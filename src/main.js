@@ -80,7 +80,8 @@ function nextLevel() {
             drawBoard();
         }, 50);
     } else {
-        alert("You've completed all levels! Congratulations!");
+        // Show the game complete modal instead of an alert
+        showFireworksCelebration(true);
     }
 }
 
