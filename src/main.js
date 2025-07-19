@@ -74,39 +74,97 @@ window.resetGame = resetGame;
 // Function to advance to next level (called from HTML button)
 function nextLevel() {
     if (currentLevel < MAX_LEVELS) {
-        isTransitioning = true; // Prevent word completion checks during transition
-        currentLevel++;
-        moveCount = 0;
-        // Aggressively clear completed tiles and force immediate visual update
+        // AGGRESSIVE CLEARING - Do this FIRST before anything else
+        console.log('=== NEXT LEVEL TRANSITION START ===');
+        console.log('Before clearing - completedTiles:', completedTiles);
+        
+        // 1. Stop everything immediately
+        gameRunning = false;
+        animating = false;
+        animation = null;
+        isTransitioning = true;
+        
+        // 2. GLOBAL DISABLE GREEN HIGHLIGHTING
+        disableGreenHighlighting = true;
+        console.log('GLOBAL GREEN HIGHLIGHTING DISABLED');
+        
+        // 3. Clear completed tiles multiple times
         completedTiles = [];
-        completedTiles.length = 0; // Force array to be completely empty
+        completedTiles.length = 0;
+        completedTiles.splice(0, completedTiles.length);
         
-        // Debug: Log the clearing
-        console.log('Next level - cleared completedTiles:', completedTiles);
-        
-        updateMoveCounter();
-        updateLevelDisplay();
-        updateTargetWordsDisplay();
-        generateBoard();
-        
-        // Force multiple complete redraws to ensure clean state
+        // 4. Force immediate visual clearing
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawBoard();
         
-        // Force another redraw after a short delay to ensure clean state
+        // 4. Update level state
+        currentLevel++;
+        moveCount = 0;
+        
+        console.log('After clearing - completedTiles:', completedTiles);
+        
+        // 5. Update displays
+        updateMoveCounter();
+        updateLevelDisplay();
+        updateTargetWordsDisplay();
+        
+        // 6. Generate new board
+        generateBoard();
+        
+        // 7. Ensure emptyPos is correctly set
+        console.log('Next level - emptyPos after generateBoard:', emptyPos);
+        
+        // 8. AGGRESSIVE MULTIPLE CLEARING SEQUENCE
+        // Clear immediately
         setTimeout(() => {
-            console.log('Next level - 50ms redraw, completedTiles:', completedTiles);
+            console.log('Clear 1 - completedTiles:', completedTiles);
+            completedTiles = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBoard();
+        }, 10);
+        
+        // Clear after 50ms
+        setTimeout(() => {
+            console.log('Clear 2 - completedTiles:', completedTiles);
+            completedTiles = [];
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawBoard();
         }, 50);
         
-        // Force a third redraw after a longer delay to catch any late updates
+        // Clear after 100ms
         setTimeout(() => {
-            console.log('Next level - 200ms redraw, completedTiles:', completedTiles);
+            console.log('Clear 3 - completedTiles:', completedTiles);
+            completedTiles = [];
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawBoard();
-            isTransitioning = false; // Re-enable word completion checks
+        }, 100);
+        
+        // Clear after 200ms
+        setTimeout(() => {
+            console.log('Clear 4 - completedTiles:', completedTiles);
+            completedTiles = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBoard();
         }, 200);
+        
+        // 9. Restart game loop with final clearing
+        setTimeout(() => {
+            console.log('=== NEXT LEVEL TRANSITION END ===');
+            console.log('Final - completedTiles:', completedTiles);
+            console.log('Final - emptyPos:', emptyPos);
+            gameRunning = true;
+            isTransitioning = false;
+            
+            // RE-ENABLE GREEN HIGHLIGHTING
+            disableGreenHighlighting = false;
+            console.log('GLOBAL GREEN HIGHLIGHTING RE-ENABLED');
+            
+            // Final aggressive clear
+            completedTiles = [];
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBoard();
+        }, 300);
+        
     } else {
         // Show the game complete modal instead of an alert
         showFireworksCelebration(true);
@@ -115,6 +173,28 @@ function nextLevel() {
 
 // Make nextLevel globally accessible
 window.nextLevel = nextLevel;
+
+
+
+
+
+// Function to completely clear all green highlighting
+function clearAllGreenHighlighting() {
+    console.log('Clearing all green highlighting...');
+    completedTiles = [];
+    completedTiles.length = 0;
+    
+    // Force multiple canvas clears and redraws
+    for (let i = 0; i < 5; i++) {
+        setTimeout(() => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBoard();
+        }, i * 50);
+    }
+}
+
+// Make functions globally accessible
+window.clearAllGreenHighlighting = clearAllGreenHighlighting;
 
 // Add this function for the popup
 function showTryAgainPopup() {
@@ -652,7 +732,7 @@ function shuffleArray(arr) {
 }
 
 // Word sets for each level - now with longer words for 7x7 board
-const WORD_SETS = [
+const PROD_WORD_SETS = [
     ["kyle", "matt", "mike"],    // Level 1
     ["jason", "brandon"],        // Level 2
     ["red", "blue", "pink"],     // Level 3
@@ -665,12 +745,18 @@ const WORD_SETS = [
     ["love", "heart", "care"]    // Level 10
 ];
 
+// Current word sets
+let WORD_SETS = PROD_WORD_SETS;
+
 function getCurrentWordSet() {
     return WORD_SETS[currentLevel - 1] || WORD_SETS[0];
 }
 
 // Track which individual tiles are part of completed words
 let completedTiles = [];
+
+// GLOBAL FLAG to completely disable green highlighting
+let disableGreenHighlighting = false;
 
 function isWordCompleted(rowIndex) {
     const targetWords = getCurrentWordSet();
@@ -707,6 +793,38 @@ function isWordCompletedVertical(colIndex) {
 }
 
 function isTileCompleted(r, c) {
+    // ULTRA STRICT - Check global disable flag FIRST
+    if (disableGreenHighlighting) {
+        console.log(`Tile at (${r}, ${c}) - GLOBAL DISABLE FLAG, no green`); // Debug
+        return false;
+    }
+    
+    // ULTRA STRICT - During transitions, never show completed tiles
+    if (isTransitioning) {
+        console.log(`Tile at (${r}, ${c}) - transitioning, no green`); // Debug
+        return false;
+    }
+    
+    // ULTRA AGGRESSIVE - If global flag is set, clear completedTiles and return false
+    if (disableGreenHighlighting) {
+        console.log(`Tile at (${r}, ${c}) - ULTRA AGGRESSIVE: Clearing completedTiles due to global flag`);
+        completedTiles = [];
+        completedTiles.length = 0;
+        return false;
+    }
+    
+    // ULTRA STRICT - If completedTiles is empty, never show completed tiles
+    if (!completedTiles || completedTiles.length === 0) {
+        console.log(`Tile at (${r}, ${c}) - no completed tiles, no green`); // Debug
+        return false;
+    }
+    
+    // ULTRA STRICT - If game is not running, never show completed tiles
+    if (!gameRunning) {
+        console.log(`Tile at (${r}, ${c}) - game not running, no green`); // Debug
+        return false;
+    }
+    
     const isCompleted = completedTiles.some(tile => tile.r === r && tile.c === c);
     if (isCompleted) {
         console.log(`Tile at (${r}, ${c}) is completed! completedTiles:`, completedTiles); // Debug
@@ -715,9 +833,15 @@ function isTileCompleted(r, c) {
 }
 
 function checkWordCompletion() {
-    // Don't check word completion during level transitions
+    // SUPER STRICT - Don't check word completion during level transitions
     if (isTransitioning) {
         console.log("Skipping word completion check during transition");
+        return;
+    }
+    
+    // SUPER STRICT - Don't check if game is not running
+    if (!gameRunning) {
+        console.log("Skipping word completion check - game not running");
         return;
     }
     
@@ -882,6 +1006,11 @@ function wordsAreSolved() {
 }
 
 function generateBoard() {
+    // IMMEDIATELY CLEAR COMPLETED TILES when generating new board
+    console.log('generateBoard - Clearing completedTiles before generating new board');
+    completedTiles = [];
+    completedTiles.length = 0;
+    
     // Create a solvable board with the target words
     const targetWords = getCurrentWordSet();
     let attempts = 0;
@@ -898,7 +1027,7 @@ function generateBoard() {
             }
         }
         
-        // Create a truly scrambled board based on current target words
+        // Regular board generation
         const allLetters = [];
         
         // Add letters from target words
@@ -1205,10 +1334,33 @@ function startGame() {
 }
 
 function drawBoard(anim = null) {
+    // DEBUG - Log when drawBoard is called
+    console.log(`drawBoard called - isTransitioning: ${isTransitioning}, gameRunning: ${gameRunning}, disableGreenHighlighting: ${disableGreenHighlighting}, completedTiles.length: ${completedTiles ? completedTiles.length : 'null'}`);
+    
     const cellSize = canvas.width / cols;
     ctx.font = `bold ${cellSize / 2.5}px Arial`; // Smaller font for mobile
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    
+    // SUPER STRICT - Never show green highlighting during transitions
+    const forceNoGreen = isTransitioning || !gameRunning || !completedTiles || completedTiles.length === 0 || disableGreenHighlighting;
+    
+    // ULTRA AGGRESSIVE - If we're transitioning or global flag is set, ALWAYS force no green
+    if (isTransitioning || disableGreenHighlighting) {
+        console.log('drawBoard - ULTRA AGGRESSIVE: Forcing no green due to transition or global flag');
+        completedTiles = [];
+        completedTiles.length = 0;
+    }
+    
+    if (forceNoGreen) {
+        console.log('drawBoard - forceNoGreen is TRUE, no green highlighting will be shown');
+        // AGGRESSIVE - Clear completedTiles if any of the conditions are met
+        if (completedTiles && completedTiles.length > 0) {
+            console.log('drawBoard - Clearing completedTiles because forceNoGreen is true');
+            completedTiles = [];
+            completedTiles.length = 0;
+        }
+    }
 
     // Draw oak wood board background with realistic texture
     const boardGradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
@@ -1311,7 +1463,12 @@ function drawBoard(anim = null) {
                 ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
             } else {
                 // Check if this tile is part of a completed word
-                const isCompleted = isTileCompleted(r, c);
+                const isCompleted = forceNoGreen ? false : isTileCompleted(r, c);
+                
+                // DEBUG - Log if any tile is being marked as completed
+                if (isCompleted) {
+                    console.log(`drawBoard - Tile at (${r}, ${c}) with letter "${board[r][c]}" is being marked as completed! forceNoGreen: ${forceNoGreen}`);
+                }
                 
                 // Draw enhanced 3D block tile
                 const blockHeight = 18; // Much more pronounced 3D effect
@@ -1489,6 +1646,12 @@ function drawBoard(anim = null) {
 }
 
 function updateGame() {
+    // Only run the game loop if gameRunning is true
+    if (!gameRunning) {
+        requestAnimationFrame(updateGame);
+        return;
+    }
+    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (animating && animation) {
