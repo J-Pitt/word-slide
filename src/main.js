@@ -320,15 +320,23 @@ function showCelebrationModal(isFinalLevel = false) {
     // Create button
     const button = document.createElement('button');
     if (isFinalLevel) {
-        button.textContent = 'Play Again';
+        button.textContent = 'Start Over';
         button.onclick = () => {
             currentLevel = 1;
             moveCount = 0;
+            completedTiles = [];
             updateMoveCounter();
             updateLevelDisplay();
             updateTargetWordsDisplay();
             generateBoard();
+            // Force a complete redraw to clear any green tiles
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawBoard();
+            // Force another redraw after a short delay to ensure clean state
+            setTimeout(() => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawBoard();
+            }, 50);
             document.body.removeChild(modalOverlay);
         };
     } else {
