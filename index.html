@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>WordSlide</title>
+  <link rel="stylesheet" href="src/styles.css" />
+</head>
+<body>
+  <div class="game-container">
+    <h1>WordSlide</h1>
+    <div class="game-info">
+      <p>Level: <span id="levelDisplay">1</span>/10</p>
+      <p>Slide tiles to form the words: <strong id="targetWords">FIVE, RICE, BIRD</strong></p>
+      <p>Moves: <span id="moveCounter">0</span></p>
+    </div>
+    <canvas id="gameCanvas" width="350" height="350"></canvas>
+    <button class="button" onclick="resetGame()">New Game</button>
+  </div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
