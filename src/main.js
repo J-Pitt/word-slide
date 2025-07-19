@@ -1514,11 +1514,13 @@ function updateGame() {
 let touchStartY = 0;
 let touchStartX = 0;
 let isPulling = false;
+let pullDistance = 0;
 
 window.addEventListener('touchstart', (e) => {
     touchStartY = e.touches[0].clientY;
     touchStartX = e.touches[0].clientX;
     isPulling = false;
+    pullDistance = 0;
     
     // Handle game input
     handleInput(e);
@@ -1532,26 +1534,36 @@ window.addEventListener('touchmove', (e) => {
     const deltaY = touchY - touchStartY;
     const deltaX = Math.abs(touchX - touchStartX);
     
-    // Check if it's a downward pull gesture (not a horizontal swipe)
-    if (deltaY > 50 && deltaX < 100 && window.scrollY === 0) {
+    // Only detect pull-to-refresh when:
+    // 1. At the very top of the page (scrollY === 0)
+    // 2. Pulling down significantly (more than 100px)
+    // 3. Not much horizontal movement (less than 50px)
+    // 4. Touch started near the top of the screen (within 100px)
+    if (window.scrollY === 0 && 
+        deltaY > 100 && 
+        deltaX < 50 && 
+        touchStartY < 100) {
+        
         isPulling = true;
+        pullDistance = deltaY;
         e.preventDefault();
     }
 });
 
 window.addEventListener('touchend', (e) => {
-    if (isPulling) {
+    if (isPulling && pullDistance > 150) {
         e.preventDefault();
         showReloadConfirmationModal();
     }
     touchStartY = 0;
     touchStartX = 0;
     isPulling = false;
+    pullDistance = 0;
 });
 
-// Prevent default pull-to-refresh behavior
+// Only prevent default pull-to-refresh when at the very top
 document.addEventListener('touchmove', (e) => {
-    if (window.scrollY === 0 && e.touches[0].clientY > 0) {
+    if (window.scrollY === 0 && e.touches[0].clientY > 0 && e.touches[0].clientY < 100) {
         e.preventDefault();
     }
 }, { passive: false });
