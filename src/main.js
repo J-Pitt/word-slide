@@ -41,6 +41,7 @@ function updateTargetWordsDisplay() {
 // Function to reset the game (called from HTML button)
 function resetGame() {
     moveCount = 0;
+    // Clear completed tiles and force immediate visual update
     completedTiles = [];
     updateMoveCounter();
     updateLevelDisplay();
@@ -49,6 +50,11 @@ function resetGame() {
     // Force a complete redraw to clear any green tiles
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBoard();
+    // Force another redraw after a short delay to ensure clean state
+    setTimeout(() => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBoard();
+    }, 50);
 }
 
 // Make resetGame globally accessible
@@ -59,6 +65,7 @@ function nextLevel() {
     if (currentLevel < MAX_LEVELS) {
         currentLevel++;
         moveCount = 0;
+        // Clear completed tiles and force immediate visual update
         completedTiles = [];
         updateMoveCounter();
         updateLevelDisplay();
@@ -67,6 +74,11 @@ function nextLevel() {
         // Force a complete redraw to clear any green tiles
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawBoard();
+        // Force another redraw after a short delay to ensure clean state
+        setTimeout(() => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBoard();
+        }, 50);
     } else {
         alert("You've completed all levels! Congratulations!");
     }
