@@ -1490,6 +1490,232 @@ function updateGame() {
     requestAnimationFrame(updateGame);
 }
 
-window.addEventListener('touchstart', handleInput);
+// Prevent pull-to-refresh and show confirmation modal
+let touchStartY = 0;
+let touchStartX = 0;
+let isPulling = false;
+
+window.addEventListener('touchstart', (e) => {
+    touchStartY = e.touches[0].clientY;
+    touchStartX = e.touches[0].clientX;
+    isPulling = false;
+    
+    // Handle game input
+    handleInput(e);
+});
+
+window.addEventListener('touchmove', (e) => {
+    if (!touchStartY) return;
+    
+    const touchY = e.touches[0].clientY;
+    const touchX = e.touches[0].clientX;
+    const deltaY = touchY - touchStartY;
+    const deltaX = Math.abs(touchX - touchStartX);
+    
+    // Check if it's a downward pull gesture (not a horizontal swipe)
+    if (deltaY > 50 && deltaX < 100 && window.scrollY === 0) {
+        isPulling = true;
+        e.preventDefault();
+    }
+});
+
+window.addEventListener('touchend', (e) => {
+    if (isPulling) {
+        e.preventDefault();
+        showReloadConfirmationModal();
+    }
+    touchStartY = 0;
+    touchStartX = 0;
+    isPulling = false;
+});
+
+// Prevent default pull-to-refresh behavior
+document.addEventListener('touchmove', (e) => {
+    if (window.scrollY === 0 && e.touches[0].clientY > 0) {
+        e.preventDefault();
+    }
+}, { passive: false });
+
 window.addEventListener('mousedown', handleInput);
 window.addEventListener('DOMContentLoaded', startGame);
+
+// Function to show reload confirmation modal
+function showReloadConfirmationModal() {
+    // Create modal overlay
+    const modalOverlay = document.createElement('div');
+    modalOverlay.id = 'reload-confirmation-modal';
+    modalOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 3000;
+        font-family: Arial, sans-serif;
+    `;
+    
+    // Create modal container with wood paneling
+    const modalContainer = document.createElement('div');
+    modalContainer.style.cssText = `
+        position: relative;
+        width: 350px;
+        max-width: 90vw;
+        background: transparent;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 
+            0 20px 60px rgba(0, 0, 0, 0.8),
+            0 0 40px rgba(47, 27, 20, 0.8);
+        border: 4px solid #2F1B14;
+    `;
+    
+    // Create dark wood paneling background
+    const panelingBackground = document.createElement('div');
+    panelingBackground.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: 
+            linear-gradient(135deg, #2F1B14 0%, #3D2318 20%, #4A2C1A 40%, #5D3A1F 60%, #4A2C1A 80%, #3D2318 100%),
+            repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 1px,
+                rgba(47, 27, 20, 0.6) 1px,
+                rgba(47, 27, 20, 0.6) 3px
+            ),
+            repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(61, 35, 24, 0.7) 2px,
+                rgba(61, 35, 24, 0.7) 15px
+            );
+        pointer-events: none;
+    `;
+    modalContainer.appendChild(panelingBackground);
+    
+    // Create content container
+    const content = document.createElement('div');
+    content.style.cssText = `
+        position: relative;
+        z-index: 10;
+        padding: 30px;
+        text-align: center;
+        color: white;
+    `;
+    
+    // Create title
+    const title = document.createElement('h3');
+    title.textContent = '🔄 Reload Game?';
+    title.style.cssText = `
+        color: #FFFFFF;
+        font-size: 24px;
+        margin: 0 0 15px 0;
+        text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8), 1px 1px 2px rgba(0, 0, 0, 0.9);
+        font-weight: bold;
+    `;
+    
+    // Create message
+    const message = document.createElement('p');
+    message.textContent = 'Are you sure you want to reload the game? This will restart from level 1.';
+    message.style.cssText = `
+        color: #FFFFFF;
+        font-size: 16px;
+        margin: 0 0 25px 0;
+        line-height: 1.4;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    `;
+    
+    // Create button container
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = `
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+    `;
+    
+    // Create Cancel button
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel';
+    cancelButton.onclick = () => {
+        document.body.removeChild(modalOverlay);
+    };
+    cancelButton.style.cssText = `
+        background: linear-gradient(135deg, #6B7280, #4B5563);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: bold;
+        border-radius: 8px;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        transition: transform 0.2s, box-shadow 0.2s;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    `;
+    
+    // Create Reload button
+    const reloadButton = document.createElement('button');
+    reloadButton.textContent = 'Reload';
+    reloadButton.onclick = () => {
+        location.reload();
+    };
+    reloadButton.style.cssText = `
+        background: linear-gradient(135deg, #EF4444, #DC2626);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: bold;
+        border-radius: 8px;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        transition: transform 0.2s, box-shadow 0.2s;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    `;
+    
+    // Add hover effects
+    [cancelButton, reloadButton].forEach(button => {
+        button.onmouseenter = () => {
+            button.style.transform = 'scale(1.05)';
+            button.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.4)';
+        };
+        button.onmouseleave = () => {
+            button.style.transform = 'scale(1)';
+            button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+        };
+    });
+    
+    // Assemble the modal
+    buttonContainer.appendChild(cancelButton);
+    buttonContainer.appendChild(reloadButton);
+    content.appendChild(title);
+    content.appendChild(message);
+    content.appendChild(buttonContainer);
+    modalContainer.appendChild(content);
+    modalOverlay.appendChild(modalContainer);
+    document.body.appendChild(modalOverlay);
+    
+    // Add click outside to close
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) {
+            document.body.removeChild(modalOverlay);
+        }
+    });
+    
+    // Add escape key to close
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(modalOverlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+}
