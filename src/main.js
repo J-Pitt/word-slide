@@ -40,7 +40,6 @@ function updateTargetWordsDisplay() {
 
 // Function to reset the game (called from HTML button)
 function resetGame() {
-    currentLevel = 1;
     moveCount = 0;
     completedTiles = [];
     updateMoveCounter();
@@ -49,6 +48,28 @@ function resetGame() {
     generateBoard();
     drawBoard();
 }
+
+// Make resetGame globally accessible
+window.resetGame = resetGame;
+
+// Function to advance to next level (called from HTML button)
+function nextLevel() {
+    if (currentLevel < MAX_LEVELS) {
+        currentLevel++;
+        moveCount = 0;
+        completedTiles = [];
+        updateMoveCounter();
+        updateLevelDisplay();
+        updateTargetWordsDisplay();
+        generateBoard();
+        drawBoard();
+    } else {
+        alert("You've completed all levels! Congratulations!");
+    }
+}
+
+// Make nextLevel globally accessible
+window.nextLevel = nextLevel;
 
 // Add this function for the popup
 function showTryAgainPopup() {
@@ -519,23 +540,37 @@ function startFireworks() {
 }
 
 function getCellFromCoords(x, y) {
+    // Scale coordinates to match actual canvas size
+    const scaleX = canvas.width / canvas.offsetWidth;
+    const scaleY = canvas.height / canvas.offsetHeight;
+    const scaledX = x * scaleX;
+    const scaledY = y * scaleY;
+    
     const cellSize = canvas.width / cols;
-    const c = Math.floor(x / cellSize);
-    const r = Math.floor(y / cellSize);
+    const c = Math.floor(scaledX / cellSize);
+    const r = Math.floor(scaledY / cellSize);
+    console.log(`getCellFromCoords: x=${x}, y=${y}, scaledX=${scaledX}, scaledY=${scaledY}, cellSize=${cellSize}, result=(${r}, ${c})`); // Debug
     return { r, c };
 }
 
 // Update tryMove to increment moveCount and check for limit
 function tryMove(r, c) {
+    console.log(`tryMove called with (${r}, ${c})`); // Debug
     const dr = Math.abs(r - emptyPos.r);
     const dc = Math.abs(c - emptyPos.c);
+    console.log(`Distance: dr=${dr}, dc=${dc}`); // Debug
+    console.log(`Can move: ${(dr === 1 && dc === 0) || (dr === 0 && dc === 1)}`); // Debug
+    console.log(`Currently animating: ${animating}`); // Debug
+    
     if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
         if (!animating) {
             // Check if the tile being moved is part of a completed word
             if (isTileCompleted(r, c)) {
+                console.log(`Tile is completed, cannot move`); // Debug
                 return; // Don't allow moving tiles from completed words
             }
             
+            console.log(`Starting animation from (${r}, ${c}) to (${emptyPos.r}, ${emptyPos.c})`); // Debug
             animating = true;
             animation = {
                 from: { r, c },
@@ -546,7 +581,11 @@ function tryMove(r, c) {
             };
             moveCount++;
             updateMoveCounter(); // Update the display
+        } else {
+            console.log(`Already animating, ignoring move`); // Debug
         }
+    } else {
+        console.log(`Invalid move - not adjacent to empty space`); // Debug
     }
 }
 
@@ -717,44 +756,63 @@ function wordsAreSolved() {
     
     let solvedWords = 0;
     const totalWords = targetWords.length;
+    const foundWords = new Set(); // Track which words we've found
     
-    // Check horizontal words (rows)
-    for (let i = 0; i < targetWords.length; i++) {
-        let word = "";
-        for (let c = 0; c < targetWords[i].length; c++) {
-            if (!board[i] || typeof board[i][c] !== "string") {
-                console.log(`Row ${i}, col ${c}: missing or invalid`); // Debug
-                continue; // Skip this word, check others
+    // Check for each target word anywhere on the board
+    for (let targetWord of targetWords) {
+        console.log(`Looking for word: "${targetWord}"`); // Debug
+        let wordFound = false;
+        
+        // Check horizontal positions
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c <= cols - targetWord.length; c++) {
+                let word = "";
+                for (let i = 0; i < targetWord.length; i++) {
+                    if (board[r] && board[r][c + i]) {
+                        word += board[r][c + i];
+                    }
+                }
+                if (word.toUpperCase() === targetWord.toUpperCase()) {
+                    console.log(`✅ Found horizontal word "${targetWord}" at row ${r}, col ${c}`); // Debug
+                    wordFound = true;
+                    break;
+                }
             }
-            word += board[i][c];
+            if (wordFound) break;
         }
-        console.log(`Row ${i}: "${word}" vs "${targetWords[i]}"`); // Debug
-        if (word.toUpperCase() === targetWords[i].toUpperCase()) {
-            console.log(`✅ Row ${i} is solved!`); // Debug
-            solvedWords++;
-        }
-    }
-    
-    // Check vertical words (columns)
-    for (let i = 0; i < targetWords.length; i++) {
-        let word = "";
-        for (let r = 0; r < targetWords[i].length; r++) {
-            if (!board[r] || typeof board[r][i] !== "string") {
-                console.log(`Col ${i}, row ${r}: missing or invalid`); // Debug
-                continue; // Skip this word, check others
+        
+        // Check vertical positions if not found horizontally
+        if (!wordFound) {
+            for (let r = 0; r <= rows - targetWord.length; r++) {
+                for (let c = 0; c < cols; c++) {
+                    let word = "";
+                    for (let i = 0; i < targetWord.length; i++) {
+                        if (board[r + i] && board[r + i][c]) {
+                            word += board[r + i][c];
+                        }
+                    }
+                    if (word.toUpperCase() === targetWord.toUpperCase()) {
+                        console.log(`✅ Found vertical word "${targetWord}" at row ${r}, col ${c}`); // Debug
+                        wordFound = true;
+                        break;
+                    }
+                }
+                if (wordFound) break;
             }
-            word += board[r][i];
         }
-        console.log(`Col ${i}: "${word}" vs "${targetWords[i]}"`); // Debug
-        if (word.toUpperCase() === targetWords[i].toUpperCase()) {
-            console.log(`✅ Col ${i} is solved!`); // Debug
+        
+        if (wordFound) {
             solvedWords++;
+            foundWords.add(targetWord);
+        } else {
+            console.log(`❌ Word "${targetWord}" not found`); // Debug
         }
     }
     
     console.log(`Solved words: ${solvedWords}/${totalWords}`); // Debug
+    console.log("Found words:", Array.from(foundWords)); // Debug
     
-    // Check if ALL words are solved (not just any)
+    // Check if ALL words are solved
     if (solvedWords >= totalWords) {
         console.log("🎉 ALL WORDS ARE SOLVED! WIN CONDITION MET!"); // Debug
         return true;
@@ -848,7 +906,12 @@ function handleInput(event) {
     } else {
         return;
     }
+    console.log(`Canvas dimensions: ${canvas.width}x${canvas.height}`); // Debug
+    console.log(`Canvas display size: ${canvas.offsetWidth}x${canvas.offsetHeight}`); // Debug
     const { r, c } = getCellFromCoords(x, y);
+    console.log(`Click at (${x}, ${y}) -> Cell (${r}, ${c})`); // Debug
+    console.log(`Empty position: (${emptyPos.r}, ${emptyPos.c})`); // Debug
+    console.log(`Board state:`, board); // Debug
     tryMove(r, c);
 }
 
@@ -1001,31 +1064,7 @@ function startGame() {
     drawBoard(); // <-- Add this line
     updateGame();
     
-    // Add test buttons for debugging
-    const testButton = document.createElement('button');
-    testButton.textContent = 'Test Word Completion';
-    testButton.style.position = 'fixed';
-    testButton.style.top = '10px';
-    testButton.style.right = '10px';
-    testButton.style.zIndex = '1000';
-    testButton.onclick = () => {
-        console.log('Manual test - forcing word completion check');
-        checkWordCompletion();
-    };
-    document.body.appendChild(testButton);
-    
-    // Add fireworks test button
-    const fireworksButton = document.createElement('button');
-    fireworksButton.textContent = 'Test Fireworks';
-    fireworksButton.style.position = 'fixed';
-    fireworksButton.style.top = '50px';
-    fireworksButton.style.right = '10px';
-    fireworksButton.style.zIndex = '1000';
-    fireworksButton.onclick = () => {
-        console.log('Manual test - forcing fireworks celebration');
-        showFireworksCelebration();
-    };
-    document.body.appendChild(fireworksButton);
+
 }
 
 function drawBoard(anim = null) {
@@ -1236,11 +1275,11 @@ function drawBoard(anim = null) {
                 
                 // Draw letter with clean 3D effect (like sliding animation)
                 ctx.save();
-                ctx.fillStyle = "#8B4513";
-                ctx.shadowColor = "#4A2C1A";
-                ctx.shadowBlur = 3;
-                ctx.shadowOffsetX = 2;
-                ctx.shadowOffsetY = 2;
+                ctx.fillStyle = "#654321"; // Darker brown
+                ctx.shadowColor = "transparent";
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
                 ctx.fillText(
                     board[r][c],
                     x + (cellSize - 4) / 2,
@@ -1248,8 +1287,8 @@ function drawBoard(anim = null) {
                 );
                 ctx.restore();
                 
-                // Add subtle highlight to letter
-                ctx.fillStyle = "#F5DEB3";
+                // Add subtle highlight to letter (darker)
+                ctx.fillStyle = "#8B4513";
                 ctx.shadowColor = "transparent";
                 ctx.shadowBlur = 0;
                 ctx.shadowOffsetX = 0;
@@ -1292,18 +1331,18 @@ function drawBoard(anim = null) {
         ctx.lineWidth = 2;
         ctx.strokeRect(x - blockSize/2, y - blockSize/2, blockSize, blockSize);
         
-        // Letter
-        ctx.save();
-        ctx.fillStyle = "#8B4513";
-        ctx.shadowColor = "#4A2C1A";
-        ctx.shadowBlur = 3;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        ctx.fillText(anim.letter, x, y);
-        ctx.restore();
+                        // Letter
+                ctx.save();
+                ctx.fillStyle = "#654321"; // Darker brown
+                ctx.shadowColor = "transparent";
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+                ctx.fillText(anim.letter, x, y);
+                ctx.restore();
         
-        // Highlight
-        ctx.fillStyle = "#F5DEB3";
+        // Highlight (darker)
+        ctx.fillStyle = "#8B4513";
         ctx.shadowColor = "transparent";
         ctx.shadowBlur = 0;
         ctx.shadowOffsetX = 0;
