@@ -11,6 +11,7 @@ let animation = null;
 let moveCount = 0;
 let currentLevel = 1;
 const MAX_LEVELS = 10;
+let isTransitioning = false; // Flag to prevent word completion checks during transitions
 console.log("main.js loaded");
 
 // Function to update move counter display
@@ -73,11 +74,15 @@ window.resetGame = resetGame;
 // Function to advance to next level (called from HTML button)
 function nextLevel() {
     if (currentLevel < MAX_LEVELS) {
+        isTransitioning = true; // Prevent word completion checks during transition
         currentLevel++;
         moveCount = 0;
         // Aggressively clear completed tiles and force immediate visual update
         completedTiles = [];
         completedTiles.length = 0; // Force array to be completely empty
+        
+        // Debug: Log the clearing
+        console.log('Next level - cleared completedTiles:', completedTiles);
         
         updateMoveCounter();
         updateLevelDisplay();
@@ -90,14 +95,17 @@ function nextLevel() {
         
         // Force another redraw after a short delay to ensure clean state
         setTimeout(() => {
+            console.log('Next level - 50ms redraw, completedTiles:', completedTiles);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawBoard();
         }, 50);
         
         // Force a third redraw after a longer delay to catch any late updates
         setTimeout(() => {
+            console.log('Next level - 200ms redraw, completedTiles:', completedTiles);
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawBoard();
+            isTransitioning = false; // Re-enable word completion checks
         }, 200);
     } else {
         // Show the game complete modal instead of an alert
@@ -701,12 +709,18 @@ function isWordCompletedVertical(colIndex) {
 function isTileCompleted(r, c) {
     const isCompleted = completedTiles.some(tile => tile.r === r && tile.c === c);
     if (isCompleted) {
-        console.log(`Tile at (${r}, ${c}) is completed!`); // Debug
+        console.log(`Tile at (${r}, ${c}) is completed! completedTiles:`, completedTiles); // Debug
     }
     return isCompleted;
 }
 
 function checkWordCompletion() {
+    // Don't check word completion during level transitions
+    if (isTransitioning) {
+        console.log("Skipping word completion check during transition");
+        return;
+    }
+    
     const targetWords = getCurrentWordSet();
     const newCompletedTiles = [];
     
