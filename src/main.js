@@ -41,20 +41,30 @@ function updateTargetWordsDisplay() {
 // Function to reset the game (called from HTML button)
 function resetGame() {
     moveCount = 0;
-    // Clear completed tiles and force immediate visual update
+    // Aggressively clear completed tiles and force immediate visual update
     completedTiles = [];
+    completedTiles.length = 0; // Force array to be completely empty
+    
     updateMoveCounter();
     updateLevelDisplay();
     updateTargetWordsDisplay();
     generateBoard();
-    // Force a complete redraw to clear any green tiles
+    
+    // Force multiple complete redraws to ensure clean state
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBoard();
+    
     // Force another redraw after a short delay to ensure clean state
     setTimeout(() => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawBoard();
     }, 50);
+    
+    // Force a third redraw after a longer delay to catch any late updates
+    setTimeout(() => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBoard();
+    }, 200);
 }
 
 // Make resetGame globally accessible
@@ -65,20 +75,30 @@ function nextLevel() {
     if (currentLevel < MAX_LEVELS) {
         currentLevel++;
         moveCount = 0;
-        // Clear completed tiles and force immediate visual update
+        // Aggressively clear completed tiles and force immediate visual update
         completedTiles = [];
+        completedTiles.length = 0; // Force array to be completely empty
+        
         updateMoveCounter();
         updateLevelDisplay();
         updateTargetWordsDisplay();
         generateBoard();
-        // Force a complete redraw to clear any green tiles
+        
+        // Force multiple complete redraws to ensure clean state
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawBoard();
+        
         // Force another redraw after a short delay to ensure clean state
         setTimeout(() => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawBoard();
         }, 50);
+        
+        // Force a third redraw after a longer delay to catch any late updates
+        setTimeout(() => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBoard();
+        }, 200);
     } else {
         // Show the game complete modal instead of an alert
         showFireworksCelebration(true);
