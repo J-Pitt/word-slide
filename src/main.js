@@ -46,6 +46,8 @@ function resetGame() {
     updateLevelDisplay();
     updateTargetWordsDisplay();
     generateBoard();
+    // Force a complete redraw to clear any green tiles
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBoard();
 }
 
@@ -62,6 +64,8 @@ function nextLevel() {
         updateLevelDisplay();
         updateTargetWordsDisplay();
         generateBoard();
+        // Force a complete redraw to clear any green tiles
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawBoard();
     } else {
         alert("You've completed all levels! Congratulations!");
@@ -825,72 +829,151 @@ function wordsAreSolved() {
 function generateBoard() {
     // Create a solvable board with the target words
     const targetWords = getCurrentWordSet();
-    board = [];
+    let attempts = 0;
+    const maxAttempts = 10; // Prevent infinite loops
     
-    // Initialize empty board
-    for (let r = 0; r < rows; r++) {
-        board[r] = [];
-        for (let c = 0; c < cols; c++) {
-            board[r][c] = "";
-        }
-    }
-    
-    // Create a truly scrambled board based on current target words
-    const allLetters = [];
-    
-    // Add letters from target words
-    for (let r = 0; r < targetWords.length; r++) {
-        const word = targetWords[r];
-        for (let c = 0; c < word.length; c++) {
-            allLetters.push(word[c].toUpperCase());
-        }
-    }
-    
-    // Add random letters to fill the board
-    const remainingSlots = rows * cols - allLetters.length - 1; // -1 for empty space
-    for (let i = 0; i < remainingSlots; i++) {
-        allLetters.push(String.fromCharCode(65 + Math.floor(Math.random() * 26)));
-    }
-    
-    // Shuffle all letters
-    shuffleArray(allLetters);
-    
-    // Place letters on the board in scrambled positions
-    let letterIndex = 0;
-    for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-            if (r === rows - 1 && c === cols - 1) {
-                board[r][c] = ""; // Empty space in bottom-right
-            } else {
-                board[r][c] = allLetters[letterIndex++];
+    do {
+        board = [];
+        
+        // Initialize empty board
+        for (let r = 0; r < rows; r++) {
+            board[r] = [];
+            for (let c = 0; c < cols; c++) {
+                board[r][c] = "";
             }
         }
-    }
-    
-    // Ensure the board is not already solved by making strategic swaps
-    // This guarantees the puzzle requires solving
-    const scrambleMoves = Math.floor(Math.random() * 3) + 2; // 2-4 random moves
-    
-    for (let i = 0; i < scrambleMoves; i++) {
-        // Find two random positions to swap
-        let pos1 = { r: Math.floor(Math.random() * rows), c: Math.floor(Math.random() * cols) };
-        let pos2 = { r: Math.floor(Math.random() * rows), c: Math.floor(Math.random() * cols) };
         
-        // Make sure we're not swapping with the empty space
-        while ((pos1.r === rows - 1 && pos1.c === cols - 1) || 
-               (pos2.r === rows - 1 && pos2.c === cols - 1)) {
-            pos1 = { r: Math.floor(Math.random() * rows), c: Math.floor(Math.random() * cols) };
-            pos2 = { r: Math.floor(Math.random() * rows), c: Math.floor(Math.random() * cols) };
+        // Create a truly scrambled board based on current target words
+        const allLetters = [];
+        
+        // Add letters from target words
+        for (let r = 0; r < targetWords.length; r++) {
+            const word = targetWords[r];
+            for (let c = 0; c < word.length; c++) {
+                allLetters.push(word[c].toUpperCase());
+            }
         }
         
-        // Swap the letters
-        const temp = board[pos1.r][pos1.c];
-        board[pos1.r][pos1.c] = board[pos2.r][pos2.c];
-        board[pos2.r][pos2.c] = temp;
-    }
+        // Add random letters to fill the board
+        const remainingSlots = rows * cols - allLetters.length - 1; // -1 for empty space
+        for (let i = 0; i < remainingSlots; i++) {
+            allLetters.push(String.fromCharCode(65 + Math.floor(Math.random() * 26)));
+        }
+        
+        // Shuffle all letters
+        shuffleArray(allLetters);
+        
+        // Place letters on the board in scrambled positions
+        let letterIndex = 0;
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                if (r === rows - 1 && c === cols - 1) {
+                    board[r][c] = ""; // Empty space in bottom-right
+                } else {
+                    board[r][c] = allLetters[letterIndex++];
+                }
+            }
+        }
+        
+        // Ensure the board is not already solved by making strategic swaps
+        // This guarantees the puzzle requires solving
+        const scrambleMoves = Math.floor(Math.random() * 3) + 2; // 2-4 random moves
+        
+        for (let i = 0; i < scrambleMoves; i++) {
+            // Find two random positions to swap
+            let pos1 = { r: Math.floor(Math.random() * rows), c: Math.floor(Math.random() * cols) };
+            let pos2 = { r: Math.floor(Math.random() * rows), c: Math.floor(Math.random() * cols) };
+            
+            // Make sure we're not swapping with the empty space
+            while ((pos1.r === rows - 1 && pos1.c === cols - 1) || 
+                   (pos2.r === rows - 1 && pos2.c === cols - 1)) {
+                pos1 = { r: Math.floor(Math.random() * rows), c: Math.floor(Math.random() * cols) };
+                pos2 = { r: Math.floor(Math.random() * rows), c: Math.floor(Math.random() * cols) };
+            }
+            
+            // Swap the letters
+            const temp = board[pos1.r][pos1.c];
+            board[pos1.r][pos1.c] = board[pos2.r][pos2.c];
+            board[pos2.r][pos2.c] = temp;
+        }
+        
+        // Find the empty position
+        emptyPos = { r: rows - 1, c: cols - 1 };
+        
+        attempts++;
+        
+        // Check if any target words are already solved
+        let hasSolvedWords = false;
+        for (let targetWord of targetWords) {
+            // Check horizontal positions
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c <= cols - targetWord.length; c++) {
+                    let word = "";
+                    for (let i = 0; i < targetWord.length; i++) {
+                        if (board[r] && board[r][c + i]) {
+                            word += board[r][c + i];
+                        }
+                    }
+                    if (word.toUpperCase() === targetWord.toUpperCase()) {
+                        hasSolvedWords = true;
+                        break;
+                    }
+                }
+                if (hasSolvedWords) break;
+            }
+            
+            // Check vertical positions
+            if (!hasSolvedWords) {
+                for (let r = 0; r <= rows - targetWord.length; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        let word = "";
+                        for (let i = 0; i < targetWord.length; i++) {
+                            if (board[r + i] && board[r + i][c]) {
+                                word += board[r + i][c];
+                            }
+                        }
+                        if (word.toUpperCase() === targetWord.toUpperCase()) {
+                            hasSolvedWords = true;
+                            break;
+                        }
+                    }
+                    if (hasSolvedWords) break;
+                }
+            }
+            
+            if (hasSolvedWords) break;
+        }
+        
+        // If no words are solved, we can use this board
+        if (!hasSolvedWords) {
+            console.log(`Board generated successfully after ${attempts} attempts`);
+            break;
+        }
+        
+        console.log(`Attempt ${attempts}: Board had solved words, regenerating...`);
+        
+    } while (attempts < maxAttempts);
     
-    // Find the empty position
-    emptyPos = { r: rows - 1, c: cols - 1 };
+    // If we've reached max attempts, just use the last generated board
+    // and add extra scrambling to ensure it's not solved
+    if (attempts >= maxAttempts) {
+        console.log(`Reached max attempts (${maxAttempts}), adding extra scrambling`);
+        // Add more aggressive scrambling
+        for (let i = 0; i < 10; i++) {
+            let pos1 = { r: Math.floor(Math.random() * rows), c: Math.floor(Math.random() * cols) };
+            let pos2 = { r: Math.floor(Math.random() * rows), c: Math.floor(Math.random() * cols) };
+            
+            while ((pos1.r === rows - 1 && pos1.c === cols - 1) || 
+                   (pos2.r === rows - 1 && pos2.c === cols - 1)) {
+                pos1 = { r: Math.floor(Math.random() * rows), c: Math.floor(Math.random() * cols) };
+                pos2 = { r: Math.floor(Math.random() * rows), c: Math.floor(Math.random() * cols) };
+            }
+            
+            const temp = board[pos1.r][pos1.c];
+            board[pos1.r][pos1.c] = board[pos2.r][pos2.c];
+            board[pos2.r][pos2.c] = temp;
+        }
+    }
 }
 
 function handleInput(event) {
