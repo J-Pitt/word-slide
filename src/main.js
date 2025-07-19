@@ -1060,7 +1060,6 @@ function startGame() {
     updateMoveCounter(); // Initialize move counter
     updateLevelDisplay(); // Initialize level display
     updateTargetWordsDisplay(); // Initialize target words display
-    checkWordCompletion(); // Check initial word completion
     drawBoard(); // <-- Add this line
     updateGame();
     
