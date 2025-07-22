@@ -251,6 +251,7 @@ function clearAllGreenHighlighting() {
 window.clearAllGreenHighlighting = clearAllGreenHighlighting;
 window.newGame = newGame;
 window.showHintConfirmation = showHintConfirmation;
+window.showRulesModal = showRulesModal;
 
 // Add this function for the popup
 function showTryAgainPopup() {
@@ -1314,16 +1315,17 @@ function showMoveHint(hint) {
         z-index: 2000;
     `;
     
-    // Add pulsing highlight to the letter to move
-    const cellSize = canvas.width / cols;
+    // Get canvas position and size for responsive positioning
+    const canvasRect = canvas.getBoundingClientRect();
+    const cellSize = canvasRect.width / cols;
     const fromX = hint.from.c * cellSize;
     const fromY = hint.from.r * cellSize;
     
     const highlight = document.createElement('div');
     highlight.style.cssText = `
-        position: absolute;
-        left: ${canvas.offsetLeft + fromX}px;
-        top: ${canvas.offsetTop + fromY}px;
+        position: fixed;
+        left: ${canvasRect.left + fromX}px;
+        top: ${canvasRect.top + fromY}px;
         width: ${cellSize}px;
         height: ${cellSize}px;
         border: 4px solid #FFD700;
@@ -1331,6 +1333,7 @@ function showMoveHint(hint) {
         background: rgba(255, 215, 0, 0.2);
         animation: pulse 1.5s infinite;
         pointer-events: none;
+        z-index: 2001;
     `;
     
     // Add CSS animation
@@ -1350,9 +1353,9 @@ function showMoveHint(hint) {
     
     const arrow = document.createElement('div');
     arrow.style.cssText = `
-        position: absolute;
-        left: ${canvas.offsetLeft + toX}px;
-        top: ${canvas.offsetTop + toY}px;
+        position: fixed;
+        left: ${canvasRect.left + toX}px;
+        top: ${canvasRect.top + toY}px;
         width: ${cellSize}px;
         height: ${cellSize}px;
         border: 3px dashed #00FF00;
@@ -1360,6 +1363,7 @@ function showMoveHint(hint) {
         background: rgba(0, 255, 0, 0.1);
         animation: arrowPulse 2s infinite;
         pointer-events: none;
+        z-index: 2001;
     `;
     
     // Add arrow pulse animation
@@ -1437,6 +1441,247 @@ function showHintMessage(message) {
 // Show message when no hint is available
 function showNoHintAvailable() {
     showHintMessage('💡 All words are already completed or no helpful moves found!');
+}
+
+// Show game rules and how to play modal
+function showRulesModal() {
+    // Create modal overlay
+    const modalOverlay = document.createElement('div');
+    modalOverlay.id = 'rules-modal';
+    modalOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 3000;
+        font-family: Arial, sans-serif;
+    `;
+    
+    // Create modal container with wood paneling
+    const modalContainer = document.createElement('div');
+    modalContainer.style.cssText = `
+        position: relative;
+        width: 600px;
+        max-width: 90vw;
+        max-height: 80vh;
+        background: transparent;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 
+            0 20px 60px rgba(0, 0, 0, 0.8),
+            0 0 40px rgba(47, 27, 20, 0.8);
+        border: 4px solid #2F1B14;
+    `;
+    
+    // Create dark wood paneling background
+    const panelingBackground = document.createElement('div');
+    panelingBackground.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: 
+            linear-gradient(135deg, #2F1B14 0%, #3D2318 20%, #4A2C1A 40%, #5D3A1F 60%, #4A2C1A 80%, #3D2318 100%),
+            repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 1px,
+                rgba(47, 27, 20, 0.6) 1px,
+                rgba(47, 27, 20, 0.6) 3px
+            ),
+            repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(61, 35, 24, 0.7) 2px,
+                rgba(61, 35, 24, 0.7) 15px
+            );
+        pointer-events: none;
+    `;
+    modalContainer.appendChild(panelingBackground);
+    
+    // Create scrollable content container
+    const content = document.createElement('div');
+    content.style.cssText = `
+        position: relative;
+        z-index: 10;
+        padding: 30px;
+        color: white;
+        max-height: 70vh;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #8B4513 #2F1B14;
+    `;
+    
+    // Add custom scrollbar styles
+    const scrollbarStyle = document.createElement('style');
+    scrollbarStyle.textContent = `
+        #rules-modal .content::-webkit-scrollbar {
+            width: 8px;
+        }
+        #rules-modal .content::-webkit-scrollbar-track {
+            background: #2F1B14;
+            border-radius: 4px;
+        }
+        #rules-modal .content::-webkit-scrollbar-thumb {
+            background: #8B4513;
+            border-radius: 4px;
+        }
+        #rules-modal .content::-webkit-scrollbar-thumb:hover {
+            background: #A0522D;
+        }
+    `;
+    document.head.appendChild(scrollbarStyle);
+    
+    // Create title
+    const title = document.createElement('h2');
+    title.textContent = '🎮 How to Play WordSlide';
+    title.style.cssText = `
+        color: #FFFFFF;
+        font-size: 28px;
+        margin: 0 0 20px 0;
+        text-align: center;
+        text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8), 1px 1px 2px rgba(0, 0, 0, 0.9);
+        font-weight: bold;
+    `;
+    
+    // Create sections
+    const sections = [
+        {
+            title: '🎯 Objective',
+            content: 'Slide letter tiles to form the target words shown at the top of the screen. Complete all words to advance to the next level!'
+        },
+        {
+            title: '🎲 Game Board',
+            content: 'The game uses a 7×7 grid with letter tiles and one empty space. Letters can only move into the empty space by sliding adjacent tiles.'
+        },
+        {
+            title: '🖱️ How to Move',
+            content: 'Click or tap on any tile adjacent to the empty space to move it. Tiles can move horizontally or vertically, but not diagonally.'
+        },
+        {
+            title: '✅ Word Completion',
+            content: 'When you form a complete word (horizontally or vertically), those tiles will turn green and become locked in place. You cannot move tiles that are part of completed words.'
+        },
+        {
+            title: '📊 Progress Tracking',
+            content: 'Your move count is displayed at the top. Try to complete each level with as few moves as possible!'
+        },
+        {
+            title: '💡 Using Hints',
+            content: 'If you get stuck, use the Hint button (💡) to get a suggestion for your next move. Each hint adds 3 moves to your total, so use them strategically!'
+        },
+        {
+            title: '🔄 Scramble Letters',
+            content: 'The "Scramble Letters" button will re-arrange the unsolved letters while keeping your completed words in place. This gives you a fresh perspective without losing progress.'
+        },
+        {
+            title: '🎯 Level Progression',
+            content: 'Complete all target words to advance to the next level. Each level has different words to solve. There are 10 levels total!'
+        },
+        {
+            title: '🏆 Winning',
+            content: 'Complete all 10 levels to win the game! You\'ll see a celebration with fireworks when you finish.'
+        },
+        {
+            title: '💾 Save & Load',
+            content: 'Your progress is automatically saved. You can close the browser and return later to continue from where you left off. Use "New Game" to start completely fresh.'
+        },
+        {
+            title: '📱 Tips & Strategies',
+            content: '• Focus on completing one word at a time\n• Look for letters that are already close to their target positions\n• Use the empty space strategically to move multiple tiles\n• Don\'t be afraid to use hints when stuck\n• Try to plan your moves ahead to minimize the total move count'
+        }
+    ];
+    
+    // Add title
+    content.appendChild(title);
+    
+    // Add sections
+    sections.forEach(section => {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.style.cssText = `
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            border-left: 4px solid #FFD700;
+        `;
+        
+        const sectionTitle = document.createElement('h3');
+        sectionTitle.textContent = section.title;
+        sectionTitle.style.cssText = `
+            color: #FFD700;
+            font-size: 18px;
+            margin: 0 0 10px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            font-weight: bold;
+        `;
+        
+        const sectionContent = document.createElement('p');
+        sectionContent.textContent = section.content;
+        sectionContent.style.cssText = `
+            color: #FFFFFF;
+            font-size: 14px;
+            margin: 0;
+            line-height: 1.5;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+        `;
+        
+        sectionDiv.appendChild(sectionTitle);
+        sectionDiv.appendChild(sectionContent);
+        content.appendChild(sectionDiv);
+    });
+    
+    // Create close button
+    const closeButton = document.createElement('button');
+    closeButton.textContent = 'Got it!';
+    closeButton.style.cssText = `
+        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        transition: all 0.2s ease;
+        margin-top: 20px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    `;
+    closeButton.onmouseover = () => {
+        closeButton.style.transform = 'translateY(-2px)';
+        closeButton.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.4)';
+    };
+    closeButton.onmouseout = () => {
+        closeButton.style.transform = 'translateY(0)';
+        closeButton.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)';
+    };
+    closeButton.onclick = () => {
+        document.body.removeChild(modalOverlay);
+    };
+    
+    content.appendChild(closeButton);
+    modalContainer.appendChild(content);
+    modalOverlay.appendChild(modalContainer);
+    document.body.appendChild(modalOverlay);
+    
+    // Handle escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(modalOverlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
 }
 
 function getCurrentWordSet() {
