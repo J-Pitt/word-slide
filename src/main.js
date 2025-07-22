@@ -41,31 +41,83 @@ function updateTargetWordsDisplay() {
 
 // Function to reset the game (called from HTML button)
 function resetGame() {
-    moveCount = 0;
-    // Aggressively clear completed tiles and force immediate visual update
-    completedTiles = [];
-    completedTiles.length = 0; // Force array to be completely empty
+    console.log('=== RESET BOARD - PRESERVING COMPLETED WORDS ===');
     
+    // Store the current completed tiles before resetting
+    const preservedCompletedTiles = [...completedTiles];
+    console.log('Preserving completed tiles:', preservedCompletedTiles);
+    
+    // Reset move count
+    moveCount = 0;
+    
+    // Generate a new board (this will clear completedTiles)
+    generateBoard();
+    
+    // Restore the completed tiles
+    completedTiles = preservedCompletedTiles;
+    console.log('Restored completed tiles:', completedTiles);
+    
+    // Now re-scramble only the non-completed tiles
+    rescrambleIncompleteTiles();
+    
+    // Update displays
     updateMoveCounter();
     updateLevelDisplay();
     updateTargetWordsDisplay();
-    generateBoard();
     
-    // Force multiple complete redraws to ensure clean state
+    // Redraw the board
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawBoard();
     
-    // Force another redraw after a short delay to ensure clean state
-    setTimeout(() => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawBoard();
-    }, 50);
+    // Save the new state
+    saveGameState();
     
-    // Force a third redraw after a longer delay to catch any late updates
-    setTimeout(() => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawBoard();
-    }, 200);
+    console.log('Board reset complete - completed words preserved');
+}
+
+// Function to re-scramble only the incomplete tiles while preserving completed words
+function rescrambleIncompleteTiles() {
+    console.log('=== RE-SCRAMBLING INCOMPLETE TILES ===');
+    
+    // Create a set of completed tile positions for fast lookup
+    const completedPositions = new Set();
+    for (const tile of completedTiles) {
+        completedPositions.add(`${tile.r},${tile.c}`);
+    }
+    
+    console.log('Completed positions:', Array.from(completedPositions));
+    
+    // Collect all incomplete tiles (letters that can be moved)
+    const incompleteTiles = [];
+    const incompletePositions = [];
+    
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const position = `${r},${c}`;
+            if (!completedPositions.has(position) && board[r][c] !== "") {
+                incompleteTiles.push(board[r][c]);
+                incompletePositions.push({ r, c });
+            }
+        }
+    }
+    
+    console.log('Incomplete tiles to scramble:', incompleteTiles);
+    console.log('Incomplete positions:', incompletePositions);
+    
+    // Shuffle the incomplete tiles
+    shuffleArray(incompleteTiles);
+    
+    // Place the shuffled incomplete tiles back in their positions
+    for (let i = 0; i < incompleteTiles.length; i++) {
+        const pos = incompletePositions[i];
+        board[pos.r][pos.c] = incompleteTiles[i];
+    }
+    
+    // Ensure the empty space is in the correct position
+    emptyPos = { r: rows - 1, c: cols - 1 };
+    board[emptyPos.r][emptyPos.c] = "";
+    
+    console.log('Re-scrambling complete. New board state:', board);
 }
 
 // Make resetGame globally accessible
@@ -100,6 +152,7 @@ function nextLevel() {
         // 4. Update level state
         currentLevel++;
         moveCount = 0;
+        saveGameState(); // Save when advancing to next level
         
         console.log('After clearing - completedTiles:', completedTiles);
         
@@ -167,6 +220,7 @@ function nextLevel() {
         
     } else {
         // Show the game complete modal instead of an alert
+        saveGameState(); // Save final state
         showFireworksCelebration(true);
     }
 }
@@ -195,6 +249,7 @@ function clearAllGreenHighlighting() {
 
 // Make functions globally accessible
 window.clearAllGreenHighlighting = clearAllGreenHighlighting;
+window.newGame = newGame;
 
 // Add this function for the popup
 function showTryAgainPopup() {
@@ -452,11 +507,12 @@ function showCelebrationModal(isFinalLevel = false) {
         button.textContent = 'Next Level';
         button.onclick = () => {
             currentLevel++;
-            moveCount = 0;
-            updateMoveCounter();
-            updateLevelDisplay();
-            updateTargetWordsDisplay();
-            generateBoard();
+                moveCount = 0;
+    updateMoveCounter();
+    updateLevelDisplay();
+    updateTargetWordsDisplay();
+    generateBoard();
+    saveGameState(); // Save when resetting board
             drawBoard();
             document.body.removeChild(modalOverlay);
         };
@@ -714,6 +770,7 @@ function tryMove(r, c) {
             };
             moveCount++;
             updateMoveCounter(); // Update the display
+            saveGameState(); // Save after each move
         } else {
             console.log(`Already animating, ignoring move`); // Debug
         }
@@ -747,6 +804,122 @@ const PROD_WORD_SETS = [
 
 // Current word sets
 let WORD_SETS = PROD_WORD_SETS;
+
+// Save/load system
+const SAVE_KEY = 'wordslide_game_state';
+
+// Game state structure
+let gameState = {
+    currentLevel: 1,
+    moveCount: 0,
+    completedTiles: [],
+    board: null,
+    emptyPos: { r: 6, c: 6 },
+    isTransitioning: false,
+    gameRunning: true,
+    animating: false,
+    animation: null,
+    disableGreenHighlighting: false
+};
+
+// Save game state to localStorage
+function saveGameState() {
+    try {
+        const stateToSave = {
+            currentLevel: currentLevel,
+            moveCount: moveCount,
+            completedTiles: completedTiles,
+            board: board,
+            emptyPos: emptyPos,
+            isTransitioning: isTransitioning,
+            gameRunning: gameRunning,
+            animating: animating,
+            animation: animation,
+            disableGreenHighlighting: disableGreenHighlighting,
+            timestamp: Date.now()
+        };
+        
+        localStorage.setItem(SAVE_KEY, JSON.stringify(stateToSave));
+        console.log('Game state saved successfully');
+    } catch (error) {
+        console.error('Error saving game state:', error);
+    }
+}
+
+// Load game state from localStorage
+function loadGameState() {
+    try {
+        const savedState = localStorage.getItem(SAVE_KEY);
+        if (savedState) {
+            const parsedState = JSON.parse(savedState);
+            
+            // Check if saved state is not too old (7 days)
+            const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+            if (parsedState.timestamp && parsedState.timestamp < sevenDaysAgo) {
+                console.log('Saved game state is too old, starting fresh');
+                return false;
+            }
+            
+            // Restore game state
+            currentLevel = parsedState.currentLevel || 1;
+            moveCount = parsedState.moveCount || 0;
+            completedTiles = parsedState.completedTiles || [];
+            board = parsedState.board || null;
+            emptyPos = parsedState.emptyPos || { r: 6, c: 6 };
+            isTransitioning = parsedState.isTransitioning || false;
+            gameRunning = parsedState.gameRunning !== undefined ? parsedState.gameRunning : true;
+            animating = parsedState.animating || false;
+            animation = parsedState.animation || null;
+            disableGreenHighlighting = parsedState.disableGreenHighlighting || false;
+            
+            console.log('Game state loaded successfully');
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Error loading game state:', error);
+        return false;
+    }
+}
+
+// Clear saved game state
+function clearSavedGame() {
+    try {
+        localStorage.removeItem(SAVE_KEY);
+        console.log('Saved game state cleared');
+    } catch (error) {
+        console.error('Error clearing saved game state:', error);
+    }
+}
+
+// Start a completely new game
+function newGame() {
+    // Clear saved state
+    clearSavedGame();
+    
+    // Reset all game variables
+    currentLevel = 1;
+    moveCount = 0;
+    completedTiles = [];
+    isTransitioning = false;
+    gameRunning = true;
+    animating = false;
+    animation = null;
+    disableGreenHighlighting = false;
+    
+    // Generate new board
+    generateBoard();
+    
+    // Update displays
+    updateMoveCounter();
+    updateLevelDisplay();
+    updateTargetWordsDisplay();
+    
+    // Redraw board
+    drawBoard();
+    
+    console.log('New game started');
+}
 
 function getCurrentWordSet() {
     return WORD_SETS[currentLevel - 1] || WORD_SETS[0];
@@ -929,6 +1102,9 @@ function checkWordCompletion() {
     
     // Force a redraw to see the changes
     drawBoard();
+    
+    // Save state when words are completed
+    saveGameState();
 }
 
 function wordsAreSolved() {
@@ -1320,17 +1496,29 @@ function startGame() {
     // Create dark wood paneling background
     createDarkWoodPaneling();
     
-    generateBoard();
-    console.log(board); // Debug: See the board in the console
-    gameRunning = true;
-    completedTiles = [];
-    updateMoveCounter(); // Initialize move counter
-    updateLevelDisplay(); // Initialize level display
-    updateTargetWordsDisplay(); // Initialize target words display
-    drawBoard(); // <-- Add this line
-    updateGame();
+    // Try to load saved game state
+    const loadedState = loadGameState();
     
-
+    if (loadedState && board) {
+        // Restore from saved state
+        console.log('Restoring game from saved state');
+        updateMoveCounter();
+        updateLevelDisplay();
+        updateTargetWordsDisplay();
+        drawBoard();
+    } else {
+        // Start fresh game
+        console.log('Starting fresh game');
+        generateBoard();
+        gameRunning = true;
+        completedTiles = [];
+        updateMoveCounter();
+        updateLevelDisplay();
+        updateTargetWordsDisplay();
+        drawBoard();
+    }
+    
+    updateGame();
 }
 
 function drawBoard(anim = null) {
