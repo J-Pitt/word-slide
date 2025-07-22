@@ -7,10 +7,21 @@
   <link rel="stylesheet" href="src/styles.css" />
 </head>
 <body>
-  <div class="game-container">
-    <h1>WordSlide</h1>
+  <!-- Main Menu -->
+  <div class="main-menu" id="mainMenu">
+    <h1 class="game-title">WordSlide</h1>
+    <p class="subtitle">Choose your game mode</p>
+    <div class="menu-buttons">
+      <button class="menu-button" onclick="startOriginalGame()">🎮 Original Game</button>
+      <button class="menu-button" onclick="startTetrisGame()">🔄 Tetris Style</button>
+    </div>
+  </div>
+
+  <!-- Original Game Container -->
+  <div class="game-container" id="originalGameContainer" style="display: none;">
+    <h1>WordSlide - Original</h1>
     <div class="game-info">
-      <p>Level: <span id="levelDisplay">1</span>/10</p>
+      <p>Level: <span id="levelDisplay">1</span>/20</p>
       <p>Slide tiles to form the words: <strong id="targetWords">FIVE, RICE, BIRD</strong></p>
       <p>Moves: <span id="moveCounter">0</span></p>
     </div>
@@ -20,7 +31,23 @@
     <button class="button" onclick="newGame()">New Game</button>
     <button class="button" onclick="showHintConfirmation()">💡 Hint</button>
     <button class="button" onclick="showRulesModal()">❓ How to Play</button>
+    <button class="button back-to-menu" onclick="showMainMenu()">← Back to Menu</button>
   </div>
+
+  <!-- Tetris Game Container -->
+  <div class="game-container" id="tetrisGameContainer" style="display: none;">
+    <h1>WordSlide - Tetris Style</h1>
+    <div class="game-info">
+      <p>Words Solved: <span id="wordsSolvedCounter">0</span></p>
+      <p>Target Word: <strong id="tetrisTargetWords">Loading...</strong></p>
+      <p>Moves: <span id="tetrisMoveCounter">0</span></p>
+    </div>
+    <canvas id="tetrisCanvas" width="450" height="450"></canvas>
+    <button class="button" onclick="newTetrisGame()">New Game</button>
+    <button class="button" onclick="showTetrisRulesModal()">❓ How to Play</button>
+    <button class="button back-to-menu" onclick="showMainMenu()">← Back to Menu</button>
+  </div>
+
   <script type="module" src="src/main.js"></script>
 </body>
 </html>

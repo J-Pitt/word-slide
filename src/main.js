@@ -10,7 +10,7 @@ let animation = null;
 
 let moveCount = 0;
 let currentLevel = 1;
-const MAX_LEVELS = 10;
+const MAX_LEVELS = 20;
 let isTransitioning = false; // Flag to prevent word completion checks during transitions
 console.log("main.js loaded");
 
@@ -113,9 +113,12 @@ function rescrambleIncompleteTiles() {
         board[pos.r][pos.c] = incompleteTiles[i];
     }
     
-    // Ensure the empty space is in the correct position
-    emptyPos = { r: rows - 1, c: cols - 1 };
+    // Choose a random position for the empty space
+    const emptyRow = Math.floor(Math.random() * rows);
+    const emptyCol = Math.floor(Math.random() * cols);
+    emptyPos = { r: emptyRow, c: emptyCol };
     board[emptyPos.r][emptyPos.c] = "";
+    console.log(`Re-scrambling - new empty space position: (${emptyRow}, ${emptyCol})`);
     
     console.log('Re-scrambling complete. New board state:', board);
 }
@@ -252,6 +255,1155 @@ window.clearAllGreenHighlighting = clearAllGreenHighlighting;
 window.newGame = newGame;
 window.showHintConfirmation = showHintConfirmation;
 window.showRulesModal = showRulesModal;
+
+// Main menu navigation functions
+window.startOriginalGame = startOriginalGame;
+window.startTetrisGame = startTetrisGame;
+window.showMainMenu = showMainMenu;
+window.newTetrisGame = newTetrisGame;
+window.showTetrisRulesModal = showTetrisRulesModal;
+window.saveTetrisGameState = saveTetrisGameState;
+window.loadTetrisGameState = loadTetrisGameState;
+window.clearSavedTetrisGame = clearSavedTetrisGame;
+
+// Main menu navigation functions
+function showMainMenu() {
+    document.getElementById('mainMenu').style.display = 'block';
+    document.getElementById('originalGameContainer').style.display = 'none';
+    document.getElementById('tetrisGameContainer').style.display = 'none';
+}
+
+function startOriginalGame() {
+    document.getElementById('mainMenu').style.display = 'none';
+    document.getElementById('originalGameContainer').style.display = 'block';
+    document.getElementById('tetrisGameContainer').style.display = 'none';
+    
+    // Start the original game
+    if (!window.originalGameStarted) {
+        startGame();
+        window.originalGameStarted = true;
+    }
+}
+
+function startTetrisGame() {
+    document.getElementById('mainMenu').style.display = 'none';
+    document.getElementById('originalGameContainer').style.display = 'none';
+    document.getElementById('tetrisGameContainer').style.display = 'block';
+    
+    // Start the tetris game
+    if (!window.tetrisGameStarted) {
+        startTetrisGameLogic();
+        window.tetrisGameStarted = true;
+    }
+}
+
+function newTetrisGame() {
+    // Reset tetris game state
+    window.tetrisGameStarted = false;
+    tetrisUsedWords.clear(); // Reset used words for new game
+    clearSavedTetrisGame(); // Clear saved state for new game
+    startTetrisGame();
+}
+
+// Tetris Game Variables
+let tetrisBoard = [];
+let tetrisEmptyPos = { r: 0, c: 0 };
+let tetrisMoveCount = 0;
+let tetrisWordsSolved = 0;
+let tetrisCurrentWord = '';
+let tetrisGameRunning = false;
+let tetrisAnimating = false;
+let tetrisAnimation = null;
+let tetrisCompletedTiles = [];
+
+// Tetris Game Functions
+function startTetrisGameLogic() {
+    console.log('Starting Tetris game logic...');
+    
+    // Try to load saved game state first
+    const loadedState = loadTetrisGameState();
+    
+    if (!loadedState) {
+        // Initialize tetris game state if no saved state
+        tetrisMoveCount = 0;
+        tetrisWordsSolved = 0;
+        tetrisGameRunning = true;
+        tetrisAnimating = false;
+        tetrisAnimation = null;
+        tetrisCompletedTiles = [];
+        tetrisUsedWords.clear(); // Reset used words for new game
+        
+        // Generate initial tetris board
+        generateTetrisBoard();
+    } else {
+        // Update displays with loaded state
+        document.getElementById('tetrisMoveCounter').textContent = tetrisMoveCount;
+        document.getElementById('wordsSolvedCounter').textContent = tetrisWordsSolved;
+        document.getElementById('tetrisTargetWords').textContent = tetrisCurrentWord;
+    }
+    
+    // Start tetris game loop
+    updateTetrisGame();
+    
+    // Add event listeners for tetris canvas
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    tetrisCanvas.addEventListener('click', handleTetrisInput);
+    tetrisCanvas.addEventListener('touchstart', handleTetrisInput);
+}
+
+function generateTetrisBoard() {
+    console.log('Generating Tetris board...');
+    
+    const rows = 7;
+    const cols = 7;
+    
+    // Initialize empty board
+    tetrisBoard = [];
+    for (let r = 0; r < rows; r++) {
+        tetrisBoard[r] = [];
+        for (let c = 0; c < cols; c++) {
+            tetrisBoard[r][c] = '';
+        }
+    }
+    
+    // Fill board with random letters
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            tetrisBoard[r][c] = letters[Math.floor(Math.random() * letters.length)];
+        }
+    }
+    
+
+    
+    // Choose a random position for the empty space
+    const emptyRow = Math.floor(Math.random() * rows);
+    const emptyCol = Math.floor(Math.random() * cols);
+    tetrisBoard[emptyRow][emptyCol] = '';
+    tetrisEmptyPos = { r: emptyRow, c: emptyCol };
+    
+    console.log(`Tetris board generated with empty space at (${emptyRow}, ${emptyCol})`);
+    
+    // Generate initial word
+    generateNewTetrisWord();
+    
+    // Draw the board
+    drawTetrisBoard();
+}
+
+function generateNewTetrisWord() {
+    // Analyze current board and generate a word that can be completed
+    const availableLetters = getAvailableLetters();
+    tetrisCurrentWord = selectWordFromLetters(availableLetters);
+    
+    // Update display
+    document.getElementById('tetrisTargetWords').textContent = tetrisCurrentWord;
+    
+    console.log(`New tetris word generated: ${tetrisCurrentWord}`);
+}
+
+function getAvailableLetters() {
+    const letters = [];
+    for (let r = 0; r < tetrisBoard.length; r++) {
+        for (let c = 0; c < tetrisBoard[r].length; c++) {
+            if (tetrisBoard[r][c] !== '') {
+                letters.push(tetrisBoard[r][c]);
+            }
+        }
+    }
+    return letters;
+}
+
+// Track used words in Tetris game to avoid repetition
+let tetrisUsedWords = new Set();
+
+function selectWordFromLetters(availableLetters) {
+    // Enhanced word selection using the same word bank as original game
+    // Filter words that can be made with available letters
+    const possibleWords = WORD_BANK.filter(word => {
+        const wordLetters = word.split('');
+        const availableCopy = [...availableLetters];
+        
+        for (const letter of wordLetters) {
+            const index = availableCopy.indexOf(letter);
+            if (index === -1) return false;
+            availableCopy.splice(index, 1);
+        }
+        return true;
+    });
+    
+    // Filter out words that have been used recently
+    const unusedWords = possibleWords.filter(word => !tetrisUsedWords.has(word));
+    
+    // If we have unused words, use one of those
+    if (unusedWords.length > 0) {
+        const selectedWord = unusedWords[Math.floor(Math.random() * unusedWords.length)];
+        tetrisUsedWords.add(selectedWord);
+        
+        // If we've used 100 words, reset the used words set
+        if (tetrisUsedWords.size >= 100) {
+            tetrisUsedWords.clear();
+        }
+        
+        return selectedWord;
+    }
+    
+    // If all possible words have been used, clear the set and use any possible word
+    if (possibleWords.length > 0) {
+        tetrisUsedWords.clear();
+        const selectedWord = possibleWords[Math.floor(Math.random() * possibleWords.length)];
+        tetrisUsedWords.add(selectedWord);
+        return selectedWord;
+    }
+    
+    // If no words can be made with available letters, return a simple word
+    // and we'll add needed letters to the board
+    return 'CAT';
+}
+
+function handleTetrisInput(event) {
+    if (!tetrisGameRunning) return;
+    
+    event.preventDefault();
+    
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    const rect = tetrisCanvas.getBoundingClientRect();
+    const x = (event.clientX || event.touches[0].clientX) - rect.left;
+    const y = (event.clientY || event.touches[0].clientY) - rect.top;
+    
+    const cell = getTetrisCellFromCoords(x, y);
+    if (cell) {
+        tryTetrisMove(cell.r, cell.c);
+    }
+}
+
+function getTetrisCellFromCoords(x, y) {
+    // Scale coordinates to match actual canvas size (exactly same as original game)
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    const scaleX = tetrisCanvas.width / tetrisCanvas.offsetWidth;
+    const scaleY = tetrisCanvas.height / tetrisCanvas.offsetHeight;
+    const scaledX = x * scaleX;
+    const scaledY = y * scaleY;
+    
+    const cellSize = tetrisCanvas.width / 7;
+    const c = Math.floor(scaledX / cellSize);
+    const r = Math.floor(scaledY / cellSize);
+    
+    console.log(`getTetrisCellFromCoords: x=${x}, y=${y}, scaledX=${scaledX}, scaledY=${scaledY}, cellSize=${cellSize}, result=(${r}, ${c})`); // Debug
+    
+    if (r >= 0 && r < 7 && c >= 0 && c < 7) {
+        return { r, c };
+    }
+    return null;
+}
+
+function tryTetrisMove(r, c) {
+    console.log(`tryTetrisMove called with (${r}, ${c})`); // Debug
+    const dr = Math.abs(r - tetrisEmptyPos.r);
+    const dc = Math.abs(c - tetrisEmptyPos.c);
+    console.log(`Distance: dr=${dr}, dc=${dc}`); // Debug
+    console.log(`Can move: ${(dr === 1 && dc === 0) || (dr === 0 && dc === 1)}`); // Debug
+    console.log(`Currently animating: ${tetrisAnimating}`); // Debug
+    
+    if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
+        // Remove animation check - always process valid moves (same as original game)
+        // Valid move - start sliding animation (exactly same as original game)
+        const letter = tetrisBoard[r][c];
+        
+        console.log(`Starting tetris animation from (${r}, ${c}) to (${tetrisEmptyPos.r}, ${tetrisEmptyPos.c})`);
+        tetrisAnimating = true;
+        tetrisAnimation = {
+            from: { r, c },
+            to: { r: tetrisEmptyPos.r, c: tetrisEmptyPos.c },
+            letter: letter,
+            progress: 0,
+            duration: 8 // frames (exactly same as original game)
+        };
+        
+        tetrisMoveCount++;
+        document.getElementById('tetrisMoveCounter').textContent = tetrisMoveCount;
+        saveTetrisGameState(); // Save after each move
+    } else {
+        console.log(`Invalid tetris move - not adjacent to empty space`); // Debug
+    }
+}
+
+function checkTetrisWordCompletion() {
+    // Check if the current word is completed horizontally or vertically
+    const word = tetrisCurrentWord;
+    
+    // Check horizontal completion
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c <= 7 - word.length; c++) {
+            let found = true;
+            for (let i = 0; i < word.length; i++) {
+                if (tetrisBoard[r][c + i] !== word[i]) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+                completeTetrisWord(r, c, 'horizontal');
+                return;
+            }
+        }
+    }
+    
+    // Check vertical completion
+    for (let r = 0; r <= 7 - word.length; r++) {
+        for (let c = 0; c < 7; c++) {
+            let found = true;
+            for (let i = 0; i < word.length; i++) {
+                if (tetrisBoard[r + i][c] !== word[i]) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+                completeTetrisWord(r, c, 'vertical');
+                return;
+            }
+        }
+    }
+}
+
+function completeTetrisWord(startRow, startCol, direction) {
+    console.log(`Tetris word completed: ${tetrisCurrentWord} at (${startRow}, ${startCol}) ${direction}`);
+    
+    tetrisWordsSolved++;
+    document.getElementById('wordsSolvedCounter').textContent = tetrisWordsSolved;
+    saveTetrisGameState(); // Save after word completion
+    
+    // Mark completed tiles
+    const completedTiles = [];
+    for (let i = 0; i < tetrisCurrentWord.length; i++) {
+        const r = direction === 'horizontal' ? startRow : startRow + i;
+        const c = direction === 'horizontal' ? startCol + i : startCol;
+        completedTiles.push({ r, c, letter: tetrisCurrentWord[i] });
+    }
+    
+    // Animate word completion
+    animateTetrisWordCompletion(completedTiles);
+}
+
+function animateTetrisWordCompletion(completedTiles) {
+    // Don't block sliding animations during word completion
+    // tetrisAnimating = true; // REMOVED - this was blocking sliding!
+    
+    // Step 1: Highlight completed tiles
+    drawTetrisBoardWithHighlight(completedTiles);
+    
+    setTimeout(() => {
+        // Step 2: Remove completed tiles
+        for (const tile of completedTiles) {
+            tetrisBoard[tile.r][tile.c] = '';
+        }
+        
+        // Step 3: Apply gravity
+        applyTetrisGravity();
+        
+        // Step 4: Add new letters
+        addNewTetrisLetters();
+        
+        // Step 5: Generate new word
+        generateNewTetrisWord();
+        
+        // Step 6: Redraw board
+        drawTetrisBoard();
+        
+        // Step 7: Save game state after board update
+        saveTetrisGameState();
+        
+        // tetrisAnimating = false; // REMOVED - no longer needed
+    }, 1000);
+}
+
+function drawTetrisBoardWithHighlight(completedTiles) {
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    const ctx = tetrisCanvas.getContext('2d');
+    const cellSize = tetrisCanvas.width / 7;
+    
+    // Set font for letters
+    ctx.font = `bold ${cellSize / 2.5}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    
+    // Draw oak wood board background with realistic texture
+    const boardGradient = ctx.createLinearGradient(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+    boardGradient.addColorStop(0, "#F5DEB3"); // Wheat
+    boardGradient.addColorStop(0.2, "#DEB887"); // Burlywood
+    boardGradient.addColorStop(0.4, "#D2B48C"); // Tan
+    boardGradient.addColorStop(0.6, "#CD853F"); // Peru
+    boardGradient.addColorStop(0.8, "#A0522D"); // Sienna
+    boardGradient.addColorStop(1, "#8B4513"); // Saddle brown
+    
+    ctx.fillStyle = boardGradient;
+    ctx.fillRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+    
+    // Add oak wood grain patterns
+    ctx.strokeStyle = "rgba(139, 69, 19, 0.4)";
+    ctx.lineWidth = 1;
+    
+    // Vertical grain lines (characteristic of oak)
+    for (let i = 0; i < tetrisCanvas.width; i += 3) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + 1, tetrisCanvas.height);
+        ctx.stroke();
+    }
+    
+    // Horizontal growth rings
+    ctx.strokeStyle = "rgba(160, 82, 45, 0.5)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < tetrisCanvas.height; i += 12) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(tetrisCanvas.width, i);
+        ctx.stroke();
+    }
+    
+    // Diagonal grain patterns
+    ctx.strokeStyle = "rgba(101, 67, 33, 0.3)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < tetrisCanvas.width + tetrisCanvas.height; i += 20) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + 8, tetrisCanvas.height);
+        ctx.stroke();
+    }
+    
+    // Add oak medullary rays (characteristic white lines in oak)
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < tetrisCanvas.height; i += 8) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(tetrisCanvas.height, i);
+        ctx.stroke();
+    }
+    
+    // Add light variations across the wood
+    const lightGradient = ctx.createLinearGradient(0, 0, tetrisCanvas.width, 0);
+    lightGradient.addColorStop(0, "rgba(255, 255, 255, 0.1)");
+    lightGradient.addColorStop(0.3, "transparent");
+    lightGradient.addColorStop(0.7, "transparent");
+    lightGradient.addColorStop(1, "rgba(0, 0, 0, 0.1)");
+    
+    ctx.fillStyle = lightGradient;
+    ctx.fillRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+    
+    // Add board shadow for 3D effect
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.fillRect(15, 15, tetrisCanvas.width, tetrisCanvas.height);
+    
+    // Draw board with 3D border
+    ctx.fillStyle = boardGradient;
+    ctx.fillRect(0, 0, tetrisCanvas.width - 15, tetrisCanvas.height - 15);
+
+    // Draw tiles
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+            const x = c * cellSize;
+            const y = r * cellSize;
+            
+            // Check if this tile is completed
+            const isCompleted = completedTiles.some(tile => tile.r === r && tile.c === c);
+            
+            if (tetrisBoard[r][c] === "") {
+                // Draw empty space as a recessed area
+                ctx.fillStyle = "#654321";
+                ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                
+                // Add shadow to make it look recessed
+                ctx.strokeStyle = "#4A2C1A";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+            } else {
+                // Draw enhanced 3D block tile
+                const blockHeight = 18; // Much more pronounced 3D effect
+                
+                // Draw enhanced bottom shadow with multiple layers
+                ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+                ctx.fillRect(x + blockHeight, y + blockHeight, cellSize - 4, cellSize - 4);
+                
+                // Draw additional shadow layers for extreme depth
+                ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+                ctx.fillRect(x + blockHeight - 3, y + blockHeight - 3, cellSize - 4, cellSize - 4);
+                
+                ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+                ctx.fillRect(x + blockHeight - 6, y + blockHeight - 6, cellSize - 4, cellSize - 4);
+                
+                // Draw right side of block with enhanced 3D
+                ctx.fillStyle = isCompleted ? "#2E8B57" : "#A0522D"; // Green for completed
+                ctx.beginPath();
+                ctx.moveTo(x + cellSize - 4, y);
+                ctx.lineTo(x + cellSize - 4 + blockHeight, y + blockHeight);
+                ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
+                ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Draw bottom side of block with enhanced 3D
+                ctx.fillStyle = isCompleted ? "#228B22" : "#8B4513"; // Green for completed
+                ctx.beginPath();
+                ctx.moveTo(x, y + cellSize - 4);
+                ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
+                ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
+                ctx.lineTo(x + blockHeight, y + cellSize - 4 + blockHeight);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Add intense highlight on top edge for dramatic 3D effect
+                ctx.strokeStyle = isCompleted ? "#90EE90" : "#FFFFFF";
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + cellSize - 4, y);
+                ctx.stroke();
+                
+                // Add intense highlight on left edge for dramatic 3D effect
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x, y + cellSize - 4);
+                ctx.stroke();
+                
+                // Add secondary highlight for extra depth
+                ctx.strokeStyle = isCompleted ? "#90EE90" : "#F5DEB3";
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x + 1, y + 1);
+                ctx.lineTo(x + cellSize - 5, y + 1);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(x + 1, y + 1);
+                ctx.lineTo(x + 1, y + cellSize - 5);
+                ctx.stroke();
+                
+                // Draw main face of block
+                let tileGradient;
+                if (isCompleted) {
+                    tileGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+                    tileGradient.addColorStop(0, "#00FF00"); // Bright green
+                    tileGradient.addColorStop(0.3, "#00CC00"); // Medium green
+                    tileGradient.addColorStop(0.7, "#009900"); // Dark green
+                    tileGradient.addColorStop(1, "#006600"); // Very dark green
+                } else {
+                    tileGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+                    tileGradient.addColorStop(0, "#F5DEB3"); // Wheat
+                    tileGradient.addColorStop(0.3, "#DEB887"); // Burlywood
+                    tileGradient.addColorStop(0.7, "#D2B48C"); // Tan
+                    tileGradient.addColorStop(1, "#BC8F8F"); // Rosy brown
+                }
+                
+                ctx.fillStyle = tileGradient;
+                ctx.fillRect(x, y, cellSize - 4, cellSize - 4);
+                
+                // Add bright border for completed tiles
+                if (isCompleted) {
+                    ctx.strokeStyle = "#00FF00";
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(x, y, cellSize - 4, cellSize - 4);
+                }
+                
+                // Add wood grain to tile
+                ctx.strokeStyle = "#CD853F";
+                ctx.lineWidth = 0.5;
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + 5 + i * 8, y + 5);
+                    ctx.lineTo(x + 8 + i * 8, y + cellSize - 9);
+                    ctx.stroke();
+                }
+                
+                // Draw letter with clean 3D effect
+                ctx.save();
+                ctx.fillStyle = "#654321"; // Darker brown
+                ctx.shadowColor = "transparent";
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+                ctx.fillText(
+                    tetrisBoard[r][c],
+                    x + (cellSize - 4) / 2,
+                    y + (cellSize - 4) / 2
+                );
+                ctx.restore();
+                
+                // Add subtle highlight to letter (darker)
+                ctx.fillStyle = "#8B4513";
+                ctx.shadowColor = "transparent";
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+                ctx.fillText(
+                    tetrisBoard[r][c],
+                    x + (cellSize - 4) / 2 - 1,
+                    y + (cellSize - 4) / 2 - 1
+                );
+            }
+        }
+    }
+}
+
+function applyTetrisGravity() {
+    // Apply gravity to make letters fall down
+    for (let c = 0; c < 7; c++) {
+        let writeRow = 6; // Start from bottom
+        for (let r = 6; r >= 0; r--) {
+            if (tetrisBoard[r][c] !== '') {
+                if (writeRow !== r) {
+                    tetrisBoard[writeRow][c] = tetrisBoard[r][c];
+                    tetrisBoard[r][c] = '';
+                }
+                writeRow--;
+            }
+        }
+    }
+    
+    // Update empty position to top
+    tetrisEmptyPos = { r: 0, c: Math.floor(Math.random() * 7) };
+}
+
+function addNewTetrisLetters() {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    
+    // Fill empty spaces with new letters
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+            if (tetrisBoard[r][c] === '') {
+                tetrisBoard[r][c] = letters[Math.floor(Math.random() * letters.length)];
+            }
+        }
+    }
+}
+
+function drawTetrisBoard(anim = null) {
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    
+    if (!tetrisCanvas) {
+        console.error('Tetris canvas not found!');
+        return;
+    }
+    
+    const ctx = tetrisCanvas.getContext('2d');
+    const cellSize = tetrisCanvas.width / 7;
+    
+    // Set font for letters
+    ctx.font = `bold ${cellSize / 2.5}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    
+    // Draw oak wood board background with realistic texture
+    const boardGradient = ctx.createLinearGradient(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+    boardGradient.addColorStop(0, "#F5DEB3"); // Wheat
+    boardGradient.addColorStop(0.2, "#DEB887"); // Burlywood
+    boardGradient.addColorStop(0.4, "#D2B48C"); // Tan
+    boardGradient.addColorStop(0.6, "#CD853F"); // Peru
+    boardGradient.addColorStop(0.8, "#A0522D"); // Sienna
+    boardGradient.addColorStop(1, "#8B4513"); // Saddle brown
+    
+    ctx.fillStyle = boardGradient;
+    ctx.fillRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+    
+    // Add oak wood grain patterns
+    ctx.strokeStyle = "rgba(139, 69, 19, 0.4)";
+    ctx.lineWidth = 1;
+    
+    // Vertical grain lines (characteristic of oak)
+    for (let i = 0; i < tetrisCanvas.width; i += 3) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + 1, tetrisCanvas.height);
+        ctx.stroke();
+    }
+    
+    // Horizontal growth rings
+    ctx.strokeStyle = "rgba(160, 82, 45, 0.5)";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < tetrisCanvas.height; i += 12) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(tetrisCanvas.width, i);
+        ctx.stroke();
+    }
+    
+    // Diagonal grain patterns
+    ctx.strokeStyle = "rgba(101, 67, 33, 0.3)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < tetrisCanvas.width + tetrisCanvas.height; i += 20) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + 8, tetrisCanvas.height);
+        ctx.stroke();
+    }
+    
+    // Add oak medullary rays (characteristic white lines in oak)
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < tetrisCanvas.height; i += 8) {
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(tetrisCanvas.width, i);
+        ctx.stroke();
+    }
+    
+    // Add light variations across the wood
+    const lightGradient = ctx.createLinearGradient(0, 0, tetrisCanvas.width, 0);
+    lightGradient.addColorStop(0, "rgba(255, 255, 255, 0.1)");
+    lightGradient.addColorStop(0.3, "transparent");
+    lightGradient.addColorStop(0.7, "transparent");
+    lightGradient.addColorStop(1, "rgba(0, 0, 0, 0.1)");
+    
+    ctx.fillStyle = lightGradient;
+    ctx.fillRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+    
+    // Add board shadow for 3D effect
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.fillRect(15, 15, tetrisCanvas.width, tetrisCanvas.height);
+    
+    // Draw board with 3D border
+    ctx.fillStyle = boardGradient;
+    ctx.fillRect(0, 0, tetrisCanvas.width - 15, tetrisCanvas.height - 15);
+
+    // Draw tiles
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+            const x = c * cellSize;
+            const y = r * cellSize;
+            
+            // If animating, skip drawing the moving letter in its original spot
+            // Also ensure empty space is drawn consistently during animation
+            if (anim && anim.from.r === r && anim.from.c === c) {
+                // Draw empty space consistently during animation
+                ctx.fillStyle = "#654321";
+                ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                
+                ctx.strokeStyle = "#4A2C1A";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                continue;
+            }
+
+            if (tetrisBoard[r][c] === "") {
+                // Draw empty space as a recessed area
+                ctx.fillStyle = "#654321";
+                ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                
+                // Add shadow to make it look recessed
+                ctx.strokeStyle = "#4A2C1A";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+            } else {
+                // Draw enhanced 3D block tile
+                const blockHeight = 18; // Much more pronounced 3D effect
+                
+                // Draw enhanced bottom shadow with multiple layers
+                ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+                ctx.fillRect(x + blockHeight, y + blockHeight, cellSize - 4, cellSize - 4);
+                
+                // Draw additional shadow layers for extreme depth
+                ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+                ctx.fillRect(x + blockHeight - 3, y + blockHeight - 3, cellSize - 4, cellSize - 4);
+                
+                ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+                ctx.fillRect(x + blockHeight - 6, y + blockHeight - 6, cellSize - 4, cellSize - 4);
+                
+                // Draw right side of block with enhanced 3D
+                ctx.fillStyle = "#A0522D";
+                ctx.beginPath();
+                ctx.moveTo(x + cellSize - 4, y);
+                ctx.lineTo(x + cellSize - 4 + blockHeight, y + blockHeight);
+                ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
+                ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Draw bottom side of block with enhanced 3D
+                ctx.fillStyle = "#8B4513";
+                ctx.beginPath();
+                ctx.moveTo(x, y + cellSize - 4);
+                ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
+                ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
+                ctx.lineTo(x + blockHeight, y + cellSize - 4 + blockHeight);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Add intense highlight on top edge for dramatic 3D effect
+                ctx.strokeStyle = "#FFFFFF";
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + cellSize - 4, y);
+                ctx.stroke();
+                
+                // Add intense highlight on left edge for dramatic 3D effect
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x, y + cellSize - 4);
+                ctx.stroke();
+                
+                // Add secondary highlight for extra depth
+                ctx.strokeStyle = "#F5DEB3";
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x + 1, y + 1);
+                ctx.lineTo(x + cellSize - 5, y + 1);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(x + 1, y + 1);
+                ctx.lineTo(x + 1, y + cellSize - 5);
+                ctx.stroke();
+                
+                // Draw main face of block
+                const tileGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+                tileGradient.addColorStop(0, "#F5DEB3"); // Wheat
+                tileGradient.addColorStop(0.3, "#DEB887"); // Burlywood
+                tileGradient.addColorStop(0.7, "#D2B48C"); // Tan
+                tileGradient.addColorStop(1, "#BC8F8F"); // Rosy brown
+                
+                ctx.fillStyle = tileGradient;
+                ctx.fillRect(x, y, cellSize - 4, cellSize - 4);
+                
+                // Add wood grain to tile
+                ctx.strokeStyle = "#CD853F";
+                ctx.lineWidth = 0.5;
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + 5 + i * 8, y + 5);
+                    ctx.lineTo(x + 8 + i * 8, y + cellSize - 9);
+                    ctx.stroke();
+                }
+                
+                // Draw letter with clean 3D effect
+                ctx.save();
+                ctx.fillStyle = "#654321"; // Darker brown
+                ctx.shadowColor = "transparent";
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+                ctx.fillText(
+                    tetrisBoard[r][c],
+                    x + (cellSize - 4) / 2,
+                    y + (cellSize - 4) / 2
+                );
+                ctx.restore();
+                
+                // Add subtle highlight to letter (darker)
+                ctx.fillStyle = "#8B4513";
+                ctx.shadowColor = "transparent";
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+                ctx.fillText(
+                    tetrisBoard[r][c],
+                    x + (cellSize - 4) / 2 - 1,
+                    y + (cellSize - 4) / 2 - 1
+                );
+            }
+        }
+    }
+
+    // Draw the moving letter if animating
+    if (anim) {
+        const t = anim.progress / anim.duration;
+        const startX = anim.from.c * cellSize + (cellSize - 4) / 2;
+        const startY = anim.from.r * cellSize + (cellSize - 4) / 2;
+        const endX = anim.to.c * cellSize + (cellSize - 4) / 2;
+        const endY = anim.to.r * cellSize + (cellSize - 4) / 2;
+        const x = startX + (endX - startX) * t;
+        const y = startY + (endY - startY) * t;
+
+        // Draw moving tile as a simple block (no 3D effects) - same as original game
+        const blockSize = cellSize - 4;
+        
+        // Main face - same as stationary tiles
+        let tileGradient;
+        tileGradient = ctx.createLinearGradient(x - blockSize/2, y - blockSize/2, x + blockSize/2, y + blockSize/2);
+        tileGradient.addColorStop(0, "#F5DEB3"); // Wheat
+        tileGradient.addColorStop(0.3, "#DEB887"); // Burlywood
+        tileGradient.addColorStop(0.7, "#D2B48C"); // Tan
+        tileGradient.addColorStop(1, "#BC8F8F"); // Rosy brown
+        
+        ctx.fillStyle = tileGradient;
+        ctx.fillRect(x - blockSize/2, y - blockSize/2, blockSize, blockSize);
+        
+        // Simple border
+        ctx.strokeStyle = "#8B4513";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - blockSize/2, y - blockSize/2, blockSize, blockSize);
+        
+        // Add wood grain to moving tile
+        ctx.strokeStyle = "#CD853F";
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.moveTo(x - blockSize/2 + 5 + i * 8, y - blockSize/2 + 5);
+            ctx.lineTo(x - blockSize/2 + 8 + i * 8, y + blockSize/2 - 9);
+            ctx.stroke();
+        }
+        
+        // Draw letter on moving tile
+        ctx.save();
+        ctx.fillStyle = "#654321"; // Darker brown
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.fillText(anim.letter, x, y);
+        ctx.restore();
+        
+        // Add subtle highlight to letter
+        ctx.fillStyle = "#8B4513";
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.fillText(anim.letter, x - 1, y - 1);
+    }
+}
+
+function updateTetrisGame() {
+    // Only run the game loop if tetrisGameRunning is true (exactly same as original game)
+    if (!tetrisGameRunning) {
+        requestAnimationFrame(updateTetrisGame);
+        return;
+    }
+    
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    const ctx = tetrisCanvas.getContext('2d');
+    ctx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+
+    if (tetrisAnimating && tetrisAnimation) {
+        drawTetrisBoard(tetrisAnimation);
+        tetrisAnimation.progress++;
+        if (tetrisAnimation.progress >= tetrisAnimation.duration) {
+            // Finish animation and swap (exactly same as original game)
+            tetrisBoard[tetrisAnimation.to.r][tetrisAnimation.to.c] = tetrisAnimation.letter;
+            tetrisBoard[tetrisAnimation.from.r][tetrisAnimation.from.c] = "";
+            tetrisEmptyPos = { r: tetrisAnimation.from.r, c: tetrisAnimation.from.c };
+            tetrisAnimating = false;
+            tetrisAnimation = null;
+            
+            console.log("Tetris board after move:", tetrisBoard); // Debug
+            console.log("Tetris empty pos:", tetrisEmptyPos); // Debug
+            
+            // Check for word completion after each move
+            checkTetrisWordCompletion();
+        }
+    } else {
+        drawTetrisBoard();
+    }
+
+    requestAnimationFrame(updateTetrisGame);
+}
+
+function showTetrisRulesModal() {
+    // Create tetris-specific rules modal
+    const modalOverlay = document.createElement('div');
+    modalOverlay.id = 'tetris-rules-modal';
+    modalOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 3000;
+        font-family: Arial, sans-serif;
+    `;
+    
+    // Create modal container with wood paneling
+    const modalContainer = document.createElement('div');
+    modalContainer.style.cssText = `
+        position: relative;
+        width: 600px;
+        max-width: 90vw;
+        max-height: 80vh;
+        background: transparent;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 
+            0 20px 60px rgba(0, 0, 0, 0.8),
+            0 0 40px rgba(47, 27, 20, 0.8);
+        border: 4px solid #2F1B14;
+    `;
+    
+    // Create dark wood paneling background
+    const panelingBackground = document.createElement('div');
+    panelingBackground.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: 
+            linear-gradient(135deg, #2F1B14 0%, #3D2318 20%, #4A2C1A 40%, #5D3A1F 60%, #4A2C1A 80%, #3D2318 100%),
+            repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 1px,
+                rgba(47, 27, 20, 0.6) 1px,
+                rgba(47, 27, 20, 0.6) 3px
+            ),
+            repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(61, 35, 24, 0.7) 2px,
+                rgba(61, 35, 24, 0.7) 15px
+            );
+        pointer-events: none;
+    `;
+    modalContainer.appendChild(panelingBackground);
+    
+    // Create scrollable content container
+    const content = document.createElement('div');
+    content.style.cssText = `
+        position: relative;
+        z-index: 10;
+        padding: 30px;
+        color: white;
+        max-height: 70vh;
+        overflow-y: auto;
+    `;
+    
+    // Create title
+    const title = document.createElement('h2');
+    title.textContent = '🔄 Tetris Style WordSlide';
+    title.style.cssText = `
+        color: #FFFFFF;
+        font-size: 28px;
+        margin: 0 0 20px 0;
+        text-align: center;
+        text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8), 1px 1px 2px rgba(0, 0, 0, 0.9);
+        font-weight: bold;
+    `;
+    
+    // Create sections
+    const sections = [
+        {
+            title: '🎯 Objective',
+            content: 'Solve words continuously! When you complete a word, it disappears and new letters drop down from the top.'
+        },
+        {
+            title: '🔄 Dynamic Gameplay',
+            content: 'Unlike the original game, there are no levels. You keep solving words forever, with new words appearing as you progress.'
+        },
+        {
+            title: '📉 Gravity System',
+            content: 'When a word is completed, those letters disappear and all letters above them drop down to fill the empty spaces.'
+        },
+        {
+            title: '⬇️ New Letters',
+            content: 'After letters drop down, new letter blocks float down from the top to fill any remaining empty spaces.'
+        },
+        {
+            title: '🎲 Word Generation',
+            content: 'The game analyzes the current board and generates new words that can be completed with the available letters.'
+        },
+        {
+            title: '📊 Scoring',
+            content: 'Track your progress with the Words Solved counter and Moves counter. Try to solve as many words as possible!'
+        },
+        {
+            title: '🎮 Controls',
+            content: 'Click or tap on tiles adjacent to the empty space to move them, just like the original game.'
+        },
+        {
+            title: '🏆 Endless Challenge',
+            content: 'The game continues indefinitely. How many words can you solve? Challenge yourself to beat your high score!'
+        }
+    ];
+    
+    // Add title
+    content.appendChild(title);
+    
+    // Add sections
+    sections.forEach(section => {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.style.cssText = `
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            border-left: 4px solid #FFD700;
+        `;
+        
+        const sectionTitle = document.createElement('h3');
+        sectionTitle.textContent = section.title;
+        sectionTitle.style.cssText = `
+            color: #FFD700;
+            font-size: 18px;
+            margin: 0 0 10px 0;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            font-weight: bold;
+        `;
+        
+        const sectionContent = document.createElement('p');
+        sectionContent.textContent = section.content;
+        sectionContent.style.cssText = `
+            color: #FFFFFF;
+            font-size: 14px;
+            margin: 0;
+            line-height: 1.5;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+        `;
+        
+        sectionDiv.appendChild(sectionTitle);
+        sectionDiv.appendChild(sectionContent);
+        content.appendChild(sectionDiv);
+    });
+    
+    // Create close button
+    const closeButton = document.createElement('button');
+    closeButton.textContent = 'Got it!';
+    closeButton.style.cssText = `
+        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        transition: all 0.2s ease;
+        margin-top: 20px;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    `;
+    closeButton.onmouseover = () => {
+        closeButton.style.transform = 'translateY(-2px)';
+        closeButton.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.4)';
+    };
+    closeButton.onmouseout = () => {
+        closeButton.style.transform = 'translateY(0)';
+        closeButton.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)';
+    };
+    closeButton.onclick = () => {
+        document.body.removeChild(modalOverlay);
+    };
+    
+    content.appendChild(closeButton);
+    modalContainer.appendChild(content);
+    modalOverlay.appendChild(modalContainer);
+    document.body.appendChild(modalOverlay);
+    
+    // Handle escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(modalOverlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+}
 
 // Add this function for the popup
 function showTryAgainPopup() {
@@ -768,7 +1920,7 @@ function tryMove(r, c) {
                 to: { r: emptyPos.r, c: emptyPos.c },
                 letter: board[r][c],
                 progress: 0,
-                duration: 15 // frames
+                duration: 8 // frames (halved from 15)
             };
             moveCount++;
             updateMoveCounter(); // Update the display
@@ -790,25 +1942,76 @@ function shuffleArray(arr) {
     return arr;
 }
 
-// Word sets for each level - now with longer words for 7x7 board
-const PROD_WORD_SETS = [
-    ["high", "bird", "cat"],    // Level 1
-    ["dog", "hat", "mara"],        // Level 2
-    ["red", "blue", "pink"],     // Level 3
-    ["sun", "moon", "star"],     // Level 4
-    ["book", "read", "write"],   // Level 5
-    ["tree", "leaf", "root"],    // Level 6
-    ["fish", "swim", "ocean"],   // Level 7
-    ["play", "game", "fun"],     // Level 8
-    ["food", "eat", "meal"],     // Level 9
-    ["love", "heart", "care"]    // Level 10
+// Enhanced word generation system for 20 levels
+const WORD_BANK = [
+    // 3-letter words
+    "CAT", "DOG", "BAT", "RAT", "HAT", "MAT", "SIT", "RUN", "JAM", "BAG",
+    "BIG", "HOT", "COW", "PIG", "FOX", "BOX", "TOP", "MAP", "CAP", "TAP",
+    "GAP", "LAP", "NAP", "RAP", "SAP", "ZAP", "BED", "RED", "FED", "LED",
+    "TEN", "PEN", "MEN", "DEN", "BEN", "SUN", "FUN", "GUN", "NUN", "BUN",
+    "CUP", "PUP", "UP", "TIP", "LIP", "RIP", "SIP", "DIP", "HIP", "KIP",
+    "JET", "PET", "SET", "WET", "GET", "LET", "MET", "NET", "YET", "VET",
+    "KEY", "DAY", "MAY", "SAY", "WAY", "PAY", "RAY", "LAY", "HAY", "JAY",
+    "BOY", "TOY", "JOY", "COY", "SOY", "ROY", "ZOO", "TOO", "TWO", "WHO",
+    "HOW", "NOW", "COW", "BOW", "ROW", "LOW", "MOW", "SOW", "TOW", "WOW",
+    "EAT", "FAT", "HAT", "MAT", "PAT", "RAT", "SAT", "VAT", "CAT", "BAT",
+    
+    // 4-letter words
+    "BIRD", "CARD", "DARK", "FARM", "GAME", "HAND", "JUMP", "KIND", "LAMP", "MIND",
+    "NEXT", "OPEN", "PLAY", "QUIT", "RACE", "SING", "TALK", "WALK", "YEAR", "ZERO",
+    "BOOK", "COOK", "LOOK", "TOOK", "HOOK", "ROOK", "SOOK", "WOOD", "FOOD", "MOOD",
+    "GOOD", "HOOD", "ROOM", "DOOM", "BOOM", "ZOOM", "COOL", "POOL", "TOOL", "FOOL",
+    "BALL", "CALL", "FALL", "HALL", "MALL", "TALL", "WALL", "SMALL", "STAR", "CARE",
+    "DARE", "FARE", "HARE", "MARE", "PARE", "RARE", "WARE", "BARE", "FIRE", "HIRE",
+    "MIRE", "SIRE", "TIRE", "WIRE", "LIRE", "CORE", "BORE", "FORE", "GORE", "MORE",
+    "PORE", "SORE", "TORE", "WORE", "YORE", "LORE", "RORE", "DORE", "FOUR", "HOUR",
+    "POUR", "SOUR", "TOUR", "YOUR", "COURT", "PORT", "SORT", "FORT", "WORT", "BORT",
+    "HURT", "CURT", "BURT", "TURT", "GURT", "LURT", "MURT", "PURT", "SURT", "WURT"
 ];
+
+// Generate word sets for 20 levels
+function generateWordSets() {
+    const wordSets = [];
+    const usedWords = new Set();
+    
+    for (let level = 1; level <= 20; level++) {
+        const levelWords = [];
+        
+        // Select 3 words for each level
+        for (let i = 0; i < 3; i++) {
+            let selectedWord;
+            let attempts = 0;
+            
+            // Try to find an unused word
+            do {
+                selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)];
+                attempts++;
+            } while (usedWords.has(selectedWord) && attempts < 50);
+            
+            // If we can't find an unused word, reset and use any word
+            if (attempts >= 50) {
+                selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)];
+            }
+            
+            levelWords.push(selectedWord);
+            usedWords.add(selectedWord);
+        }
+        
+        wordSets.push(levelWords);
+    }
+    
+    return wordSets;
+}
+
+// Generate word sets for each session
+const PROD_WORD_SETS = generateWordSets();
 
 // Current word sets
 let WORD_SETS = PROD_WORD_SETS;
 
 // Save/load system
 const SAVE_KEY = 'wordslide_game_state';
+const TETRIS_SAVE_KEY = 'wordslide_tetris_state';
 
 // Game state structure
 let gameState = {
@@ -891,6 +2094,76 @@ function clearSavedGame() {
         console.log('Saved game state cleared');
     } catch (error) {
         console.error('Error clearing saved game state:', error);
+    }
+}
+
+// Save Tetris game state to localStorage
+function saveTetrisGameState() {
+    try {
+        const stateToSave = {
+            tetrisMoveCount: tetrisMoveCount,
+            tetrisWordsSolved: tetrisWordsSolved,
+            tetrisCurrentWord: tetrisCurrentWord,
+            tetrisBoard: tetrisBoard,
+            tetrisEmptyPos: tetrisEmptyPos,
+            tetrisGameRunning: tetrisGameRunning,
+            tetrisAnimating: tetrisAnimating,
+            tetrisAnimation: tetrisAnimation,
+            tetrisCompletedTiles: tetrisCompletedTiles,
+            tetrisUsedWords: Array.from(tetrisUsedWords),
+            timestamp: Date.now()
+        };
+        
+        localStorage.setItem(TETRIS_SAVE_KEY, JSON.stringify(stateToSave));
+        console.log('Tetris game state saved successfully');
+    } catch (error) {
+        console.error('Error saving Tetris game state:', error);
+    }
+}
+
+// Load Tetris game state from localStorage
+function loadTetrisGameState() {
+    try {
+        const savedState = localStorage.getItem(TETRIS_SAVE_KEY);
+        if (savedState) {
+            const parsedState = JSON.parse(savedState);
+            
+            // Check if saved state is not too old (7 days)
+            const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+            if (parsedState.timestamp && parsedState.timestamp < sevenDaysAgo) {
+                console.log('Saved Tetris game state is too old, starting fresh');
+                return false;
+            }
+            
+            // Restore Tetris game state
+            tetrisMoveCount = parsedState.tetrisMoveCount || 0;
+            tetrisWordsSolved = parsedState.tetrisWordsSolved || 0;
+            tetrisCurrentWord = parsedState.tetrisCurrentWord || '';
+            tetrisBoard = parsedState.tetrisBoard || [];
+            tetrisEmptyPos = parsedState.tetrisEmptyPos || { r: 0, c: 0 };
+            tetrisGameRunning = parsedState.tetrisGameRunning !== undefined ? parsedState.tetrisGameRunning : true;
+            tetrisAnimating = parsedState.tetrisAnimating || false;
+            tetrisAnimation = parsedState.tetrisAnimation || null;
+            tetrisCompletedTiles = parsedState.tetrisCompletedTiles || [];
+            tetrisUsedWords = new Set(parsedState.tetrisUsedWords || []);
+            
+            console.log('Tetris game state loaded successfully');
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Error loading Tetris game state:', error);
+        return false;
+    }
+}
+
+// Clear saved Tetris game state
+function clearSavedTetrisGame() {
+    try {
+        localStorage.removeItem(TETRIS_SAVE_KEY);
+        console.log('Saved Tetris game state cleared');
+    } catch (error) {
+        console.error('Error clearing saved Tetris game state:', error);
     }
 }
 
@@ -1583,7 +2856,7 @@ function showRulesModal() {
         },
         {
             title: '🎯 Level Progression',
-            content: 'Complete all target words to advance to the next level. Each level has different words to solve. There are 10 levels total!'
+            content: 'Complete all target words to advance to the next level. Each level has different words to solve. There are 20 levels total!'
         },
         {
             title: '🏆 Winning',
@@ -1986,12 +3259,17 @@ function generateBoard() {
         // Shuffle all letters
         shuffleArray(allLetters);
         
+        // Choose a random position for the empty space
+        const emptyRow = Math.floor(Math.random() * rows);
+        const emptyCol = Math.floor(Math.random() * cols);
+        console.log(`Random empty space position: (${emptyRow}, ${emptyCol})`);
+        
         // Place letters on the board in scrambled positions
         let letterIndex = 0;
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
-                if (r === rows - 1 && c === cols - 1) {
-                    board[r][c] = ""; // Empty space in bottom-right
+                if (r === emptyRow && c === emptyCol) {
+                    board[r][c] = ""; // Empty space in random position
                 } else {
                     board[r][c] = allLetters[letterIndex++];
                 }
@@ -2021,7 +3299,7 @@ function generateBoard() {
         }
         
         // Find the empty position
-        emptyPos = { r: rows - 1, c: cols - 1 };
+        emptyPos = { r: emptyRow, c: emptyCol };
         
         attempts++;
         
@@ -2697,7 +3975,10 @@ document.addEventListener('touchmove', (e) => {
 }, { passive: false });
 
 window.addEventListener('mousedown', handleInput);
-window.addEventListener('DOMContentLoaded', startGame);
+window.addEventListener('DOMContentLoaded', () => {
+    // Show main menu by default instead of starting the game
+    showMainMenu();
+});
 
 // Function to show reload confirmation modal
 function showReloadConfirmationModal() {
