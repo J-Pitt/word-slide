@@ -250,6 +250,7 @@ function clearAllGreenHighlighting() {
 // Make functions globally accessible
 window.clearAllGreenHighlighting = clearAllGreenHighlighting;
 window.newGame = newGame;
+window.showHintConfirmation = showHintConfirmation;
 
 // Add this function for the popup
 function showTryAgainPopup() {
@@ -919,6 +920,523 @@ function newGame() {
     drawBoard();
     
     console.log('New game started');
+}
+
+// Show hint confirmation modal
+function showHintConfirmation() {
+    // Create modal overlay
+    const modalOverlay = document.createElement('div');
+    modalOverlay.id = 'hint-confirmation-modal';
+    modalOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 3000;
+        font-family: Arial, sans-serif;
+    `;
+    
+    // Create modal container with wood paneling
+    const modalContainer = document.createElement('div');
+    modalContainer.style.cssText = `
+        position: relative;
+        width: 400px;
+        max-width: 90vw;
+        background: transparent;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 
+            0 20px 60px rgba(0, 0, 0, 0.8),
+            0 0 40px rgba(47, 27, 20, 0.8);
+        border: 4px solid #2F1B14;
+    `;
+    
+    // Create dark wood paneling background
+    const panelingBackground = document.createElement('div');
+    panelingBackground.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: 
+            linear-gradient(135deg, #2F1B14 0%, #3D2318 20%, #4A2C1A 40%, #5D3A1F 60%, #4A2C1A 80%, #3D2318 100%),
+            repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 1px,
+                rgba(47, 27, 20, 0.6) 1px,
+                rgba(47, 27, 20, 0.6) 3px
+            ),
+            repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(61, 35, 24, 0.7) 2px,
+                rgba(61, 35, 24, 0.7) 15px
+            );
+        pointer-events: none;
+    `;
+    modalContainer.appendChild(panelingBackground);
+    
+    // Create content container
+    const content = document.createElement('div');
+    content.style.cssText = `
+        position: relative;
+        z-index: 10;
+        padding: 30px;
+        text-align: center;
+        color: white;
+    `;
+    
+    // Create title
+    const title = document.createElement('h3');
+    title.textContent = '💡 Use Hint?';
+    title.style.cssText = `
+        color: #FFFFFF;
+        font-size: 24px;
+        margin: 0 0 15px 0;
+        text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8), 1px 1px 2px rgba(0, 0, 0, 0.9);
+        font-weight: bold;
+    `;
+    
+    // Create message
+    const message = document.createElement('p');
+    message.textContent = 'This will show you the next best move and add 3 moves to your total. Continue?';
+    message.style.cssText = `
+        color: #FFFFFF;
+        font-size: 16px;
+        margin: 0 0 25px 0;
+        line-height: 1.4;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    `;
+    
+    // Create button container
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = `
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+    `;
+    
+    // Create Yes button
+    const yesButton = document.createElement('button');
+    yesButton.textContent = 'Yes, Show Hint';
+    yesButton.style.cssText = `
+        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        transition: all 0.2s ease;
+    `;
+    yesButton.onmouseover = () => {
+        yesButton.style.transform = 'translateY(-2px)';
+        yesButton.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.4)';
+    };
+    yesButton.onmouseout = () => {
+        yesButton.style.transform = 'translateY(0)';
+        yesButton.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)';
+    };
+    yesButton.onclick = () => {
+        document.body.removeChild(modalOverlay);
+        showHint();
+    };
+    
+    // Create No button
+    const noButton = document.createElement('button');
+    noButton.textContent = 'Cancel';
+    noButton.style.cssText = `
+        background: linear-gradient(135deg, #f44336 0%, #da190b 100%);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        transition: all 0.2s ease;
+    `;
+    noButton.onmouseover = () => {
+        noButton.style.transform = 'translateY(-2px)';
+        noButton.style.boxShadow = '0 6px 12px rgba(0, 0, 0, 0.4)';
+    };
+    noButton.onmouseout = () => {
+        noButton.style.transform = 'translateY(0)';
+        noButton.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.3)';
+    };
+    noButton.onclick = () => {
+        document.body.removeChild(modalOverlay);
+    };
+    
+    buttonContainer.appendChild(yesButton);
+    buttonContainer.appendChild(noButton);
+    content.appendChild(title);
+    content.appendChild(message);
+    content.appendChild(buttonContainer);
+    modalContainer.appendChild(content);
+    modalOverlay.appendChild(modalContainer);
+    document.body.appendChild(modalOverlay);
+    
+    // Handle escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(modalOverlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+}
+
+// Show hint - analyze board and suggest next best move
+function showHint() {
+    console.log('=== SHOWING HINT ===');
+    
+    // Add 3 moves penalty
+    moveCount += 3;
+    updateMoveCounter();
+    saveGameState();
+    
+    // Find the best hint to show
+    const hint = analyzeBoardForHint();
+    
+    if (hint) {
+        showHintVisual(hint);
+    } else {
+        showNoHintAvailable();
+    }
+}
+
+// Analyze the board to find the best hint
+function analyzeBoardForHint() {
+    const targetWords = getCurrentWordSet();
+    console.log('Analyzing board for hints. Target words:', targetWords);
+    
+    // Find which words are closest to completion
+    const wordProgress = [];
+    
+    for (let wordIndex = 0; wordIndex < targetWords.length; wordIndex++) {
+        const targetWord = targetWords[wordIndex];
+        const progress = analyzeWordProgress(targetWord, wordIndex);
+        wordProgress.push(progress);
+    }
+    
+    // Sort by completion percentage (highest first)
+    wordProgress.sort((a, b) => b.completionPercentage - a.completionPercentage);
+    
+    console.log('Word progress analysis:', wordProgress);
+    
+    // Find the best move for the most promising word
+    for (const progress of wordProgress) {
+        if (progress.completionPercentage > 0 && progress.completionPercentage < 100) {
+            const bestMove = findBestMoveForWord(progress);
+            if (bestMove) {
+                return {
+                    type: 'move',
+                    word: progress.word,
+                    letter: bestMove.letter,
+                    from: bestMove.from,
+                    to: bestMove.to,
+                    reason: `Move "${bestMove.letter}" to complete "${progress.word}"`
+                };
+            }
+        }
+    }
+    
+    // If no specific moves found, suggest a general strategy
+    return {
+        type: 'strategy',
+        message: 'Focus on completing one word at a time. Look for letters that are close to their target positions.'
+    };
+}
+
+// Analyze how close a word is to completion
+function analyzeWordProgress(targetWord, wordIndex) {
+    console.log(`Analyzing progress for word "${targetWord}"`);
+    
+    let bestProgress = 0;
+    let bestPositions = [];
+    
+    // Check horizontal positions
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c <= cols - targetWord.length; c++) {
+            const progress = checkWordProgressAtPosition(targetWord, r, c, 'horizontal');
+            if (progress.percentage > bestProgress) {
+                bestProgress = progress.percentage;
+                bestPositions = progress.positions;
+            }
+        }
+    }
+    
+    // Check vertical positions
+    for (let r = 0; r <= rows - targetWord.length; r++) {
+        for (let c = 0; c < cols; c++) {
+            const progress = checkWordProgressAtPosition(targetWord, r, c, 'vertical');
+            if (progress.percentage > bestProgress) {
+                bestProgress = progress.percentage;
+                bestPositions = progress.positions;
+            }
+        }
+    }
+    
+    return {
+        word: targetWord,
+        wordIndex: wordIndex,
+        completionPercentage: bestProgress,
+        positions: bestPositions
+    };
+}
+
+// Check word progress at a specific position
+function checkWordProgressAtPosition(targetWord, startRow, startCol, direction) {
+    let correctLetters = 0;
+    const positions = [];
+    
+    for (let i = 0; i < targetWord.length; i++) {
+        const r = direction === 'horizontal' ? startRow : startRow + i;
+        const c = direction === 'horizontal' ? startCol + i : startCol;
+        
+        const expectedLetter = targetWord[i].toUpperCase();
+        const actualLetter = board[r][c];
+        
+        positions.push({
+            r: r,
+            c: c,
+            expected: expectedLetter,
+            actual: actualLetter,
+            correct: actualLetter === expectedLetter
+        });
+        
+        if (actualLetter === expectedLetter) {
+            correctLetters++;
+        }
+    }
+    
+    return {
+        percentage: (correctLetters / targetWord.length) * 100,
+        positions: positions
+    };
+}
+
+// Find the best move to complete a word
+function findBestMoveForWord(wordProgress) {
+    console.log(`Finding best move for word "${wordProgress.word}"`);
+    
+    // Find letters that need to be moved
+    const neededLetters = [];
+    const targetPositions = [];
+    
+    for (const pos of wordProgress.positions) {
+        if (!pos.correct) {
+            neededLetters.push(pos.expected);
+            targetPositions.push({ r: pos.r, c: pos.c });
+        }
+    }
+    
+    console.log('Needed letters:', neededLetters);
+    console.log('Target positions:', targetPositions);
+    
+    // Find where the needed letters currently are
+    for (const neededLetter of neededLetters) {
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                if (board[r][c] === neededLetter) {
+                    // Check if this letter is not already in a completed word
+                    const isCompleted = completedTiles.some(tile => tile.r === r && tile.c === c);
+                    if (!isCompleted) {
+                        // Find the closest target position
+                        const closestTarget = findClosestTargetPosition(r, c, targetPositions);
+                        if (closestTarget) {
+                            return {
+                                letter: neededLetter,
+                                from: { r: r, c: c },
+                                to: closestTarget
+                            };
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    return null;
+}
+
+// Find the closest target position to a letter
+function findClosestTargetPosition(letterRow, letterCol, targetPositions) {
+    let closest = null;
+    let minDistance = Infinity;
+    
+    for (const target of targetPositions) {
+        const distance = Math.abs(letterRow - target.r) + Math.abs(letterCol - target.c);
+        if (distance < minDistance) {
+            minDistance = distance;
+            closest = target;
+        }
+    }
+    
+    return closest;
+}
+
+// Show visual hint on the board
+function showHintVisual(hint) {
+    if (hint.type === 'move') {
+        showMoveHint(hint);
+    } else if (hint.type === 'strategy') {
+        showStrategyHint(hint);
+    }
+}
+
+// Show a specific move hint
+function showMoveHint(hint) {
+    console.log('Showing move hint:', hint);
+    
+    // Create hint overlay
+    const hintOverlay = document.createElement('div');
+    hintOverlay.id = 'hint-overlay';
+    hintOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 2000;
+    `;
+    
+    // Add pulsing highlight to the letter to move
+    const cellSize = canvas.width / cols;
+    const fromX = hint.from.c * cellSize;
+    const fromY = hint.from.r * cellSize;
+    
+    const highlight = document.createElement('div');
+    highlight.style.cssText = `
+        position: absolute;
+        left: ${canvas.offsetLeft + fromX}px;
+        top: ${canvas.offsetTop + fromY}px;
+        width: ${cellSize}px;
+        height: ${cellSize}px;
+        border: 4px solid #FFD700;
+        border-radius: 8px;
+        background: rgba(255, 215, 0, 0.2);
+        animation: pulse 1.5s infinite;
+        pointer-events: none;
+    `;
+    
+    // Add CSS animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // Add arrow to target position
+    const toX = hint.to.c * cellSize;
+    const toY = hint.to.r * cellSize;
+    
+    const arrow = document.createElement('div');
+    arrow.style.cssText = `
+        position: absolute;
+        left: ${canvas.offsetLeft + toX}px;
+        top: ${canvas.offsetTop + toY}px;
+        width: ${cellSize}px;
+        height: ${cellSize}px;
+        border: 3px dashed #00FF00;
+        border-radius: 8px;
+        background: rgba(0, 255, 0, 0.1);
+        animation: arrowPulse 2s infinite;
+        pointer-events: none;
+    `;
+    
+    // Add arrow pulse animation
+    const arrowStyle = document.createElement('style');
+    arrowStyle.textContent = `
+        @keyframes arrowPulse {
+            0% { border-color: #00FF00; }
+            50% { border-color: #FFFF00; }
+            100% { border-color: #00FF00; }
+        }
+    `;
+    document.head.appendChild(arrowStyle);
+    
+    hintOverlay.appendChild(highlight);
+    hintOverlay.appendChild(arrow);
+    document.body.appendChild(hintOverlay);
+    
+    // Show hint message
+    setTimeout(() => {
+        showHintMessage(`💡 Hint: ${hint.reason}`);
+    }, 500);
+    
+    // Remove hint after 5 seconds
+    setTimeout(() => {
+        if (document.body.contains(hintOverlay)) {
+            document.body.removeChild(hintOverlay);
+        }
+    }, 5000);
+}
+
+// Show strategy hint
+function showStrategyHint(hint) {
+    showHintMessage(`💡 Hint: ${hint.message}`);
+}
+
+// Show hint message
+function showHintMessage(message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 15px 25px;
+        border-radius: 10px;
+        font-size: 16px;
+        font-weight: bold;
+        z-index: 3000;
+        animation: slideDown 0.5s ease-out;
+    `;
+    messageDiv.textContent = message;
+    
+    // Add slide down animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideDown {
+            from { transform: translateX(-50%) translateY(-100%); opacity: 0; }
+            to { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    document.body.appendChild(messageDiv);
+    
+    // Remove message after 4 seconds
+    setTimeout(() => {
+        if (document.body.contains(messageDiv)) {
+            document.body.removeChild(messageDiv);
+        }
+    }, 4000);
+}
+
+// Show message when no hint is available
+function showNoHintAvailable() {
+    showHintMessage('💡 All words are already completed or no helpful moves found!');
 }
 
 function getCurrentWordSet() {
