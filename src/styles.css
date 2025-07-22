@@ -2,24 +2,6 @@ body {
     margin: 0;
     padding: 0;
     font-family: 'Arial', sans-serif;
-    background: transparent;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    overflow: hidden;
-    -webkit-tap-highlight-color: transparent;
-    position: relative;
-}
-
-/* Dark oak floor slats background for entire page */
-body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
     background: 
         /* Base dark brown wood color */
         #654321,
@@ -63,7 +45,13 @@ body::before {
             rgba(255, 255, 255, 0.1) 80px,
             rgba(255, 255, 255, 0.1) 85px
         );
-    z-index: -1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
 }
 
 /* Dark oak floor slats background for main menu */
@@ -149,10 +137,14 @@ body::before {
     border-radius: 15px;
     box-shadow: none;
     border: none;
-    max-width: 95vw;
-    max-height: 95vh;
+    width: 100vw;
+    height: 100vh;
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 
