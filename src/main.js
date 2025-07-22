@@ -733,8 +733,8 @@ function shuffleArray(arr) {
 
 // Word sets for each level - now with longer words for 7x7 board
 const PROD_WORD_SETS = [
-    ["kyle", "matt", "mike"],    // Level 1
-    ["jason", "brandon"],        // Level 2
+    ["high", "bird", "cat"],    // Level 1
+    ["dog", "hat", "mara"],        // Level 2
     ["red", "blue", "pink"],     // Level 3
     ["sun", "moon", "star"],     // Level 4
     ["book", "read", "write"],   // Level 5
