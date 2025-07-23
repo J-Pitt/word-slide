@@ -2,6 +2,51 @@ body {
     margin: 0;
     padding: 0;
     font-family: 'Arial', sans-serif;
+    background-color: #2F1B14 !important;
+    background-image: 
+        /* Dark oak horizontal floor slats */
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 60px,
+            #3D2318 60px,
+            #3D2318 65px
+        ),
+        /* Wood grain within slats */
+        repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 3px,
+            rgba(47, 27, 20, 0.9) 3px,
+            rgba(47, 27, 20, 0.9) 6px
+        ),
+        /* Subtle grain variations */
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 6px,
+            rgba(61, 35, 24, 0.5) 6px,
+            rgba(61, 35, 24, 0.5) 12px
+        ),
+        /* Dark oak highlights on slat edges */
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 60px,
+            rgba(255, 255, 255, 0.03) 60px,
+            rgba(255, 255, 255, 0.03) 65px
+        ) !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    position: relative;
+}
+
+/* Ensure html element also has the background */
+html {
     background: 
         /* Base dark brown wood color */
         #654321,
@@ -44,18 +89,12 @@ body {
             transparent 80px,
             rgba(255, 255, 255, 0.1) 80px,
             rgba(255, 255, 255, 0.1) 85px
-        );
-    display: flex;
-    justify-content: center;
-    align-items: center;
+        ) !important;
     min-height: 100vh;
-    overflow: hidden;
-    -webkit-tap-highlight-color: transparent;
-    position: relative;
 }
 
 /* Dark oak floor slats background for main menu */
-.main-menu {
+#mainMenu, .main-menu {
     position: relative;
     overflow: hidden;
     width: 100vw;
@@ -66,6 +105,43 @@ body {
     align-items: center;
     text-align: center;
     padding-top: 80px;
+    background-color: #2F1B14 !important;
+    background-image: 
+        /* Dark oak horizontal floor slats */
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 60px,
+            #3D2318 60px,
+            #3D2318 65px
+        ),
+        /* Wood grain within slats */
+        repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 3px,
+            rgba(47, 27, 20, 0.9) 3px,
+            rgba(47, 27, 20, 0.9) 6px
+        ),
+        /* Subtle grain variations */
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 6px,
+            rgba(61, 35, 24, 0.5) 6px,
+            rgba(61, 35, 24, 0.5) 12px
+        ),
+        /* Dark oak highlights on slat edges */
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 60px,
+            rgba(255, 255, 255, 0.03) 60px,
+            rgba(255, 255, 255, 0.03) 65px
+        ) !important;
+    box-shadow: 
+        inset 0 0 50px rgba(0, 0, 0, 0.3),
+        inset 0 0 100px rgba(255, 255, 255, 0.02);
 }
 
 
@@ -133,11 +209,46 @@ body {
 
 .game-container {
     text-align: center;
-    background: transparent;
+    background-color: #2F1B14 !important;
+    background-image: 
+        /* Dark oak horizontal floor slats */
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 60px,
+            #3D2318 60px,
+            #3D2318 65px
+        ),
+        /* Wood grain within slats */
+        repeating-linear-gradient(
+            90deg,
+            transparent,
+            transparent 3px,
+            rgba(47, 27, 20, 0.9) 3px,
+            rgba(47, 27, 20, 0.9) 6px
+        ),
+        /* Subtle grain variations */
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 6px,
+            rgba(61, 35, 24, 0.5) 6px,
+            rgba(61, 35, 24, 0.5) 12px
+        ),
+        /* Dark oak highlights on slat edges */
+        repeating-linear-gradient(
+            0deg,
+            transparent,
+            transparent 60px,
+            rgba(255, 255, 255, 0.03) 60px,
+            rgba(255, 255, 255, 0.03) 65px
+        ) !important;
     padding: 15px;
-    padding-top: 60px;
+    padding-top: 100px;
     border-radius: 15px;
-    box-shadow: none;
+    box-shadow: 
+        inset 0 0 50px rgba(0, 0, 0, 0.3),
+        inset 0 0 100px rgba(255, 255, 255, 0.02);
     border: none;
     width: 100vw;
     height: 100vh;
