@@ -107,18 +107,24 @@ function rescrambleIncompleteTiles() {
     // Shuffle the incomplete tiles
     shuffleArray(incompleteTiles);
     
+    // Choose a random position for the empty space (must be from incomplete positions)
+    const randomIndex = Math.floor(Math.random() * incompletePositions.length);
+    const newEmptyPos = incompletePositions[randomIndex];
+    
+    // Remove the chosen position from incomplete positions and tiles
+    incompletePositions.splice(randomIndex, 1);
+    incompleteTiles.splice(randomIndex, 1);
+    
     // Place the shuffled incomplete tiles back in their positions
     for (let i = 0; i < incompleteTiles.length; i++) {
         const pos = incompletePositions[i];
         board[pos.r][pos.c] = incompleteTiles[i];
     }
     
-    // Choose a random position for the empty space
-    const emptyRow = Math.floor(Math.random() * rows);
-    const emptyCol = Math.floor(Math.random() * cols);
-    emptyPos = { r: emptyRow, c: emptyCol };
+    // Set the new empty space
+    emptyPos = { r: newEmptyPos.r, c: newEmptyPos.c };
     board[emptyPos.r][emptyPos.c] = "";
-    console.log(`Re-scrambling - new empty space position: (${emptyRow}, ${emptyCol})`);
+    console.log(`Re-scrambling - new empty space position: (${emptyPos.r}, ${emptyPos.c})`);
     
     console.log('Re-scrambling complete. New board state:', board);
 }
@@ -286,9 +292,28 @@ function startOriginalGame() {
 }
 
 function startTetrisGame() {
+    console.log('=== STARTING TETRIS GAME ===');
+    
     document.getElementById('mainMenu').style.display = 'none';
     document.getElementById('originalGameContainer').style.display = 'none';
     document.getElementById('tetrisGameContainer').style.display = 'block';
+    
+    // Force immediate canvas setup
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    if (tetrisCanvas) {
+        console.log('Canvas found, setting dimensions...');
+        tetrisCanvas.width = 450;
+        tetrisCanvas.height = 450;
+        console.log('Canvas dimensions set to:', tetrisCanvas.width, 'x', tetrisCanvas.height);
+        
+        // Force immediate draw of empty board
+        const ctx = tetrisCanvas.getContext('2d');
+        ctx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+        drawTetrisBoardBackground();
+        console.log('Initial board background drawn');
+    } else {
+        console.error('Tetris canvas not found!');
+    }
     
     // Start the tetris game
     if (!window.tetrisGameStarted) {
@@ -303,6 +328,72 @@ function newTetrisGame() {
     tetrisUsedWords.clear(); // Reset used words for new game
     clearSavedTetrisGame(); // Clear saved state for new game
     startTetrisGame();
+}
+
+function debugTetrisBoard() {
+    console.log('=== DEBUGGING TETRIS BOARD ===');
+    
+    // Check if canvas exists
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    if (!tetrisCanvas) {
+        console.error('Canvas not found!');
+        return;
+    }
+    console.log('Canvas found:', tetrisCanvas.width, 'x', tetrisCanvas.height);
+    
+    // Check current board state
+    console.log('Current tetrisBoard:', tetrisBoard);
+    console.log('Current tetrisEmptyPos:', tetrisEmptyPos);
+    
+    // Count empty spaces
+    let emptyCount = 0;
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+            if (tetrisBoard[r][c] === '') {
+                emptyCount++;
+                console.log(`Empty space at (${r}, ${c})`);
+            }
+        }
+    }
+    console.log(`Total empty spaces: ${emptyCount}`);
+    
+    // Force regenerate board
+    console.log('Forcing board regeneration...');
+    generateTetrisBoard();
+    
+    // Force draw
+    console.log('Forcing board draw...');
+    drawTetrisBoard();
+    
+    console.log('=== DEBUG COMPLETE ===');
+}
+
+function forceDrawTetrisBoard() {
+    console.log('=== FORCING TETRIS BOARD DRAW ===');
+    
+    // Check if canvas exists
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    if (!tetrisCanvas) {
+        console.error('Canvas not found!');
+        return;
+    }
+    
+    // Ensure canvas has proper dimensions
+    tetrisCanvas.width = 450;
+    tetrisCanvas.height = 450;
+    console.log('Canvas dimensions:', tetrisCanvas.width, 'x', tetrisCanvas.height);
+    
+    // Force draw background
+    const ctx = tetrisCanvas.getContext('2d');
+    ctx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+    drawTetrisBoardBackground();
+    console.log('Background drawn');
+    
+    // Force draw board
+    drawTetrisBoard();
+    console.log('Board drawn');
+    
+    console.log('=== FORCE DRAW COMPLETE ===');
 }
 
 // Tetris Game Variables
@@ -320,6 +411,20 @@ let tetrisCompletedTiles = [];
 function startTetrisGameLogic() {
     console.log('Starting Tetris game logic...');
     
+    // Ensure canvas is properly initialized
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    if (!tetrisCanvas) {
+        console.error('Tetris canvas not found!');
+        return;
+    }
+    
+    // Ensure canvas has proper dimensions
+    if (tetrisCanvas.width === 0 || tetrisCanvas.height === 0) {
+        tetrisCanvas.width = 450;
+        tetrisCanvas.height = 450;
+        console.log('Canvas initialized with dimensions:', tetrisCanvas.width, 'x', tetrisCanvas.height);
+    }
+    
     // Try to load saved game state first
     const loadedState = loadTetrisGameState();
     
@@ -335,18 +440,29 @@ function startTetrisGameLogic() {
         
         // Generate initial tetris board
         generateTetrisBoard();
+        
+        // Force immediate draw
+        setTimeout(() => {
+            console.log('Forcing immediate draw of Tetris board...');
+            drawTetrisBoard();
+        }, 100);
     } else {
         // Update displays with loaded state
         document.getElementById('tetrisMoveCounter').textContent = tetrisMoveCount;
         document.getElementById('wordsSolvedCounter').textContent = tetrisWordsSolved;
         document.getElementById('tetrisTargetWords').textContent = tetrisCurrentWord;
+        
+        // Force immediate draw for loaded state
+        setTimeout(() => {
+            console.log('Forcing immediate draw of loaded Tetris board...');
+            drawTetrisBoard();
+        }, 100);
     }
     
     // Start tetris game loop
     updateTetrisGame();
     
     // Add event listeners for tetris canvas
-    const tetrisCanvas = document.getElementById('tetrisCanvas');
     tetrisCanvas.addEventListener('click', handleTetrisInput);
     tetrisCanvas.addEventListener('touchstart', handleTetrisInput);
 }
@@ -374,21 +490,83 @@ function generateTetrisBoard() {
         }
     }
     
-
-    
-    // Choose a random position for the empty space
-    const emptyRow = Math.floor(Math.random() * rows);
-    const emptyCol = Math.floor(Math.random() * cols);
+    // FORCE empty space at a specific location for testing
+    const emptyRow = 3; // Middle row
+    const emptyCol = 3; // Middle column
     tetrisBoard[emptyRow][emptyCol] = '';
     tetrisEmptyPos = { r: emptyRow, c: emptyCol };
     
+    console.log(`FORCED Tetris board with empty space at (${emptyRow}, ${emptyCol})`);
+    
+    // Add a test pattern to make sure board is visible
+    tetrisBoard[0][0] = 'T';
+    tetrisBoard[0][1] = 'E';
+    tetrisBoard[0][2] = 'S';
+    tetrisBoard[0][3] = 'T';
+    console.log('Added TEST pattern to top row');
+    
     console.log(`Tetris board generated with empty space at (${emptyRow}, ${emptyCol})`);
+    console.log('Tetris board state after generation:', tetrisBoard);
+    console.log('Tetris empty position:', tetrisEmptyPos);
     
     // Generate initial word
     generateNewTetrisWord();
     
     // Draw the board
+    console.log('About to draw Tetris board...');
+    
+    // Ensure canvas is properly sized
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    if (tetrisCanvas) {
+        console.log('Canvas dimensions before drawing:', tetrisCanvas.width, 'x', tetrisCanvas.height);
+        // Set canvas size if needed
+        if (tetrisCanvas.width === 0 || tetrisCanvas.height === 0) {
+            tetrisCanvas.width = 450;
+            tetrisCanvas.height = 450;
+            console.log('Canvas resized to:', tetrisCanvas.width, 'x', tetrisCanvas.height);
+        }
+    }
+    
+    // Verify board has exactly one empty space
+    let emptyCount = 0;
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+            if (tetrisBoard[r][c] === '') {
+                emptyCount++;
+                console.log(`Found empty space at (${r}, ${c})`);
+            }
+        }
+    }
+    console.log(`Total empty spaces found: ${emptyCount}`);
+    
+    if (emptyCount === 0) {
+        console.error('ERROR: No empty space found in board!');
+        // Force create an empty space
+        tetrisBoard[0][0] = '';
+        tetrisEmptyPos = { r: 0, c: 0 };
+        console.log('Forced empty space at (0, 0)');
+    } else if (emptyCount > 1) {
+        console.error(`ERROR: Too many empty spaces found: ${emptyCount}`);
+    }
+    
+    // Force immediate draw multiple times to ensure it appears
+    console.log('About to draw Tetris board...');
     drawTetrisBoard();
+    console.log('Tetris board drawn once');
+    
+    // Force another draw after a short delay
+    setTimeout(() => {
+        console.log('Forcing second draw...');
+        drawTetrisBoard();
+        console.log('Tetris board drawn twice');
+    }, 100);
+    
+    // Force a third draw after another delay
+    setTimeout(() => {
+        console.log('Forcing third draw...');
+        drawTetrisBoard();
+        console.log('Tetris board drawn three times');
+    }, 500);
 }
 
 function generateNewTetrisWord() {
@@ -529,8 +707,15 @@ function tryTetrisMove(r, c) {
 }
 
 function checkTetrisWordCompletion() {
+    // Don't check for word completion if we're already in a word completion animation
+    if (tetrisAnimating && tetrisAnimation && tetrisAnimation.isWordCompletion) {
+        return;
+    }
+    
     // Check if the current word is completed horizontally or vertically
     const word = tetrisCurrentWord;
+    console.log(`Checking for word completion: "${word}"`);
+    console.log('Current board state:', tetrisBoard);
     
     // Check horizontal completion
     for (let r = 0; r < 7; r++) {
@@ -543,6 +728,7 @@ function checkTetrisWordCompletion() {
                 }
             }
             if (found) {
+                console.log(`Found horizontal word completion at row ${r}, col ${c}`);
                 completeTetrisWord(r, c, 'horizontal');
                 return;
             }
@@ -560,15 +746,22 @@ function checkTetrisWordCompletion() {
                 }
             }
             if (found) {
+                console.log(`Found vertical word completion at row ${r}, col ${c}`);
                 completeTetrisWord(r, c, 'vertical');
                 return;
             }
         }
     }
+    
+    console.log('No word completion found');
 }
 
 function completeTetrisWord(startRow, startCol, direction) {
     console.log(`Tetris word completed: ${tetrisCurrentWord} at (${startRow}, ${startCol}) ${direction}`);
+    
+    // Set word completion animation flag to prevent further checks
+    tetrisAnimating = true;
+    tetrisAnimation = { isWordCompletion: true };
     
     tetrisWordsSolved++;
     document.getElementById('wordsSolvedCounter').textContent = tetrisWordsSolved;
@@ -587,46 +780,318 @@ function completeTetrisWord(startRow, startCol, direction) {
 }
 
 function animateTetrisWordCompletion(completedTiles) {
-    // Don't block sliding animations during word completion
-    // tetrisAnimating = true; // REMOVED - this was blocking sliding!
+    console.log('Starting enhanced Tetris word completion animation');
     
-    // Step 1: Highlight completed tiles
-    drawTetrisBoardWithHighlight(completedTiles);
+    // Step 1: Green highlight for 2 seconds
+    let highlightStartTime = Date.now();
+    const highlightDuration = 2000; // 2 seconds
     
-    setTimeout(() => {
-        // Step 2: Remove completed tiles
-        for (const tile of completedTiles) {
-            tetrisBoard[tile.r][tile.c] = '';
+    function animateHighlight() {
+        const elapsed = Date.now() - highlightStartTime;
+        const progress = Math.min(elapsed / highlightDuration, 1);
+        
+        // Draw board with green highlight
+        drawTetrisBoardWithHighlight(completedTiles);
+        
+        if (progress < 1) {
+            requestAnimationFrame(animateHighlight);
+        } else {
+            // Step 2: Start disappearing animation
+            startDisappearingAnimation(completedTiles);
         }
-        
-        // Step 3: Apply gravity
-        applyTetrisGravity();
-        
-        // Step 4: Add new letters
-        addNewTetrisLetters();
-        
-        // Step 5: Generate new word
-        generateNewTetrisWord();
-        
-        // Step 6: Redraw board
-        drawTetrisBoard();
-        
-        // Step 7: Save game state after board update
-        saveTetrisGameState();
-        
-        // tetrisAnimating = false; // REMOVED - no longer needed
-    }, 1000);
+    }
+    
+    animateHighlight();
 }
 
-function drawTetrisBoardWithHighlight(completedTiles) {
+function startDisappearingAnimation(completedTiles) {
+    console.log('Starting disappearing animation');
+    
+    const disappearingTiles = completedTiles.map(tile => ({
+        ...tile,
+        scale: 1,
+        rotation: 0,
+        alpha: 1,
+        startTime: Date.now()
+    }));
+    
+    const disappearDuration = 1500; // 1.5 seconds for disappearing animation
+    
+    function animateDisappearing() {
+        const currentTime = Date.now();
+        const tetrisCanvas = document.getElementById('tetrisCanvas');
+        const ctx = tetrisCanvas.getContext('2d');
+        const cellSize = tetrisCanvas.width / 7;
+        
+        // Clear canvas and draw background
+        ctx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+        drawTetrisBoardBackground();
+        
+        // Draw all non-completed tiles
+        for (let r = 0; r < 7; r++) {
+            for (let c = 0; c < 7; c++) {
+                const isCompleted = completedTiles.some(tile => tile.r === r && tile.c === c);
+                if (!isCompleted && tetrisBoard[r][c] !== '') {
+                    // Draw the tile with the correct letter
+                    const letter = tetrisBoard[r][c];
+                    const x = c * cellSize;
+                    const y = r * cellSize;
+                    
+                    // Draw 3D wood tile with realistic texture
+                    const tileGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+                    tileGradient.addColorStop(0, "#DEB887"); // Burlywood
+                    tileGradient.addColorStop(0.3, "#D2B48C"); // Tan
+                    tileGradient.addColorStop(0.7, "#CD853F"); // Peru
+                    tileGradient.addColorStop(1, "#A0522D"); // Sienna
+                    
+                    ctx.fillStyle = tileGradient;
+                    ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                    
+                    // Add wood grain to tile
+                    ctx.strokeStyle = "rgba(139, 69, 19, 0.6)";
+                    ctx.lineWidth = 1;
+                    for (let i = 0; i < cellSize; i += 2) {
+                        ctx.beginPath();
+                        ctx.moveTo(x + i, y);
+                        ctx.lineTo(x + i + 1, y + cellSize);
+                        ctx.stroke();
+                    }
+                    
+                    // Draw letter
+                    ctx.font = `bold ${cellSize / 2.5}px Arial`;
+                    ctx.fillStyle = "#8B4513";
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(letter, x + cellSize / 2, y + cellSize / 2);
+                    
+                    // Add 3D effect with shadows
+                    ctx.strokeStyle = "rgba(0, 0, 0, 0.3)";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                    
+                    // Highlight edge
+                    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x + 3, y + 3, cellSize - 6, cellSize - 6);
+                }
+            }
+        }
+        
+        // Animate disappearing tiles
+        let allDisappeared = true;
+        for (const tile of disappearingTiles) {
+            const elapsed = currentTime - tile.startTime;
+            const progress = Math.min(elapsed / disappearDuration, 1);
+            
+            if (progress < 1) {
+                allDisappeared = false;
+                
+                // Animate scale, rotation, and alpha
+                tile.scale = 1 - (progress * 0.5); // Scale down to 50%
+                tile.rotation = progress * Math.PI * 2; // Full rotation
+                tile.alpha = 1 - progress; // Fade out
+                
+                // Draw disappearing tile with effects
+                drawDisappearingTile(ctx, tile, cellSize);
+            }
+        }
+        
+        if (!allDisappeared) {
+            requestAnimationFrame(animateDisappearing);
+        } else {
+            // Step 3: Start gravity animation
+            startGravityAnimation(completedTiles);
+        }
+    }
+    
+    animateDisappearing();
+}
+
+function startGravityAnimation(completedTiles) {
+    console.log('Starting gravity animation');
+    
+    // Remove completed tiles from board
+    for (const tile of completedTiles) {
+        tetrisBoard[tile.r][tile.c] = '';
+    }
+    
+    // Find the lowest row that had completed tiles
+    const lowestCompletedRow = Math.max(...completedTiles.map(tile => tile.r));
+    
+    // Create falling animations for tiles above the completed area
+    const fallingTiles = [];
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    for (let c = 0; c < 7; c++) {
+        for (let r = lowestCompletedRow - 1; r >= 0; r--) {
+            if (tetrisBoard[r][c] !== '') {
+                fallingTiles.push({
+                    r: r,
+                    c: c,
+                    letter: tetrisBoard[r][c],
+                    startY: r * (tetrisCanvas.width / 7),
+                    targetY: (r + 1) * (tetrisCanvas.width / 7),
+                    startTime: Date.now(),
+                    delay: (lowestCompletedRow - r) * 100 // Stagger the falling
+                });
+            }
+        }
+    }
+    
+    const gravityDuration = 800; // 0.8 seconds for gravity
+    
+    function animateGravity() {
+        const currentTime = Date.now();
+        const tetrisCanvas = document.getElementById('tetrisCanvas');
+        const ctx = tetrisCanvas.getContext('2d');
+        const cellSize = tetrisCanvas.width / 7;
+        
+        // Clear canvas and draw background
+        ctx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+        drawTetrisBoardBackground();
+        
+        // Draw static tiles (those not falling)
+        for (let r = 0; r < 7; r++) {
+            for (let c = 0; c < 7; c++) {
+                const isFalling = fallingTiles.some(tile => tile.r === r && tile.c === c);
+                const isCompleted = completedTiles.some(tile => tile.r === r && tile.c === c);
+                if (!isFalling && !isCompleted && tetrisBoard[r][c] !== '') {
+                    drawTetrisTile(ctx, r, c, tetrisBoard[r][c], cellSize);
+                }
+            }
+        }
+        
+        // Animate falling tiles
+        let allFallen = true;
+        for (const tile of fallingTiles) {
+            const elapsed = currentTime - tile.startTime - tile.delay;
+            if (elapsed < 0) {
+                allFallen = false;
+                continue;
+            }
+            
+            const progress = Math.min(elapsed / gravityDuration, 1);
+            
+            if (progress < 1) {
+                allFallen = false;
+                
+                // Ease-out animation for smooth falling
+                const easeProgress = 1 - Math.pow(1 - progress, 3);
+                const currentY = tile.startY + (tile.targetY - tile.startY) * easeProgress;
+                
+                // Draw falling tile
+                drawFallingTile(ctx, tile, currentY, cellSize);
+            }
+        }
+        
+        if (!allFallen) {
+            requestAnimationFrame(animateGravity);
+        } else {
+            // Step 4: Apply gravity to board and add new letters
+            applyTetrisGravity();
+            startNewLettersAnimation();
+        }
+    }
+    
+    animateGravity();
+}
+
+function startNewLettersAnimation() {
+    console.log('Starting new letters animation');
+    
+    // Add new letters to empty spaces
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const newLetters = [];
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+            if (tetrisBoard[r][c] === '') {
+                const letter = letters[Math.floor(Math.random() * letters.length)];
+                tetrisBoard[r][c] = letter;
+                newLetters.push({
+                    r: r,
+                    c: c,
+                    letter: letter,
+                    startY: -tetrisCanvas.width / 7, // Start above the board
+                    targetY: r * (tetrisCanvas.width / 7),
+                    startTime: Date.now(),
+                    delay: Math.random() * 300 // Random delay for natural effect
+                });
+            }
+        }
+    }
+    
+    const dropDuration = 600; // 0.6 seconds for dropping
+    
+    function animateNewLetters() {
+        const currentTime = Date.now();
+        const tetrisCanvas = document.getElementById('tetrisCanvas');
+        const ctx = tetrisCanvas.getContext('2d');
+        const cellSize = tetrisCanvas.width / 7;
+        
+        // Clear canvas and draw background
+        ctx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+        drawTetrisBoardBackground();
+        
+        // Draw all existing tiles
+        for (let r = 0; r < 7; r++) {
+            for (let c = 0; c < 7; c++) {
+                const isNewLetter = newLetters.some(tile => tile.r === r && tile.c === c);
+                if (!isNewLetter && tetrisBoard[r][c] !== '') {
+                    drawTetrisTile(ctx, r, c, tetrisBoard[r][c], cellSize);
+                }
+            }
+        }
+        
+        // Animate dropping new letters
+        let allDropped = true;
+        for (const tile of newLetters) {
+            const elapsed = currentTime - tile.startTime - tile.delay;
+            if (elapsed < 0) {
+                allDropped = false;
+                continue;
+            }
+            
+            const progress = Math.min(elapsed / dropDuration, 1);
+            
+            if (progress < 1) {
+                allDropped = false;
+                
+                // Bounce effect for dropping
+                const bounceProgress = progress < 0.8 ? progress / 0.8 : 1;
+                const currentY = tile.startY + (tile.targetY - tile.startY) * bounceProgress;
+                
+                // Draw dropping tile
+                drawDroppingTile(ctx, tile, currentY, cellSize);
+            } else {
+                // Draw final position
+                drawTetrisTile(ctx, tile.r, tile.c, tile.letter, cellSize);
+            }
+        }
+        
+        if (!allDropped) {
+            requestAnimationFrame(animateNewLetters);
+        } else {
+            // Animation complete - generate new word and save
+            generateNewTetrisWord();
+            drawTetrisBoard();
+            saveTetrisGameState();
+            
+            // Clear word completion animation flag
+            tetrisAnimating = false;
+            tetrisAnimation = null;
+            
+            console.log('Tetris word completion animation finished');
+        }
+    }
+    
+    animateNewLetters();
+}
+
+// Helper function to draw Tetris board background
+function drawTetrisBoardBackground() {
     const tetrisCanvas = document.getElementById('tetrisCanvas');
     const ctx = tetrisCanvas.getContext('2d');
-    const cellSize = tetrisCanvas.width / 7;
-    
-    // Set font for letters
-    ctx.font = `bold ${cellSize / 2.5}px Arial`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
     
     // Draw oak wood board background with realistic texture
     const boardGradient = ctx.createLinearGradient(0, 0, tetrisCanvas.width, tetrisCanvas.height);
@@ -678,175 +1143,160 @@ function drawTetrisBoardWithHighlight(completedTiles) {
     for (let i = 0; i < tetrisCanvas.height; i += 8) {
         ctx.beginPath();
         ctx.moveTo(0, i);
-        ctx.lineTo(tetrisCanvas.height, i);
+        ctx.lineTo(tetrisCanvas.width, i);
+        ctx.stroke();
+    }
+}
+
+// Helper function to draw a single Tetris tile
+function drawTetrisTile(ctx, r, c, letter, cellSize) {
+    const x = c * cellSize;
+    const y = r * cellSize;
+    
+    // Draw 3D wood tile with realistic texture
+    const tileGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+    tileGradient.addColorStop(0, "#DEB887"); // Burlywood
+    tileGradient.addColorStop(0.3, "#D2B48C"); // Tan
+    tileGradient.addColorStop(0.7, "#CD853F"); // Peru
+    tileGradient.addColorStop(1, "#A0522D"); // Sienna
+    
+    ctx.fillStyle = tileGradient;
+    ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+    
+    // Add wood grain to tile
+    ctx.strokeStyle = "rgba(139, 69, 19, 0.6)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < cellSize; i += 2) {
+        ctx.beginPath();
+        ctx.moveTo(x + i, y);
+        ctx.lineTo(x + i + 1, y + cellSize);
         ctx.stroke();
     }
     
-    // Add light variations across the wood
-    const lightGradient = ctx.createLinearGradient(0, 0, tetrisCanvas.width, 0);
-    lightGradient.addColorStop(0, "rgba(255, 255, 255, 0.1)");
-    lightGradient.addColorStop(0.3, "transparent");
-    lightGradient.addColorStop(0.7, "transparent");
-    lightGradient.addColorStop(1, "rgba(0, 0, 0, 0.1)");
+    // Draw letter
+    ctx.font = `bold ${cellSize / 2.5}px Arial`;
+    ctx.fillStyle = "#8B4513";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(letter, x + cellSize / 2, y + cellSize / 2);
     
-    ctx.fillStyle = lightGradient;
-    ctx.fillRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+    // Add 3D effect with shadows
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
     
-    // Add board shadow for 3D effect
-    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
-    ctx.fillRect(15, 15, tetrisCanvas.width, tetrisCanvas.height);
-    
-    // Draw board with 3D border
-    ctx.fillStyle = boardGradient;
-    ctx.fillRect(0, 0, tetrisCanvas.width - 15, tetrisCanvas.height - 15);
+    // Highlight edge
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 3, y + 3, cellSize - 6, cellSize - 6);
+}
 
-    // Draw tiles
+// Helper function to draw disappearing tile with effects
+function drawDisappearingTile(ctx, tile, cellSize) {
+    const x = tile.c * cellSize;
+    const y = tile.r * cellSize;
+    const centerX = x + cellSize / 2;
+    const centerY = y + cellSize / 2;
+    
+    ctx.save();
+    ctx.globalAlpha = tile.alpha;
+    ctx.translate(centerX, centerY);
+    ctx.rotate(tile.rotation);
+    ctx.scale(tile.scale, tile.scale);
+    ctx.translate(-centerX, -centerY);
+    
+    // Draw tile with glow effect
+    const glowGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, cellSize);
+    glowGradient.addColorStop(0, `rgba(255, 255, 0, ${tile.alpha * 0.8})`);
+    glowGradient.addColorStop(0.5, `rgba(255, 255, 0, ${tile.alpha * 0.4})`);
+    glowGradient.addColorStop(1, `rgba(255, 255, 0, 0)`);
+    
+    ctx.fillStyle = glowGradient;
+    ctx.fillRect(x - cellSize/2, y - cellSize/2, cellSize * 2, cellSize * 2);
+    
+    // Draw the tile itself
+    drawTetrisTile(ctx, tile.r, tile.c, tile.letter, cellSize);
+    
+    ctx.restore();
+}
+
+// Helper function to draw falling tile
+function drawFallingTile(ctx, tile, currentY, cellSize) {
+    const x = tile.c * cellSize;
+    const y = currentY;
+    
+    // Draw tile at current falling position
+    ctx.save();
+    ctx.translate(0, y - (tile.r * cellSize));
+    drawTetrisTile(ctx, tile.r, tile.c, tile.letter, cellSize);
+    ctx.restore();
+}
+
+// Helper function to draw dropping tile
+function drawDroppingTile(ctx, tile, currentY, cellSize) {
+    const x = tile.c * cellSize;
+    const y = currentY;
+    
+    // Draw tile at current dropping position
+    ctx.save();
+    ctx.translate(0, y - (tile.r * cellSize));
+    drawTetrisTile(ctx, tile.r, tile.c, tile.letter, cellSize);
+    ctx.restore();
+}
+
+function drawTetrisBoardWithHighlight(completedTiles) {
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    const ctx = tetrisCanvas.getContext('2d');
+    const cellSize = tetrisCanvas.width / 7;
+    
+    // Set font for letters
+    ctx.font = `bold ${cellSize / 2.5}px Arial`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    
+    // Draw background
+    drawTetrisBoardBackground();
+    
+    // Draw all tiles with green highlight for completed ones
     for (let r = 0; r < 7; r++) {
         for (let c = 0; c < 7; c++) {
-            const x = c * cellSize;
-            const y = r * cellSize;
-            
-            // Check if this tile is completed
-            const isCompleted = completedTiles.some(tile => tile.r === r && tile.c === c);
-            
-            if (tetrisBoard[r][c] === "") {
-                // Draw empty space as a recessed area
-                ctx.fillStyle = "#654321";
-                ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+            if (tetrisBoard[r][c] !== '') {
+                const isCompleted = completedTiles.some(tile => tile.r === r && tile.c === c);
                 
-                // Add shadow to make it look recessed
-                ctx.strokeStyle = "#4A2C1A";
-                ctx.lineWidth = 2;
-                ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
-            } else {
-                // Draw enhanced 3D block tile
-                const blockHeight = 18; // Much more pronounced 3D effect
-                
-                // Draw enhanced bottom shadow with multiple layers
-                ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-                ctx.fillRect(x + blockHeight, y + blockHeight, cellSize - 4, cellSize - 4);
-                
-                // Draw additional shadow layers for extreme depth
-                ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
-                ctx.fillRect(x + blockHeight - 3, y + blockHeight - 3, cellSize - 4, cellSize - 4);
-                
-                ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
-                ctx.fillRect(x + blockHeight - 6, y + blockHeight - 6, cellSize - 4, cellSize - 4);
-                
-                // Draw right side of block with enhanced 3D
-                ctx.fillStyle = isCompleted ? "#2E8B57" : "#A0522D"; // Green for completed
-                ctx.beginPath();
-                ctx.moveTo(x + cellSize - 4, y);
-                ctx.lineTo(x + cellSize - 4 + blockHeight, y + blockHeight);
-                ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
-                ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
-                ctx.closePath();
-                ctx.fill();
-                
-                // Draw bottom side of block with enhanced 3D
-                ctx.fillStyle = isCompleted ? "#228B22" : "#8B4513"; // Green for completed
-                ctx.beginPath();
-                ctx.moveTo(x, y + cellSize - 4);
-                ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
-                ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
-                ctx.lineTo(x + blockHeight, y + cellSize - 4 + blockHeight);
-                ctx.closePath();
-                ctx.fill();
-                
-                // Add intense highlight on top edge for dramatic 3D effect
-                ctx.strokeStyle = isCompleted ? "#90EE90" : "#FFFFFF";
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.lineTo(x + cellSize - 4, y);
-                ctx.stroke();
-                
-                // Add intense highlight on left edge for dramatic 3D effect
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.lineTo(x, y + cellSize - 4);
-                ctx.stroke();
-                
-                // Add secondary highlight for extra depth
-                ctx.strokeStyle = isCompleted ? "#90EE90" : "#F5DEB3";
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(x + 1, y + 1);
-                ctx.lineTo(x + cellSize - 5, y + 1);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(x + 1, y + 1);
-                ctx.lineTo(x + 1, y + cellSize - 5);
-                ctx.stroke();
-                
-                // Draw main face of block
-                let tileGradient;
                 if (isCompleted) {
-                    tileGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
-                    tileGradient.addColorStop(0, "#00FF00"); // Bright green
-                    tileGradient.addColorStop(0.3, "#00CC00"); // Medium green
-                    tileGradient.addColorStop(0.7, "#009900"); // Dark green
-                    tileGradient.addColorStop(1, "#006600"); // Very dark green
-                } else {
-                    tileGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
-                    tileGradient.addColorStop(0, "#F5DEB3"); // Wheat
-                    tileGradient.addColorStop(0.3, "#DEB887"); // Burlywood
-                    tileGradient.addColorStop(0.7, "#D2B48C"); // Tan
-                    tileGradient.addColorStop(1, "#BC8F8F"); // Rosy brown
+                    // Draw green highlight background
+                    const x = c * cellSize;
+                    const y = r * cellSize;
+                    
+                    // Green glow effect
+                    const glowGradient = ctx.createRadialGradient(
+                        x + cellSize/2, y + cellSize/2, 0,
+                        x + cellSize/2, y + cellSize/2, cellSize
+                    );
+                    glowGradient.addColorStop(0, "rgba(0, 255, 0, 0.8)");
+                    glowGradient.addColorStop(0.7, "rgba(0, 255, 0, 0.4)");
+                    glowGradient.addColorStop(1, "rgba(0, 255, 0, 0)");
+                    
+                    ctx.fillStyle = glowGradient;
+                    ctx.fillRect(x - cellSize/2, y - cellSize/2, cellSize * 2, cellSize * 2);
+                    
+                    // Draw tile with green tint
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'multiply';
+                    ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+                    ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                    ctx.restore();
                 }
                 
-                ctx.fillStyle = tileGradient;
-                ctx.fillRect(x, y, cellSize - 4, cellSize - 4);
-                
-                // Add bright border for completed tiles
-                if (isCompleted) {
-                    ctx.strokeStyle = "#00FF00";
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(x, y, cellSize - 4, cellSize - 4);
-                }
-                
-                // Add wood grain to tile
-                ctx.strokeStyle = "#CD853F";
-                ctx.lineWidth = 0.5;
-                for (let i = 0; i < 3; i++) {
-                    ctx.beginPath();
-                    ctx.moveTo(x + 5 + i * 8, y + 5);
-                    ctx.lineTo(x + 8 + i * 8, y + cellSize - 9);
-                    ctx.stroke();
-                }
-                
-                // Draw letter with clean 3D effect
-                ctx.save();
-                ctx.fillStyle = "#654321"; // Darker brown
-                ctx.shadowColor = "transparent";
-                ctx.shadowBlur = 0;
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 0;
-                ctx.fillText(
-                    tetrisBoard[r][c],
-                    x + (cellSize - 4) / 2,
-                    y + (cellSize - 4) / 2
-                );
-                ctx.restore();
-                
-                // Add subtle highlight to letter (darker)
-                ctx.fillStyle = "#8B4513";
-                ctx.shadowColor = "transparent";
-                ctx.shadowBlur = 0;
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 0;
-                ctx.fillText(
-                    tetrisBoard[r][c],
-                    x + (cellSize - 4) / 2 - 1,
-                    y + (cellSize - 4) / 2 - 1
-                );
+                drawTetrisTile(ctx, r, c, tetrisBoard[r][c], cellSize);
             }
         }
     }
 }
 
 function applyTetrisGravity() {
+    console.log('Applying Tetris gravity...');
+    
     // Apply gravity to make letters fall down
     for (let c = 0; c < 7; c++) {
         let writeRow = 6; // Start from bottom
@@ -861,30 +1311,124 @@ function applyTetrisGravity() {
         }
     }
     
-    // Update empty position to top
-    tetrisEmptyPos = { r: 0, c: Math.floor(Math.random() * 7) };
+    // Find the actual empty space after gravity
+    let foundEmpty = false;
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+            if (tetrisBoard[r][c] === '') {
+                tetrisEmptyPos = { r: r, c: c };
+                foundEmpty = true;
+                console.log(`Gravity: Found empty space at (${r}, ${c})`);
+                break;
+            }
+        }
+        if (foundEmpty) break;
+    }
+    
+    // If no empty space found, create one at the top
+    if (!foundEmpty) {
+        tetrisEmptyPos = { r: 0, c: Math.floor(Math.random() * 7) };
+        tetrisBoard[tetrisEmptyPos.r][tetrisEmptyPos.c] = '';
+        console.log(`Gravity: Created empty space at (${tetrisEmptyPos.r}, ${tetrisEmptyPos.c})`);
+    }
+    
+    console.log('Gravity applied, empty position:', tetrisEmptyPos);
 }
 
 function addNewTetrisLetters() {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     
-    // Fill empty spaces with new letters
+    // Count empty spaces
+    let emptyCount = 0;
     for (let r = 0; r < 7; r++) {
         for (let c = 0; c < 7; c++) {
             if (tetrisBoard[r][c] === '') {
+                emptyCount++;
+            }
+        }
+    }
+    
+    console.log(`Empty spaces before filling: ${emptyCount}`);
+    
+    // Fill all but one empty space with new letters
+    let filledCount = 0;
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+            if (tetrisBoard[r][c] === '' && filledCount < emptyCount - 1) {
+                tetrisBoard[r][c] = letters[Math.floor(Math.random() * letters.length)];
+                filledCount++;
+            }
+        }
+    }
+    
+    // Ensure there's exactly one empty space
+    if (emptyCount === 0) {
+        // If no empty spaces, create one at the top
+        tetrisEmptyPos = { r: 0, c: Math.floor(Math.random() * 7) };
+        tetrisBoard[tetrisEmptyPos.r][tetrisEmptyPos.c] = '';
+        console.log('Created new empty space at top');
+    } else {
+        // Find the remaining empty space and set it as the empty position
+        let foundEmpty = false;
+        for (let r = 0; r < 7; r++) {
+            for (let c = 0; c < 7; c++) {
+                if (tetrisBoard[r][c] === '') {
+                    tetrisEmptyPos = { r: r, c: c };
+                    foundEmpty = true;
+                    console.log(`Found remaining empty space at (${r}, ${c})`);
+                    break;
+                }
+            }
+            if (foundEmpty) break;
+        }
+        
+        // If no empty space was found, create one
+        if (!foundEmpty) {
+            tetrisEmptyPos = { r: 3, c: 3 }; // Default to center
+            tetrisBoard[tetrisEmptyPos.r][tetrisEmptyPos.c] = '';
+            console.log('No empty space found, created one at center');
+        }
+    }
+    
+    // Verify we have exactly one empty space
+    let finalEmptyCount = 0;
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+            if (tetrisBoard[r][c] === '') {
+                finalEmptyCount++;
+            }
+        }
+    }
+    
+    console.log(`Empty spaces after filling: ${finalEmptyCount}`);
+    console.log(`Empty position: (${tetrisEmptyPos.r}, ${tetrisEmptyPos.c})`);
+    
+    if (finalEmptyCount !== 1) {
+        console.error(`ERROR: Expected 1 empty space, found ${finalEmptyCount}`);
+        // Force exactly one empty space
+        for (let r = 0; r < 7; r++) {
+            for (let c = 0; c < 7; c++) {
                 tetrisBoard[r][c] = letters[Math.floor(Math.random() * letters.length)];
             }
         }
+        tetrisEmptyPos = { r: 3, c: 3 };
+        tetrisBoard[tetrisEmptyPos.r][tetrisEmptyPos.c] = '';
+        console.log('Forced exactly one empty space at center');
     }
 }
 
 function drawTetrisBoard(anim = null) {
+    console.log('drawTetrisBoard called with anim:', anim);
     const tetrisCanvas = document.getElementById('tetrisCanvas');
     
     if (!tetrisCanvas) {
         console.error('Tetris canvas not found!');
         return;
     }
+    
+    console.log('Tetris canvas found, dimensions:', tetrisCanvas.width, 'x', tetrisCanvas.height);
+    console.log('Current tetris board state:', tetrisBoard);
+    console.log('Current tetris empty position:', tetrisEmptyPos);
     
     const ctx = tetrisCanvas.getContext('2d');
     const cellSize = tetrisCanvas.width / 7;
@@ -1078,6 +1622,9 @@ function drawTetrisBoard(anim = null) {
                 
                 // Draw letter with clean 3D effect
                 ctx.save();
+                ctx.font = `bold ${cellSize / 2.5}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
                 ctx.fillStyle = "#654321"; // Darker brown
                 ctx.shadowColor = "transparent";
                 ctx.shadowBlur = 0;
@@ -1091,6 +1638,10 @@ function drawTetrisBoard(anim = null) {
                 ctx.restore();
                 
                 // Add subtle highlight to letter (darker)
+                ctx.save();
+                ctx.font = `bold ${cellSize / 2.5}px Arial`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
                 ctx.fillStyle = "#8B4513";
                 ctx.shadowColor = "transparent";
                 ctx.shadowBlur = 0;
@@ -1101,6 +1652,7 @@ function drawTetrisBoard(anim = null) {
                     x + (cellSize - 4) / 2 - 1,
                     y + (cellSize - 4) / 2 - 1
                 );
+                ctx.restore();
             }
         }
     }
@@ -1146,6 +1698,9 @@ function drawTetrisBoard(anim = null) {
         
         // Draw letter on moving tile
         ctx.save();
+        ctx.font = `bold ${cellSize / 2.5}px Arial`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
         ctx.fillStyle = "#654321"; // Darker brown
         ctx.shadowColor = "transparent";
         ctx.shadowBlur = 0;
@@ -1155,12 +1710,17 @@ function drawTetrisBoard(anim = null) {
         ctx.restore();
         
         // Add subtle highlight to letter
+        ctx.save();
+        ctx.font = `bold ${cellSize / 2.5}px Arial`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
         ctx.fillStyle = "#8B4513";
         ctx.shadowColor = "transparent";
         ctx.shadowBlur = 0;
         ctx.shadowOffsetX = 0;
         ctx.shadowOffsetY = 0;
         ctx.fillText(anim.letter, x - 1, y - 1);
+        ctx.restore();
     }
 }
 
@@ -1172,25 +1732,39 @@ function updateTetrisGame() {
     }
     
     const tetrisCanvas = document.getElementById('tetrisCanvas');
+    if (!tetrisCanvas) {
+        console.error('Tetris canvas not found in updateTetrisGame!');
+        requestAnimationFrame(updateTetrisGame);
+        return;
+    }
+    
     const ctx = tetrisCanvas.getContext('2d');
     ctx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
 
     if (tetrisAnimating && tetrisAnimation) {
-        drawTetrisBoard(tetrisAnimation);
-        tetrisAnimation.progress++;
-        if (tetrisAnimation.progress >= tetrisAnimation.duration) {
-            // Finish animation and swap (exactly same as original game)
-            tetrisBoard[tetrisAnimation.to.r][tetrisAnimation.to.c] = tetrisAnimation.letter;
-            tetrisBoard[tetrisAnimation.from.r][tetrisAnimation.from.c] = "";
-            tetrisEmptyPos = { r: tetrisAnimation.from.r, c: tetrisAnimation.from.c };
-            tetrisAnimating = false;
-            tetrisAnimation = null;
-            
-            console.log("Tetris board after move:", tetrisBoard); // Debug
-            console.log("Tetris empty pos:", tetrisEmptyPos); // Debug
-            
-            // Check for word completion after each move
-            checkTetrisWordCompletion();
+        // Check if this is a word completion animation
+        if (tetrisAnimation.isWordCompletion) {
+            // Don't update progress for word completion animations
+            // The animation functions handle their own timing
+            console.log('Word completion animation in progress');
+        } else {
+            // Regular tile sliding animation
+            drawTetrisBoard(tetrisAnimation);
+            tetrisAnimation.progress++;
+            if (tetrisAnimation.progress >= tetrisAnimation.duration) {
+                // Finish animation and swap (exactly same as original game)
+                tetrisBoard[tetrisAnimation.to.r][tetrisAnimation.to.c] = tetrisAnimation.letter;
+                tetrisBoard[tetrisAnimation.from.r][tetrisAnimation.from.c] = "";
+                tetrisEmptyPos = { r: tetrisAnimation.from.r, c: tetrisAnimation.from.c };
+                tetrisAnimating = false;
+                tetrisAnimation = null;
+                
+                console.log("Tetris board after move:", tetrisBoard); // Debug
+                console.log("Tetris empty pos:", tetrisEmptyPos); // Debug
+                
+                // Check for word completion after each move
+                checkTetrisWordCompletion();
+            }
         }
     } else {
         drawTetrisBoard();
@@ -3978,7 +4552,41 @@ window.addEventListener('mousedown', handleInput);
 window.addEventListener('DOMContentLoaded', () => {
     // Show main menu by default instead of starting the game
     showMainMenu();
+    initializeTitleTiles();
 });
+
+function initializeTitleTiles() {
+    const tiles = document.querySelectorAll('.title-tiles .tile');
+    
+    tiles.forEach((tile, index) => {
+        // Add staggered animation on load
+        tile.style.opacity = '0';
+        tile.style.transform = 'translateY(20px)';
+        
+        setTimeout(() => {
+            tile.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+            tile.style.opacity = '1';
+            tile.style.transform = 'translateY(0)';
+        }, index * 100);
+        
+        // Add click animation
+        tile.addEventListener('click', function() {
+            this.style.transform = 'scale(0.95) translateY(-2px)';
+            setTimeout(() => {
+                this.style.transform = 'scale(1) translateY(-2px)';
+            }, 150);
+        });
+        
+        // Add hover effect
+        tile.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-3px) scale(1.05)';
+        });
+        
+        tile.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0) scale(1)';
+        });
+    });
+}
 
 // Function to show reload confirmation modal
 function showReloadConfirmationModal() {

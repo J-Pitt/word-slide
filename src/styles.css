@@ -71,11 +71,12 @@ body {
 
 
 .game-title {
-    color: #FFD700;
+    color: #F5DEB3;
     font-size: 48px;
     margin: 0 0 20px 0;
-    text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
     font-weight: bold;
+    font-family: 'Arial', sans-serif;
 }
 
 .subtitle {
@@ -134,6 +135,7 @@ body {
     text-align: center;
     background: transparent;
     padding: 15px;
+    padding-top: 60px;
     border-radius: 15px;
     box-shadow: none;
     border: none;
@@ -143,7 +145,7 @@ body {
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
 }
 
