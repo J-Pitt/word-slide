@@ -12,6 +12,7 @@ let moveCount = 0;
 let currentLevel = 1;
 const MAX_LEVELS = 20;
 let isTransitioning = false; // Flag to prevent word completion checks during transitions
+let currentGameMode = 'original'; // Track which game mode is active
 console.log("main.js loaded");
 
 // Function to update move counter display
@@ -273,6 +274,16 @@ function showMainMenu() {
 }
 
 function startOriginalGame() {
+    // Set game mode to original
+    currentGameMode = 'original';
+    
+    // Clean up any existing event listeners from tetris game
+    const tetrisCanvas = document.getElementById('tetrisCanvas');
+    if (tetrisCanvas) {
+        tetrisCanvas.removeEventListener('click', handleTetrisInput);
+        tetrisCanvas.removeEventListener('touchstart', handleTetrisInput);
+    }
+    
     document.getElementById('mainMenu').style.display = 'none';
     document.getElementById('originalGameContainer').style.display = 'block';
     document.getElementById('tetrisGameContainer').style.display = 'none';
@@ -285,6 +296,16 @@ function startOriginalGame() {
 }
 
 function startTetrisGame() {
+    // Set game mode to tetris
+    currentGameMode = 'tetris';
+    
+    // Clean up any existing event listeners from original game
+    const originalCanvas = document.getElementById('gameCanvas');
+    if (originalCanvas) {
+        originalCanvas.removeEventListener('click', handleInput);
+        originalCanvas.removeEventListener('touchstart', handleInput);
+    }
+    
     document.getElementById('mainMenu').style.display = 'none';
     document.getElementById('originalGameContainer').style.display = 'none';
     document.getElementById('tetrisGameContainer').style.display = 'block';
@@ -303,6 +324,7 @@ function startTetrisGame() {
         ctx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
         drawTetrisBoardBackground();
     } else {
+        console.error('Tetris canvas not found');
         return;
     }
     
@@ -332,9 +354,13 @@ function newTetrisGame() {
     tetrisEmptyPos = { r: 6, c: 6 };
     
     // Update displays
-    document.getElementById('tetrisMoveCounter').textContent = '0';
-    document.getElementById('wordsSolvedCounter').textContent = '0';
-    document.getElementById('tetrisTargetWords').textContent = 'Loading...';
+    const moveCounterElement = document.getElementById('tetrisMoveCounter');
+    const wordsSolvedElement = document.getElementById('wordsSolvedCounter');
+    const targetWordsElement = document.getElementById('tetrisTargetWords');
+    
+    if (moveCounterElement) moveCounterElement.textContent = '0';
+    if (wordsSolvedElement) wordsSolvedElement.textContent = '0';
+    if (targetWordsElement) targetWordsElement.textContent = 'Loading...';
     
     startTetrisGame();
 }
@@ -391,9 +417,13 @@ function startTetrisGameLogic() {
         }, 50);
     } else {
         // Update displays with loaded state
-        document.getElementById('tetrisMoveCounter').textContent = tetrisMoveCount;
-        document.getElementById('wordsSolvedCounter').textContent = tetrisWordsSolved;
-        document.getElementById('tetrisTargetWords').textContent = tetrisCurrentWord;
+        const moveCounterElement = document.getElementById('tetrisMoveCounter');
+        const wordsSolvedElement = document.getElementById('wordsSolvedCounter');
+        const targetWordsElement = document.getElementById('tetrisTargetWords');
+        
+        if (moveCounterElement) moveCounterElement.textContent = tetrisMoveCount;
+        if (wordsSolvedElement) wordsSolvedElement.textContent = tetrisWordsSolved;
+        if (targetWordsElement) targetWordsElement.textContent = tetrisCurrentWord;
         
         // IMPORTANT: Clear any ongoing animations from saved state
         tetrisAnimating = false;
@@ -415,6 +445,12 @@ function startTetrisGameLogic() {
     // Add event listeners for tetris canvas
     tetrisCanvas.addEventListener('click', handleTetrisInput);
     tetrisCanvas.addEventListener('touchstart', handleTetrisInput);
+    
+    // Test if the canvas is receiving events
+    console.log(`Tetris canvas event listeners added`);
+    console.log(`Tetris canvas dimensions: ${tetrisCanvas.width}x${tetrisCanvas.height}`);
+    console.log(`Tetris canvas offset: ${tetrisCanvas.offsetWidth}x${tetrisCanvas.offsetHeight}`);
+    console.log(`Tetris canvas style:`, tetrisCanvas.style);
 }
 
 function generateTetrisBoard() {
@@ -428,21 +464,111 @@ function generateTetrisBoard() {
         }
     }
     
-    // Create empty space at bottom-right (same as original game)
-    tetrisEmptyPos = { r: 6, c: 6 };
-    tetrisBoard[6][6] = '';
-    
     // Generate initial word
     generateNewTetrisWord();
+    
+    // Special case for first word: Create a one-move solution
+    if (tetrisWordsSolved === 0) {
+        createOneMoveSolution();
+    } else {
+        // For subsequent words, create empty space at bottom-right (same as original game)
+        tetrisEmptyPos = { r: 6, c: 6 };
+        tetrisBoard[6][6] = '';
+    }
+    
+    // Validate board has exactly one empty space
+    let emptyCount = 0;
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+            if (tetrisBoard[r][c] === '') {
+                emptyCount++;
+            }
+        }
+    }
+    
+    if (emptyCount !== 1) {
+        console.warn(`Board validation failed: found ${emptyCount} empty spaces, fixing...`);
+        // Ensure exactly one empty space at the expected position
+        for (let r = 0; r < 7; r++) {
+            for (let c = 0; c < 7; c++) {
+                if (tetrisBoard[r][c] === '' && (r !== tetrisEmptyPos.r || c !== tetrisEmptyPos.c)) {
+                    // Fill extra empty spaces with random letters
+                    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                    tetrisBoard[r][c] = letters[Math.floor(Math.random() * letters.length)];
+                }
+            }
+        }
+        // Ensure the expected empty position is actually empty
+        tetrisBoard[tetrisEmptyPos.r][tetrisEmptyPos.c] = '';
+    }
+    
+    console.log(`Board generated successfully with empty space at [${tetrisEmptyPos.r}][${tetrisEmptyPos.c}]`);
+}
+
+function createOneMoveSolution() {
+    // Choose a simple 3-letter word for the first puzzle
+    const firstWord = "CAT";
+    tetrisCurrentWord = firstWord;
+    
+    // Update display
+    const targetWordsElement = document.getElementById('tetrisTargetWords');
+    if (targetWordsElement) {
+        targetWordsElement.textContent = tetrisCurrentWord;
+    } else {
+        console.warn('tetrisTargetWords element not found in createOneMoveSolution');
+    }
+    
+    // Place the word letters in positions that require only one move to complete
+    // Place "CA" in the first two positions of row 0
+    tetrisBoard[0][0] = 'C';
+    tetrisBoard[0][1] = 'A';
+    
+    // Place "T" one cell away from its target position [0][2]
+    // Place it at [0][3] so it can slide left one space to complete "CAT"
+    tetrisBoard[0][3] = 'T';
+    
+    // Place empty space adjacent to the "T" at [0][2]
+    tetrisBoard[0][2] = '';
+    tetrisEmptyPos = { r: 0, c: 2 };
+    
+    // Fill the rest of the board with random letters
+    for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+            if (tetrisBoard[r][c] === '' || 
+                (r === 0 && c === 0) || 
+                (r === 0 && c === 1) || 
+                (r === 0 && c === 3)) {
+                continue; // Skip positions we've already set
+            }
+            const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+            tetrisBoard[r][c] = letters[Math.floor(Math.random() * letters.length)];
+        }
+    }
+    
+    console.log(`Created one-move solution for word: ${firstWord}`);
+    console.log(`Move the 'T' from [0][3] to [0][2] to complete 'CAT'`);
+    console.log(`Empty space is at [${tetrisEmptyPos.r}][${tetrisEmptyPos.c}]`);
+    console.log(`Board state after one-move setup:`, tetrisBoard);
 }
 
 function generateNewTetrisWord() {
+    // Skip normal word generation for the first word if we're creating a one-move solution
+    if (tetrisWordsSolved === 0) {
+        console.log("Skipping normal word generation - using one-move solution for first word");
+        return; // The one-move solution will be created in createOneMoveSolution()
+    }
+    
     // Analyze current board and generate a word that can be completed
     const availableLetters = getAvailableLetters();
     tetrisCurrentWord = selectWordFromLetters(availableLetters);
     
     // Update display
-    document.getElementById('tetrisTargetWords').textContent = tetrisCurrentWord;
+    const targetWordsElement = document.getElementById('tetrisTargetWords');
+    if (targetWordsElement) {
+        targetWordsElement.textContent = tetrisCurrentWord;
+    } else {
+        console.warn('tetrisTargetWords element not found in generateNewTetrisWord');
+    }
     
     console.log(`New tetris word generated: ${tetrisCurrentWord}`);
 }
@@ -463,7 +589,12 @@ function getAvailableLetters() {
 let tetrisUsedWords = new Set();
 
 function selectWordFromLetters(availableLetters) {
-    // Enhanced word selection using the same word bank as original game
+    // Enhanced word selection with better fallback logic
+    if (!availableLetters || availableLetters.length === 0) {
+        console.warn('No available letters provided, using fallback word');
+        return 'CAT';
+    }
+    
     // Filter words that can be made with available letters
     const possibleWords = WORD_BANK.filter(word => {
         const wordLetters = word.split('');
@@ -476,6 +607,8 @@ function selectWordFromLetters(availableLetters) {
         }
         return true;
     });
+    
+    console.log(`Found ${possibleWords.length} possible words from ${availableLetters.length} available letters`);
     
     // Filter out words that have been used recently
     const unusedWords = possibleWords.filter(word => !tetrisUsedWords.has(word));
@@ -490,6 +623,7 @@ function selectWordFromLetters(availableLetters) {
             tetrisUsedWords.clear();
         }
         
+        console.log(`Selected unused word: ${selectedWord}`);
         return selectedWord;
     }
     
@@ -498,35 +632,89 @@ function selectWordFromLetters(availableLetters) {
         tetrisUsedWords.clear();
         const selectedWord = possibleWords[Math.floor(Math.random() * possibleWords.length)];
         tetrisUsedWords.add(selectedWord);
+        console.log(`Selected reused word after clearing: ${selectedWord}`);
         return selectedWord;
     }
     
-    // If no words can be made with available letters, return a simple word
-    // and we'll add needed letters to the board
-    return 'CAT';
+    // If no words can be made with available letters, try to find a simple 3-letter word
+    // that we can add letters for
+    const simpleWords = ['CAT', 'DOG', 'BAT', 'RAT', 'HAT', 'MAT', 'SIT', 'RUN'];
+    const selectedWord = simpleWords[Math.floor(Math.random() * simpleWords.length)];
+    console.log(`No possible words found, using fallback: ${selectedWord}`);
+    return selectedWord;
 }
 
 function handleTetrisInput(event) {
-    if (!tetrisGameRunning) return;
+    console.log(`=== handleTetrisInput DEBUG ===`);
+    console.log(`Event type: ${event.type}`);
+    console.log(`tetrisGameRunning: ${tetrisGameRunning}`);
+    
+    if (!tetrisGameRunning) {
+        console.log(`Game not running, ignoring input`);
+        return;
+    }
     
     event.preventDefault();
     
     const tetrisCanvas = document.getElementById('tetrisCanvas');
+    if (!tetrisCanvas) {
+        console.error('Tetris canvas not found in handleTetrisInput');
+        return;
+    }
+    
     const rect = tetrisCanvas.getBoundingClientRect();
-    const x = (event.clientX || event.touches[0].clientX) - rect.left;
-    const y = (event.clientY || event.touches[0].clientY) - rect.top;
+    
+    // Handle both mouse and touch events properly
+    let clientX, clientY;
+    if (event.type === 'touchstart' && event.touches && event.touches.length > 0) {
+        clientX = event.touches[0].clientX;
+        clientY = event.touches[0].clientY;
+    } else if (event.type === 'click') {
+        clientX = event.clientX;
+        clientY = event.clientY;
+    } else {
+        console.warn('Unsupported event type:', event.type);
+        return;
+    }
+    
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    
+    console.log(`Click coordinates: (${x}, ${y})`);
+    console.log(`Canvas rect:`, rect);
     
     const cell = getTetrisCellFromCoords(x, y);
+    console.log(`Detected cell:`, cell);
+    
     if (cell) {
+        console.log(`Calling tryTetrisMove with cell [${cell.r}][${cell.c}]`);
         tryTetrisMove(cell.r, cell.c);
+    } else {
+        console.log(`No cell detected at coordinates (${x}, ${y})`);
     }
 }
 
 function getTetrisCellFromCoords(x, y) {
-    // Scale coordinates to match actual canvas size (exactly same as original game)
+    // Scale coordinates to match actual canvas size with better error handling
     const tetrisCanvas = document.getElementById('tetrisCanvas');
-    const scaleX = tetrisCanvas.width / tetrisCanvas.offsetWidth;
-    const scaleY = tetrisCanvas.height / tetrisCanvas.offsetHeight;
+    
+    // Guard against missing canvas
+    if (!tetrisCanvas) {
+        console.error('Tetris canvas not found');
+        return null;
+    }
+    
+    // Handle division by zero and invalid dimensions
+    const offsetWidth = tetrisCanvas.offsetWidth || tetrisCanvas.width;
+    const offsetHeight = tetrisCanvas.offsetHeight || tetrisCanvas.height;
+    
+    if (offsetWidth <= 0 || offsetHeight <= 0) {
+        console.error('Invalid canvas dimensions:', { width: tetrisCanvas.width, height: tetrisCanvas.height, offsetWidth, offsetHeight });
+        return null;
+    }
+    
+    const scaleX = tetrisCanvas.width / offsetWidth;
+    const scaleY = tetrisCanvas.height / offsetHeight;
     const scaledX = x * scaleX;
     const scaledY = y * scaleY;
     
@@ -534,24 +722,60 @@ function getTetrisCellFromCoords(x, y) {
     const c = Math.floor(scaledX / cellSize);
     const r = Math.floor(scaledY / cellSize);
     
+    console.log(`getTetrisCellFromCoords: input(${x}, ${y}) -> scaled(${scaledX}, ${scaledY}) -> cell[${r}][${c}]`);
+    console.log(`Canvas dimensions: ${tetrisCanvas.width}x${tetrisCanvas.height}, offset: ${offsetWidth}x${offsetHeight}`);
+    console.log(`Scale factors: scaleX=${scaleX}, scaleY=${scaleY}, cellSize=${cellSize}`);
+    
     if (r >= 0 && r < 7 && c >= 0 && c < 7) {
+        console.log(`Valid cell detected: [${r}][${c}]`);
         return { r, c };
     }
+    console.log(`Invalid cell coordinates: [${r}][${c}] (out of bounds)`);
     return null;
 }
 
 function tryTetrisMove(r, c) {
+    console.log(`=== tryTetrisMove DEBUG ===`);
+    console.log(`tryTetrisMove called with (${r}, ${c})`);
+    console.log(`Current tetrisEmptyPos: [${tetrisEmptyPos.r}][${tetrisEmptyPos.c}]`);
+    console.log(`Board at clicked position: '${tetrisBoard[r][c]}'`);
+    console.log(`tetrisAnimating: ${tetrisAnimating}`);
+    console.log(`tetrisAnimation:`, tetrisAnimation);
+    console.log(`tetrisGameRunning: ${tetrisGameRunning}`);
+    console.log(`tetrisCompletedTiles length: ${tetrisCompletedTiles.length}`);
+    
+    // Check if game is running and not animating
+    if (!tetrisGameRunning) {
+        console.log(`Game not running, ignoring move`);
+        return;
+    }
+    
+    if (tetrisAnimating) {
+        console.log(`Game is animating, ignoring move`);
+        return;
+    }
+    
     // Check if the tile being moved is part of a completed word
     if (tetrisCompletedTiles.some(tile => tile.r === r && tile.c === c)) {
+        console.log(`Tile is part of completed word, cannot move`);
         return; // Don't allow moving tiles from completed words
+    }
+    
+    // Check if clicking on empty cell itself
+    if (r === tetrisEmptyPos.r && c === tetrisEmptyPos.c) {
+        console.log(`Clicked on empty cell - nothing to move`);
+        return;
     }
     
     const dr = Math.abs(r - tetrisEmptyPos.r);
     const dc = Math.abs(c - tetrisEmptyPos.c);
+    console.log(`Distance: dr=${dr}, dc=${dc}`);
+    console.log(`Can move: ${(dr === 1 && dc === 0) || (dr === 0 && dc === 1)}`);
     
     if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
         // Valid move - start sliding animation (same as original game)
         const letter = tetrisBoard[r][c];
+        console.log(`Starting move animation: '${letter}' from [${r}][${c}] to [${tetrisEmptyPos.r}][${tetrisEmptyPos.c}]`);
         
         tetrisAnimating = true;
         tetrisAnimation = {
@@ -563,8 +787,15 @@ function tryTetrisMove(r, c) {
         };
         
         tetrisMoveCount++;
-        document.getElementById('tetrisMoveCounter').textContent = tetrisMoveCount;
+        const moveCounterElement = document.getElementById('tetrisMoveCounter');
+        if (moveCounterElement) {
+            moveCounterElement.textContent = tetrisMoveCount;
+        } else {
+            console.warn('tetrisMoveCounter element not found');
+        }
         saveTetrisGameState();
+    } else {
+        console.log(`Invalid move - not adjacent to empty space`);
     }
 }
 
@@ -621,9 +852,14 @@ function checkTetrisWordCompletion() {
 
 function completeTetrisWord(startRow, startCol, direction) {
     tetrisWordsSolved++;
-    document.getElementById('wordsSolvedCounter').textContent = tetrisWordsSolved;
+    const wordsSolvedElement = document.getElementById('wordsSolvedCounter');
+    if (wordsSolvedElement) {
+        wordsSolvedElement.textContent = tetrisWordsSolved;
+    } else {
+        console.warn('wordsSolvedCounter element not found');
+    }
     
-    // Mark completed tiles for dissolving animation
+    // Mark completed tiles for blinking animation
     const completedTiles = [];
     for (let i = 0; i < tetrisCurrentWord.length; i++) {
         const r = direction === 'horizontal' ? startRow : startRow + i;
@@ -631,11 +867,579 @@ function completeTetrisWord(startRow, startCol, direction) {
         completedTiles.push({ r, c, letter: tetrisCurrentWord[i] });
     }
     
-    // Start dissolving animation
-    startDissolvingAnimation(completedTiles);
+    // Store the original positions where letters were before being moved
+    // This is needed for the new letters animation to fill the correct cells
+    const originalPositions = [];
+    for (let i = 0; i < tetrisCurrentWord.length; i++) {
+        const r = direction === 'horizontal' ? startRow : startRow + i;
+        const c = direction === 'horizontal' ? startCol + i : startCol;
+        originalPositions.push({ r, c, letter: tetrisCurrentWord[i] });
+    }
+    
+    // Store original positions globally for use in new letters animation
+    window.tetrisOriginalWordPositions = originalPositions;
+    
+    console.log(`Word completed: ${tetrisCurrentWord} at positions:`, completedTiles);
+    console.log(`Original positions for new letters:`, originalPositions);
+    
+    // Start blinking animation first, then dissolving
+    console.log('=== STARTING WORD COMPLETION ANIMATION SEQUENCE ===');
+    console.log(`Word completed: ${tetrisCurrentWord}`);
+    console.log(`Completed tiles:`, completedTiles);
+    startBlinkingAnimation(completedTiles);
     
     // Save game state
     saveTetrisGameState();
+}
+
+function startBlinkingAnimation(completedTiles) {
+    // Set animation flag to prevent further word completion checks
+    tetrisAnimating = true;
+    tetrisAnimation = { isBlinking: true };
+    
+    const blinkDuration = 2000; // 2 seconds
+    const blinkInterval = 300; // Blink every 300ms
+    const startTime = Date.now();
+    
+    // Create the animation function that will be called by the main game loop
+    function animateBlinking() {
+        const currentTime = Date.now();
+        const elapsed = currentTime - startTime;
+        
+        if (elapsed < blinkDuration) {
+            // Continue blinking
+            const tetrisCanvas = document.getElementById('tetrisCanvas');
+            const ctx = tetrisCanvas.getContext('2d');
+            
+            // Clear canvas and draw the full board normally
+            ctx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+            
+            // Draw the board background first
+            drawTetrisBoardBackground();
+            
+            // Draw all tiles normally, but skip the completed tiles
+            const cellSize = tetrisCanvas.width / 7;
+            for (let r = 0; r < 7; r++) {
+                for (let c = 0; c < 7; c++) {
+                    const letter = tetrisBoard[r][c];
+                    if (letter !== '') {
+                        // Check if this tile is part of the completed word
+                        const isCompletedTile = completedTiles.some(tile => tile.r === r && tile.c === c);
+                        if (!isCompletedTile) {
+                            // Draw normal tile using the same enhanced 3D style as the normal board
+                            const x = c * cellSize;
+                            const y = r * cellSize;
+                            
+                            // Draw enhanced 3D block tile
+                            const blockHeight = 18; // Much more pronounced 3D effect
+                            
+                            // Draw enhanced bottom shadow with multiple layers
+                            ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+                            ctx.fillRect(x + blockHeight, y + blockHeight, cellSize - 4, cellSize - 4);
+                            
+                            // Draw additional shadow layers for extreme depth
+                            ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+                            ctx.fillRect(x + blockHeight - 3, y + blockHeight - 3, cellSize - 4, cellSize - 4);
+                            
+                            ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+                            ctx.fillRect(x + blockHeight - 6, y + blockHeight - 6, cellSize - 4, cellSize - 4);
+                            
+                            // Draw right side of block with enhanced 3D
+                            ctx.fillStyle = "#A0522D";
+                            ctx.beginPath();
+                            ctx.moveTo(x + cellSize - 4, y);
+                            ctx.lineTo(x + cellSize - 4 + blockHeight, y + blockHeight);
+                            ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
+                            ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
+                            ctx.closePath();
+                            ctx.fill();
+                            
+                            // Draw bottom side of block with enhanced 3D
+                            ctx.fillStyle = "#8B4513";
+                            ctx.beginPath();
+                            ctx.moveTo(x, y + cellSize - 4);
+                            ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
+                            ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
+                            ctx.lineTo(x + blockHeight, y + cellSize - 4 + blockHeight);
+                            ctx.closePath();
+                            ctx.fill();
+                            
+                            // Add intense highlight on top edge for dramatic 3D effect
+                            ctx.strokeStyle = "#FFFFFF";
+                            ctx.lineWidth = 3;
+                            ctx.beginPath();
+                            ctx.moveTo(x, y);
+                            ctx.lineTo(x + cellSize - 4, y);
+                            ctx.stroke();
+                            
+                            // Add intense highlight on left edge for dramatic 3D effect
+                            ctx.beginPath();
+                            ctx.moveTo(x, y);
+                            ctx.lineTo(x, y + cellSize - 4);
+                            ctx.stroke();
+                            
+                            // Add secondary highlight for extra depth
+                            ctx.strokeStyle = "#F5DEB3";
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.moveTo(x + 1, y + 1);
+                            ctx.lineTo(x + cellSize - 5, y + 1);
+                            ctx.stroke();
+                            
+                            ctx.beginPath();
+                            ctx.moveTo(x + 1, y + 1);
+                            ctx.lineTo(x + 1, y + cellSize - 5);
+                            ctx.stroke();
+                            
+                            // Draw main face of block
+                            const tileGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+                            tileGradient.addColorStop(0, "#F5DEB3"); // Wheat
+                            tileGradient.addColorStop(0.3, "#DEB887"); // Burlywood
+                            tileGradient.addColorStop(0.7, "#D2B48C"); // Tan
+                            tileGradient.addColorStop(1, "#BC8F8F"); // Rosy brown
+                            
+                            ctx.fillStyle = tileGradient;
+                            ctx.fillRect(x, y, cellSize - 4, cellSize - 4);
+                            
+                            // Add wood grain to tile
+                            ctx.strokeStyle = "#CD853F";
+                            ctx.lineWidth = 0.5;
+                            for (let i = 0; i < 3; i++) {
+                                ctx.beginPath();
+                                ctx.moveTo(x + 5 + i * 8, y + 5);
+                                ctx.lineTo(x + 8 + i * 8, y + cellSize - 9);
+                                ctx.stroke();
+                            }
+                            
+                            // Draw letter with clean 3D effect
+                            ctx.save();
+                            ctx.font = `bold ${cellSize / 2.5}px Arial`;
+                            ctx.textAlign = "center";
+                            ctx.textBaseline = "middle";
+                            ctx.fillStyle = "#654321"; // Darker brown
+                            ctx.shadowColor = "transparent";
+                            ctx.shadowBlur = 0;
+                            ctx.shadowOffsetX = 0;
+                            ctx.shadowOffsetY = 0;
+                            ctx.fillText(
+                                letter,
+                                x + (cellSize - 4) / 2,
+                                y + (cellSize - 4) / 2
+                            );
+                            ctx.restore();
+                            
+                            // Add subtle highlight to letter (darker)
+                            ctx.save();
+                            ctx.font = `bold ${cellSize / 2.5}px Arial`;
+                            ctx.textAlign = "center";
+                            ctx.textBaseline = "middle";
+                            ctx.fillStyle = "#8B4513";
+                            ctx.shadowColor = "transparent";
+                            ctx.shadowBlur = 0;
+                            ctx.shadowOffsetX = 0;
+                            ctx.shadowOffsetY = 0;
+                            ctx.fillText(
+                                letter,
+                                x + (cellSize - 4) / 2 - 1,
+                                y + (cellSize - 4) / 2 - 1
+                            );
+                            ctx.restore();
+                        }
+                    }
+                }
+            }
+            
+            // Calculate blink state (on/off every 300ms)
+            const blinkState = Math.floor(elapsed / blinkInterval) % 2 === 0;
+            
+            if (blinkState) {
+                // Draw enhanced green glow effect for completed tiles on top
+                for (const tile of completedTiles) {
+                    const x = tile.c * cellSize;
+                    const y = tile.r * cellSize;
+                    
+                    // Add intense green glow
+                    ctx.save();
+                    ctx.shadowColor = "#00FF00";
+                    ctx.shadowBlur = 20;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                    
+                    // Draw glowing green tile with enhanced 3D effect
+                    const blockHeight = 18;
+                    
+                    // Enhanced green gradient for blinking
+                    const tileGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+                    tileGradient.addColorStop(0, "#90EE90"); // Light green
+                    tileGradient.addColorStop(0.3, "#32CD32"); // Lime green
+                    tileGradient.addColorStop(0.7, "#228B22"); // Forest green
+                    tileGradient.addColorStop(1, "#006400"); // Dark green
+                    
+                    // Draw 3D green block
+                    ctx.fillStyle = tileGradient;
+                    ctx.fillRect(x, y, cellSize - 4, cellSize - 4);
+                    
+                    // Draw right side of green block
+                    ctx.fillStyle = "#228B22";
+                    ctx.beginPath();
+                    ctx.moveTo(x + cellSize - 4, y);
+                    ctx.lineTo(x + cellSize - 4 + blockHeight, y + blockHeight);
+                    ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
+                    ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Draw bottom side of green block
+                    ctx.fillStyle = "#006400";
+                    ctx.beginPath();
+                    ctx.moveTo(x, y + cellSize - 4);
+                    ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
+                    ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
+                    ctx.lineTo(x + blockHeight, y + cellSize - 4 + blockHeight);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Add bright green border
+                    ctx.strokeStyle = "#00FF00";
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(x, y, cellSize - 4, cellSize - 4);
+                    
+                    // Draw letter with enhanced visibility
+                    ctx.font = `bold ${cellSize / 2.5}px Arial`;
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillStyle = "#FFFFFF";
+                    ctx.shadowColor = "#000000";
+                    ctx.shadowBlur = 3;
+                    ctx.shadowOffsetX = 1;
+                    ctx.shadowOffsetY = 1;
+                    ctx.fillText(
+                        tile.letter,
+                        x + (cellSize - 4) / 2,
+                        y + (cellSize - 4) / 2
+                    );
+                    
+                    ctx.restore();
+                }
+            }
+        } else {
+            // Blinking complete, start explosion animation
+            console.log('Blinking animation complete, starting explosion...');
+            
+            // Clear animation flags temporarily
+            tetrisAnimating = false;
+            tetrisAnimation = null;
+            
+            // Start explosion animation (tiles will be removed during explosion)
+            startExplosionAnimation(completedTiles);
+        }
+    }
+    
+    // Store the animation function so the main game loop can call it
+    tetrisAnimation.animateFunction = animateBlinking;
+}
+
+function startExplosionAnimation(completedTiles) {
+    // Set animation flag to prevent further word completion checks
+    tetrisAnimating = true;
+    tetrisAnimation = { isExplosion: true };
+    
+    const explosionDuration = 2000; // 2 seconds for more dramatic explosion
+    const startTime = Date.now();
+    
+    // Create explosion particles for each completed tile
+    const explosionParticles = [];
+    for (const tile of completedTiles) {
+        const particleCount = 20; // More particles per tile for dramatic effect
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (i / particleCount) * Math.PI * 2;
+            const speed = 5 + Math.random() * 8; // Much faster particles
+            const tetrisCanvas = document.getElementById('tetrisCanvas');
+            explosionParticles.push({
+                x: tile.c * (tetrisCanvas.width / 7) + (tetrisCanvas.width / 7) / 2,
+                y: tile.r * (tetrisCanvas.height / 7) + (tetrisCanvas.height / 7) / 2,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                color: ['#FFD700', '#FFA500', '#FF6347', '#FF4500', '#FF0000', '#FF1493', '#00FFFF', '#00FF00'][Math.floor(Math.random() * 8)],
+                size: 6 + Math.random() * 10, // Much larger particles
+                alpha: 1,
+                startTime: Date.now(),
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.2
+            });
+        }
+    }
+    
+    // Create the animation function that will be called by the main game loop
+    function animateExplosion() {
+        const currentTime = Date.now();
+        const tetrisCanvas = document.getElementById('tetrisCanvas');
+        const ctx = tetrisCanvas.getContext('2d');
+        const cellSize = tetrisCanvas.width / 7;
+        
+        // Clear canvas and draw the board WITHOUT the completed tiles
+        ctx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
+        
+        // Draw the board background and all tiles EXCEPT the completed ones
+        drawTetrisBoardBackground();
+        
+        // Draw all tiles except the completed ones (no animation effects)
+        for (let r = 0; r < 7; r++) {
+            for (let c = 0; c < 7; c++) {
+                // Skip drawing completed tiles - they will be drawn with explosion effect
+                const isCompleted = completedTiles.some(tile => tile.r === r && tile.c === c);
+                if (!isCompleted && tetrisBoard[r][c] !== '') {
+                    // Draw tile normally using the same enhanced 3D style as the normal board
+                    const x = c * cellSize;
+                    const y = r * cellSize;
+                    
+                    // Draw enhanced 3D block tile
+                    const blockHeight = 18; // Much more pronounced 3D effect
+                    
+                    // Draw enhanced bottom shadow with multiple layers
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+                    ctx.fillRect(x + blockHeight, y + blockHeight, cellSize - 4, cellSize - 4);
+                    
+                    // Draw additional shadow layers for extreme depth
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+                    ctx.fillRect(x + blockHeight - 3, y + blockHeight - 3, cellSize - 4, cellSize - 4);
+                    
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+                    ctx.fillRect(x + blockHeight - 6, y + blockHeight - 6, cellSize - 4, cellSize - 4);
+                    
+                    // Draw right side of block with enhanced 3D
+                    ctx.fillStyle = "#A0522D";
+                    ctx.beginPath();
+                    ctx.moveTo(x + cellSize - 4, y);
+                    ctx.lineTo(x + cellSize - 4 + blockHeight, y + blockHeight);
+                    ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
+                    ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Draw bottom side of block with enhanced 3D
+                    ctx.fillStyle = "#8B4513";
+                    ctx.beginPath();
+                    ctx.moveTo(x, y + cellSize - 4);
+                    ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
+                    ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
+                    ctx.lineTo(x + blockHeight, y + cellSize - 4 + blockHeight);
+                    ctx.closePath();
+                    ctx.fill();
+                    
+                    // Add intense highlight on top edge for dramatic 3D effect
+                    ctx.strokeStyle = "#FFFFFF";
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + cellSize - 4, y);
+                    ctx.stroke();
+                    
+                    // Add intense highlight on left edge for dramatic 3D effect
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x, y + cellSize - 4);
+                    ctx.stroke();
+                    
+                    // Add secondary highlight for extra depth
+                    ctx.strokeStyle = "#F5DEB3";
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(x + 1, y + 1);
+                    ctx.lineTo(x + cellSize - 5, y + 1);
+                    ctx.stroke();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(x + 1, y + 1);
+                    ctx.lineTo(x + 1, y + cellSize - 5);
+                    ctx.stroke();
+                    
+                    // Draw main face of block
+                    const tileGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+                    tileGradient.addColorStop(0, "#F5DEB3"); // Wheat
+                    tileGradient.addColorStop(0.3, "#DEB887"); // Burlywood
+                    tileGradient.addColorStop(0.7, "#D2B48C"); // Tan
+                    tileGradient.addColorStop(1, "#BC8F8F"); // Rosy brown
+                    
+                    ctx.fillStyle = tileGradient;
+                    ctx.fillRect(x, y, cellSize - 4, cellSize - 4);
+                    
+                    // Add wood grain to tile
+                    ctx.strokeStyle = "#CD853F";
+                    ctx.lineWidth = 0.5;
+                    for (let i = 0; i < 3; i++) {
+                        ctx.beginPath();
+                        ctx.moveTo(x + 5 + i * 8, y + 5);
+                        ctx.lineTo(x + 8 + i * 8, y + cellSize - 9);
+                        ctx.stroke();
+                    }
+                    
+                    // Draw letter with clean 3D effect
+                    ctx.save();
+                    ctx.font = `bold ${cellSize / 2.5}px Arial`;
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillStyle = "#654321"; // Darker brown
+                    ctx.shadowColor = "transparent";
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                    ctx.fillText(
+                        tetrisBoard[r][c],
+                        x + (cellSize - 4) / 2,
+                        y + (cellSize - 4) / 2
+                    );
+                    ctx.restore();
+                    
+                    // Add subtle highlight to letter (darker)
+                    ctx.save();
+                    ctx.font = `bold ${cellSize / 2.5}px Arial`;
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillStyle = "#8B4513";
+                    ctx.shadowColor = "transparent";
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                    ctx.fillText(
+                        tetrisBoard[r][c],
+                        x + (cellSize - 4) / 2 - 1,
+                        y + (cellSize - 4) / 2 - 1
+                    );
+                    ctx.restore();
+                }
+            }
+        }
+        
+        // Draw crumbling tiles with dramatic explosion effect
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / explosionDuration, 1);
+        
+        // Draw the completed tiles with dramatic crumbling effect
+        for (const tile of completedTiles) {
+            const tileX = tile.c * cellSize;
+            const tileY = tile.r * cellSize;
+            
+            // Calculate dramatic crumbling effect
+            const shakeIntensity = Math.sin(progress * Math.PI * 12) * (1 - progress) * 8; // More intense shaking
+            const scale = 1 - progress * 0.5; // Tiles shrink more dramatically
+            const rotation = progress * Math.PI * 2; // Full rotation as they crumble
+            const wobble = Math.sin(progress * Math.PI * 6) * (1 - progress) * 5; // Wobble effect
+            
+            ctx.save();
+            ctx.translate(tileX + cellSize / 2 + shakeIntensity, tileY + cellSize / 2 + wobble);
+            ctx.rotate(rotation);
+            ctx.scale(scale, scale);
+            
+            // Draw crumbling tile with explosion colors and effects
+            const alpha = 1 - progress * 0.8; // Fade out more dramatically
+            ctx.globalAlpha = alpha;
+            
+            // Create dramatic explosion gradient
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, cellSize / 2);
+            const colors = ['#FFD700', '#FFA500', '#FF6347', '#FF4500', '#FF0000', '#FF1493'];
+            const colorIndex = Math.floor(progress * colors.length);
+            const currentColor = colors[colorIndex] || colors[colors.length - 1];
+            gradient.addColorStop(0, currentColor);
+            gradient.addColorStop(0.5, '#FFD700');
+            gradient.addColorStop(1, '#FF0000');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(-cellSize / 2 + 2, -cellSize / 2 + 2, cellSize - 4, cellSize - 4);
+            
+            // Add explosion glow effect
+            ctx.shadowColor = currentColor;
+            ctx.shadowBlur = 15;
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(-cellSize / 2 + 2, -cellSize / 2 + 2, cellSize - 4, cellSize - 4);
+            
+            // Draw letter with dramatic effect
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = `bold ${Math.floor(cellSize * 0.7)}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(tile.letter, 0, 0);
+            
+            // Add inner glow to letter
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 5;
+            ctx.fillStyle = '#FFFF00';
+            ctx.fillText(tile.letter, 0, 0);
+            
+            ctx.restore();
+        }
+        
+        // Animate explosion particles
+        let allExploded = true;
+        for (const particle of explosionParticles) {
+            const elapsed = currentTime - particle.startTime;
+            const progress = Math.min(elapsed / explosionDuration, 1);
+            
+            if (progress < 1) {
+                allExploded = false;
+                
+                // Update particle position
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.vy += 0.2; // Stronger gravity effect
+                particle.alpha = 1 - progress;
+                particle.rotation += particle.rotationSpeed;
+                
+                // Draw particle with enhanced effects
+                ctx.save();
+                ctx.globalAlpha = particle.alpha;
+                ctx.translate(particle.x, particle.y);
+                ctx.rotate(particle.rotation);
+                
+                // Draw particle with glow effect
+                ctx.shadowColor = particle.color;
+                ctx.shadowBlur = 10;
+                ctx.fillStyle = particle.color;
+                ctx.beginPath();
+                ctx.arc(0, 0, particle.size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Add inner highlight
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.arc(0, 0, particle.size * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.restore();
+            }
+        }
+        
+        if (!allExploded) {
+            requestAnimationFrame(animateExplosion);
+        } else {
+            // Explosion complete, remove tiles and start new letters animation
+            console.log(`Explosion complete - removing tiles and starting new letters animation`);
+            
+            // Remove the completed tiles from the board after explosion
+            for (const tile of completedTiles) {
+                tetrisBoard[tile.r][tile.c] = '';
+                console.log(`Removed tile '${tile.letter}' from [${tile.r}][${tile.c}] after explosion`);
+            }
+            
+            // Clear animation flags and completed tiles array
+            tetrisAnimating = false;
+            tetrisAnimation = null;
+            tetrisCompletedTiles = []; // Clear completed tiles so game works again
+            
+            console.log(`Cleared tetrisCompletedTiles array - game should be playable again`);
+            
+            // Start new letters animation after 500ms delay
+            setTimeout(() => {
+                startNewLettersAnimation(completedTiles);
+            }, 500);
+        }
+    }
+    
+    // Store the animation function so the main game loop can call it
+    tetrisAnimation.animateFunction = animateExplosion;
 }
 
 function startDissolvingAnimation(completedTiles) {
@@ -646,10 +1450,12 @@ function startDissolvingAnimation(completedTiles) {
     const dissolvingTiles = completedTiles.map(tile => ({
         ...tile,
         alpha: 1,
-        startTime: Date.now()
+        startTime: Date.now(),
+        rotation: 0,
+        scale: 1
     }));
     
-    const dissolveDuration = 2000; // 2 seconds
+    const dissolveDuration = 2500; // 2.5 seconds for more dramatic effect
     
     function animateDissolving() {
         const currentTime = Date.now();
@@ -670,10 +1476,12 @@ function startDissolvingAnimation(completedTiles) {
             if (progress < 1) {
                 allDissolved = false;
                 
-                // Fade out effect
+                // Enhanced dissolve effects
                 tile.alpha = 1 - progress;
+                tile.rotation = progress * Math.PI * 2; // Full rotation
+                tile.scale = 1 + progress * 0.5; // Scale up as it dissolves
                 
-                // Draw dissolving tile with fade effect
+                // Draw dissolving tile with enhanced effects
                 drawDissolvingTile(ctx, tile, cellSize);
             }
         }
@@ -682,16 +1490,19 @@ function startDissolvingAnimation(completedTiles) {
             requestAnimationFrame(animateDissolving);
         } else {
             // Animation complete - remove tiles from board
+            console.log('Dissolving animation complete, removing tiles from board');
             for (const tile of completedTiles) {
                 tetrisBoard[tile.r][tile.c] = '';
+                console.log(`Removed tile '${tile.letter}' from [${tile.r}][${tile.c}]`);
             }
             
             // Clear animation flags
             tetrisAnimating = false;
             tetrisAnimation = null;
             
-            // Start gravity animation to drop tiles down
-            startGravityAnimation(completedTiles);
+            // Start new letters animation to fill the empty spaces
+            console.log('Starting new letters animation...');
+            startNewLettersAnimation(completedTiles);
         }
     }
     
@@ -704,6 +1515,29 @@ function drawDissolvingTile(ctx, tile, cellSize) {
     
     ctx.save();
     ctx.globalAlpha = tile.alpha;
+    
+    // Apply rotation and scale transformations
+    const centerX = x + (cellSize - 4) / 2;
+    const centerY = y + (cellSize - 4) / 2;
+    ctx.translate(centerX, centerY);
+    ctx.rotate(tile.rotation);
+    ctx.scale(tile.scale, tile.scale);
+    ctx.translate(-centerX, -centerY);
+    
+    // Add particle effects for dissolving
+    if (tile.alpha < 0.8) {
+        const particleCount = Math.floor((1 - tile.alpha) * 10);
+        for (let i = 0; i < particleCount; i++) {
+            const particleX = x + Math.random() * (cellSize - 4);
+            const particleY = y + Math.random() * (cellSize - 4);
+            const particleSize = Math.random() * 4 + 2;
+            
+            ctx.fillStyle = `rgba(255, 215, 0, ${tile.alpha * 0.8})`;
+            ctx.beginPath();
+            ctx.arc(particleX, particleY, particleSize, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
     
     // Draw enhanced 3D block tile with dissolving effect
     const blockHeight = 18;
@@ -1035,7 +1869,7 @@ function drawTetrisBoard(anim = null) {
             
             // If animating, skip drawing the moving letter in its original spot
             // Also ensure empty space is drawn consistently during animation
-            if (anim && anim.from.r === r && anim.from.c === c) {
+            if (anim && anim.from && anim.from.r === r && anim.from.c === c) {
                 // Draw empty space consistently during animation
                 ctx.fillStyle = "#8B4513"; // Lighter brown for visibility
                 ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
@@ -1280,19 +2114,16 @@ function updateTetrisGame() {
     ctx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
 
     if (tetrisAnimating && tetrisAnimation) {
-        // Check if this is a dissolving animation
-        if (tetrisAnimation.isDissolving) {
-            // Don't update progress for dissolving animations
-            // The animation functions handle their own timing
+        // Check if this is a special animation that handles its own timing
+        if (tetrisAnimation.isDissolving || tetrisAnimation.isGravity) {
+            // These animations handle their own timing and progress
             drawTetrisBoard();
-        } else if (tetrisAnimation.isGravity) {
-            // Don't update progress for gravity animations
-            // The animation functions handle their own timing
-            drawTetrisBoard();
-        } else if (tetrisAnimation.isNewLetters) {
-            // Don't update progress for new letters animations
-            // The animation functions handle their own timing
-            drawTetrisBoard();
+        } else if (tetrisAnimation.isBlinking || tetrisAnimation.isExplosion || tetrisAnimation.isNewLetters) {
+            // Blinking, explosion, and new letters animations handle their own drawing completely
+            // Call the animation function
+            if (tetrisAnimation.animateFunction) {
+                tetrisAnimation.animateFunction();
+            }
         } else {
             // Regular tile sliding animation
             drawTetrisBoard(tetrisAnimation);
@@ -2287,8 +3118,20 @@ function loadTetrisGameState() {
             // CRITICAL FIX: Ensure the board has a proper empty cell
             // Ensure the board has the correct dimensions
             if (!tetrisBoard || tetrisBoard.length !== 7) {
-                generateTetrisBoard();
-                return null; // Force fresh start
+                console.log(`Warning: Invalid board dimensions, attempting to fix...`);
+                // Try to create a valid board structure instead of regenerating
+                if (!tetrisBoard || tetrisBoard.length !== 7) {
+                    tetrisBoard = [];
+                    for (let r = 0; r < 7; r++) {
+                        tetrisBoard[r] = [];
+                        for (let c = 0; c < 7; c++) {
+                            tetrisBoard[r][c] = 'A'; // Default letter
+                        }
+                    }
+                    // Set the empty position
+                    tetrisBoard[tetrisEmptyPos.r][tetrisEmptyPos.c] = '';
+                    console.log(`Recreated board structure with empty space at [${tetrisEmptyPos.r}][${tetrisEmptyPos.c}]`);
+                }
             }
             
             // Ensure the empty position is valid and the cell is actually empty
@@ -2312,10 +3155,28 @@ function loadTetrisGameState() {
                 }
             }
             
-            // If we have more than one empty space or no empty spaces, regenerate the board
+            // If we have more than one empty space or no empty spaces, try to fix it instead of regenerating
             if (emptyCount !== 1) {
-                generateTetrisBoard();
-                return null; // Force fresh start
+                console.log(`Warning: Board has ${emptyCount} empty spaces, attempting to fix...`);
+                
+                // If no empty spaces, create one at the expected position
+                if (emptyCount === 0) {
+                    tetrisBoard[tetrisEmptyPos.r][tetrisEmptyPos.c] = '';
+                    console.log(`Created empty space at [${tetrisEmptyPos.r}][${tetrisEmptyPos.c}]`);
+                }
+                // If multiple empty spaces, keep only the one at tetrisEmptyPos
+                else if (emptyCount > 1) {
+                    for (let r = 0; r < 7; r++) {
+                        for (let c = 0; c < 7; c++) {
+                            if (tetrisBoard[r][c] === '' && (r !== tetrisEmptyPos.r || c !== tetrisEmptyPos.c)) {
+                                // Fill this empty space with a random letter
+                                const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                                tetrisBoard[r][c] = letters[Math.floor(Math.random() * letters.length)];
+                                console.log(`Filled extra empty space at [${r}][${c}] with random letter`);
+                            }
+                        }
+                    }
+                }
             }
             
             return parsedState;
@@ -2340,6 +3201,44 @@ function clearSavedTetrisGame() {
 function clearTetrisState() {
     clearSavedTetrisGame();
     console.log('Tetris state cleared. Refresh the page or restart the Tetris game to see a fresh board.');
+}
+
+// Debug function to test empty cell functionality (call from console: testEmptyCell())
+function testEmptyCell() {
+    console.log(`=== EMPTY CELL TEST ===`);
+    console.log(`tetrisEmptyPos: [${tetrisEmptyPos.r}][${tetrisEmptyPos.c}]`);
+    console.log(`tetrisGameRunning: ${tetrisGameRunning}`);
+    console.log(`tetrisAnimating: ${tetrisAnimating}`);
+    console.log(`Board at empty pos: '${tetrisBoard[tetrisEmptyPos.r][tetrisEmptyPos.c]}'`);
+    
+    // Test clicking on adjacent cells
+    const adjacentCells = [
+        { r: tetrisEmptyPos.r - 1, c: tetrisEmptyPos.c }, // Above
+        { r: tetrisEmptyPos.r + 1, c: tetrisEmptyPos.c }, // Below
+        { r: tetrisEmptyPos.r, c: tetrisEmptyPos.c - 1 }, // Left
+        { r: tetrisEmptyPos.r, c: tetrisEmptyPos.c + 1 }  // Right
+    ];
+    
+    console.log(`Testing adjacent cells:`);
+    for (const cell of adjacentCells) {
+        if (cell.r >= 0 && cell.r < 7 && cell.c >= 0 && cell.c < 7) {
+            const letter = tetrisBoard[cell.r][cell.c];
+            console.log(`  [${cell.r}][${cell.c}]: '${letter}'`);
+        }
+    }
+    
+    // Test the move logic directly
+    console.log(`Testing move logic:`);
+    for (const cell of adjacentCells) {
+        if (cell.r >= 0 && cell.r < 7 && cell.c >= 0 && cell.c < 7) {
+            const letter = tetrisBoard[cell.r][cell.c];
+            if (letter !== '') {
+                console.log(`  Testing move from [${cell.r}][${cell.c}] ('${letter}') to empty cell`);
+                tryTetrisMove(cell.r, cell.c);
+            }
+        }
+    }
+    console.log(`=== END EMPTY CELL TEST ===`);
 }
 
 // Start a completely new game
@@ -3553,8 +4452,21 @@ function generateBoard() {
 }
 
 function handleInput(event) {
+    // Check if we're in Tetris game mode
+    if (currentGameMode === 'tetris') {
+        // Use Tetris input handler
+        handleTetrisInput(event);
+        return;
+    }
+    
     // Safety check - if canvas is not defined, this might be a Tetris game event
     if (!canvas) {
+        return;
+    }
+    
+    // Additional safety check - prevent double handling in Tetris mode
+    if (currentGameMode === 'tetris') {
+        console.log('handleInput: Already handled by Tetris, ignoring duplicate call');
         return;
     }
     
@@ -4535,7 +5447,7 @@ function startGravityAnimation(completedTiles) {
         return;
     }
     
-    const gravityDuration = 1000; // 1 second for gravity animation
+    const gravityDuration = 1500; // 1.5 seconds for more visible gravity animation
     
     function animateGravity() {
         const currentTime = Date.now();
@@ -4604,9 +5516,6 @@ function startGravityAnimation(completedTiles) {
             tetrisAnimating = false;
             tetrisAnimation = null;
             
-            // Generate new word
-            generateNewTetrisWord();
-            
             // Save game state
             saveTetrisGameState();
             
@@ -4620,6 +5529,13 @@ function startGravityAnimation(completedTiles) {
 
 function drawDroppingTile(ctx, tile, x, y, cellSize) {
     const blockSize = cellSize - 4;
+    
+    // Add motion blur effect for dropping tiles
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 4;
     
     // Draw enhanced 3D block tile for dropping tile
     const blockHeight = 18;
@@ -4726,6 +5642,8 @@ function drawDroppingTile(ctx, tile, x, y, cellSize) {
     ctx.shadowOffsetY = 0;
     ctx.fillText(tile.letter, x - 1, y - 1);
     ctx.restore();
+    
+    ctx.restore(); // Restore the motion blur effect
 }
 
 function startNewLettersAnimation(completedTiles) {
@@ -4733,32 +5651,21 @@ function startNewLettersAnimation(completedTiles) {
     tetrisAnimating = true;
     tetrisAnimation = { isNewLetters: true };
     
-    // Only fill the specific cells that were part of the completed word
-    // These are the cells that were marked as completed and then removed
-    const completedWordCells = completedTiles || [];
+    console.log(`=== STARTING NEW LETTERS ANIMATION ===`);
+    console.log(`Completed tiles:`, completedTiles);
+    console.log(`Completed word was: ${tetrisCurrentWord}`);
+    console.log(`Current board state:`, tetrisBoard);
     
-    if (completedWordCells.length === 0) {
-        // No completed word cells to fill, just generate new word
-        tetrisAnimating = false;
-        tetrisAnimation = null;
-        generateNewTetrisWord();
-        saveTetrisGameState();
-        return;
-    }
-    
-    // Find the empty spaces that need to be filled with new letters
-    // These are the positions where the completed word was
+    // Find the positions where the completed word was (these are now empty)
     const emptySpacesToFill = [];
-    
-    for (const cell of completedWordCells) {
-        // Check if this position is actually empty (should be after gravity)
-        if (tetrisBoard[cell.r][cell.c] === '') {
-            emptySpacesToFill.push({ r: cell.r, c: cell.c });
-        }
+    for (const tile of completedTiles) {
+        emptySpacesToFill.push({ r: tile.r, c: tile.c });
     }
+    
+    console.log(`Empty spaces to fill:`, emptySpacesToFill);
     
     if (emptySpacesToFill.length === 0) {
-        // No empty spaces to fill, just generate new word
+        console.log('No empty spaces to fill, generating new word');
         tetrisAnimating = false;
         tetrisAnimation = null;
         generateNewTetrisWord();
@@ -4766,21 +5673,24 @@ function startNewLettersAnimation(completedTiles) {
         return;
     }
     
-    // Create falling letters for each empty space that needs filling
+    // Create falling letters for each empty space
     const fallingLetters = emptySpacesToFill.map(cell => {
-        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        const randomLetter = letters[Math.floor(Math.random() * letters.length)];
+        // Generate random letters for the new positions
+        const allLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const randomLetter = allLetters[Math.floor(Math.random() * allLetters.length)];
+        
+        console.log(`Generated new letter '${randomLetter}' for position [${cell.r}][${cell.c}]`);
         
         return {
             to: { r: cell.r, c: cell.c },
             letter: randomLetter,
             startTime: Date.now(),
-            // Start from above the board (negative row)
-            from: { r: -1 - Math.random() * 2, c: cell.c }
+            // Start from the very top of the screen for proper Tetris effect
+            from: { r: -8 - Math.random() * 2, c: cell.c }
         };
     });
     
-    const newLettersDuration = 1500; // 1.5 seconds for new letters animation
+    const newLettersDuration = 1200; // 1.2 seconds for faster, more Tetris-like falling
     
     function animateNewLetters() {
         const currentTime = Date.now();
@@ -4788,12 +5698,143 @@ function startNewLettersAnimation(completedTiles) {
         const ctx = tetrisCanvas.getContext('2d');
         const cellSize = tetrisCanvas.width / 7;
         
-        // Clear canvas and draw the current board state
+        // Clear canvas and draw the board background and existing tiles (but not the new letters)
         ctx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
-        drawTetrisBoard();
+        drawTetrisBoardBackground();
+        
+        // Draw existing tiles (but not the positions where new letters will land)
+        for (let r = 0; r < 7; r++) {
+            for (let c = 0; c < 7; c++) {
+                const letter = tetrisBoard[r][c];
+                if (letter !== '') {
+                    // Check if this position is where a new letter will land
+                    const isNewLetterPosition = fallingLetters.some(tile => tile.to.r === r && tile.to.c === c);
+                    if (!isNewLetterPosition) {
+                        // Draw existing tile normally
+                        const x = c * cellSize;
+                        const y = r * cellSize;
+                        
+                        // Draw enhanced 3D block tile
+                        const blockHeight = 18;
+                        
+                        // Draw enhanced bottom shadow with multiple layers
+                        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+                        ctx.fillRect(x + blockHeight, y + blockHeight, cellSize - 4, cellSize - 4);
+                        
+                        ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+                        ctx.fillRect(x + blockHeight - 3, y + blockHeight - 3, cellSize - 4, cellSize - 4);
+                        
+                        ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+                        ctx.fillRect(x + blockHeight - 6, y + blockHeight - 6, cellSize - 4, cellSize - 4);
+                        
+                        // Draw right side of block with enhanced 3D
+                        ctx.fillStyle = "#A0522D";
+                        ctx.beginPath();
+                        ctx.moveTo(x + cellSize - 4, y);
+                        ctx.lineTo(x + cellSize - 4 + blockHeight, y + blockHeight);
+                        ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
+                        ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
+                        ctx.closePath();
+                        ctx.fill();
+                        
+                        // Draw bottom side of block with enhanced 3D
+                        ctx.fillStyle = "#8B4513";
+                        ctx.beginPath();
+                        ctx.moveTo(x, y + cellSize - 4);
+                        ctx.lineTo(x + cellSize - 4, y + cellSize - 4);
+                        ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight);
+                        ctx.lineTo(x + blockHeight, y + cellSize - 4 + blockHeight);
+                        ctx.closePath();
+                        ctx.fill();
+                        
+                        // Add intense highlight on top edge for dramatic 3D effect
+                        ctx.strokeStyle = "#FFFFFF";
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        ctx.lineTo(x + cellSize - 4, y);
+                        ctx.stroke();
+                        
+                        // Add intense highlight on left edge for dramatic 3D effect
+                        ctx.beginPath();
+                        ctx.moveTo(x, y);
+                        ctx.lineTo(x, y + cellSize - 4);
+                        ctx.stroke();
+                        
+                        // Add secondary highlight for extra depth
+                        ctx.strokeStyle = "#F5DEB3";
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(x + 1, y + 1);
+                        ctx.lineTo(x + cellSize - 5, y + 1);
+                        ctx.stroke();
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(x + 1, y + 1);
+                        ctx.lineTo(x + 1, y + cellSize - 5);
+                        ctx.stroke();
+                        
+                        // Draw main face of block
+                        const tileGradient = ctx.createLinearGradient(x, y, x + cellSize, y + cellSize);
+                        tileGradient.addColorStop(0, "#F5DEB3"); // Wheat
+                        tileGradient.addColorStop(0.3, "#DEB887"); // Burlywood
+                        tileGradient.addColorStop(0.7, "#D2B48C"); // Tan
+                        tileGradient.addColorStop(1, "#BC8F8F"); // Rosy brown
+                        
+                        ctx.fillStyle = tileGradient;
+                        ctx.fillRect(x, y, cellSize - 4, cellSize - 4);
+                        
+                        // Add wood grain to tile
+                        ctx.strokeStyle = "#CD853F";
+                        ctx.lineWidth = 0.5;
+                        for (let i = 0; i < 3; i++) {
+                            ctx.beginPath();
+                            ctx.moveTo(x + 5 + i * 8, y + 5);
+                            ctx.lineTo(x + 8 + i * 8, y + cellSize - 9);
+                            ctx.stroke();
+                        }
+                        
+                        // Draw letter with clean 3D effect
+                        ctx.save();
+                        ctx.font = `bold ${cellSize / 2.5}px Arial`;
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        ctx.fillStyle = "#654321"; // Darker brown
+                        ctx.shadowColor = "transparent";
+                        ctx.shadowBlur = 0;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 0;
+                        ctx.fillText(
+                            letter,
+                            x + (cellSize - 4) / 2,
+                            y + (cellSize - 4) / 2
+                        );
+                        ctx.restore();
+                        
+                        // Add subtle highlight to letter (darker)
+                        ctx.save();
+                        ctx.font = `bold ${cellSize / 2.5}px Arial`;
+                        ctx.textAlign = "center";
+                        ctx.textBaseline = "middle";
+                        ctx.fillStyle = "#8B4513";
+                        ctx.shadowColor = "transparent";
+                        ctx.shadowBlur = 0;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 0;
+                        ctx.fillText(
+                            letter,
+                            x + (cellSize - 4) / 2 - 1,
+                            y + (cellSize - 4) / 2 - 1
+                        );
+                        ctx.restore();
+                    }
+                }
+            }
+        }
         
         // Animate falling letters
         let allLanded = true;
+        console.log(`Animating ${fallingLetters.length} falling letters...`);
         for (const tile of fallingLetters) {
             const elapsed = currentTime - tile.startTime;
             const progress = Math.min(elapsed / newLettersDuration, 1);
@@ -4801,14 +5842,13 @@ function startNewLettersAnimation(completedTiles) {
             if (progress < 1) {
                 allLanded = false;
                 
-                // Calculate current position with easing
-                const easeOut = 1 - Math.pow(1 - progress, 3); // Cubic ease-out
+                // Calculate current position with Tetris-style constant velocity falling
                 const startX = tile.from.c * cellSize + (cellSize - 4) / 2;
                 const startY = tile.from.r * cellSize + (cellSize - 4) / 2;
                 const endX = tile.to.c * cellSize + (cellSize - 4) / 2;
                 const endY = tile.to.r * cellSize + (cellSize - 4) / 2;
-                const x = startX + (endX - startX) * easeOut;
-                const y = startY + (endY - startY) * easeOut;
+                const x = startX + (endX - startX) * progress;
+                const y = startY + (endY - startY) * progress;
                 
                 // Draw falling letter with enhanced effects
                 drawFallingLetter(ctx, tile, x, y, cellSize, progress);
@@ -4820,22 +5860,122 @@ function startNewLettersAnimation(completedTiles) {
         } else {
             // Animation complete - add letters to board
             
-            // Add letters to their final positions
+            // ANIMATION COMPLETE - NOW place the new letters on the board
+            console.log(`Animation complete - placing ${fallingLetters.length} NEW random letters on board`);
             for (const tile of fallingLetters) {
                 tetrisBoard[tile.to.r][tile.to.c] = tile.letter;
+                console.log(`Placed NEW letter '${tile.letter}' at position [${tile.to.r}][${tile.to.c}]`);
             }
+            
+            console.log(`Board state after placing new letters:`, tetrisBoard);
+            
+            // Force a redraw to make sure the new letters are visible
+            drawTetrisBoard();
             
             // Clear animation flags
             tetrisAnimating = false;
             tetrisAnimation = null;
             
-            // Generate new word
+            // Clear completed tiles array so tiles can be moved again
+            tetrisCompletedTiles = [];
+            console.log(`Cleared tetrisCompletedTiles array - tiles can now be moved again`);
+            
+            // Force game to be in a playable state
+            tetrisGameRunning = true;
+            console.log(`Set tetrisGameRunning to true - game should be playable now`);
+            
+            // Generate new word FIRST
             generateNewTetrisWord();
+            
+            // Find the empty position - it should be where the last letter was originally
+            // For "CAT", when "T" slides from [0,3] to [0,2], empty should be at [0,3]
+            // We need to find where the empty space actually is on the board
+            let foundEmpty = false;
+            for (let r = 0; r < 7; r++) {
+                for (let c = 0; c < 7; c++) {
+                    if (tetrisBoard[r][c] === '') {
+                        tetrisEmptyPos = { r: r, c: c };
+                        foundEmpty = true;
+                        console.log(`Found empty position at [${r}][${c}]`);
+                        break;
+                    }
+                }
+                if (foundEmpty) break;
+            }
+            
+            if (!foundEmpty) {
+                // If no empty space found, create one at the bottom-right
+                tetrisEmptyPos = { r: 6, c: 6 };
+                tetrisBoard[6][6] = '';
+                console.log(`No empty space found, created one at [6][6]`);
+            }
+            
+            // Final verification of game state
+            console.log(`=== FINAL GAME STATE VERIFICATION ===`);
+            console.log(`tetrisAnimating: ${tetrisAnimating}`);
+            console.log(`tetrisAnimation:`, tetrisAnimation);
+            console.log(`tetrisEmptyPos: [${tetrisEmptyPos.r}][${tetrisEmptyPos.c}]`);
+            console.log(`Board at empty pos: '${tetrisBoard[tetrisEmptyPos.r][tetrisEmptyPos.c]}'`);
+            console.log(`tetrisCompletedTiles length: ${tetrisCompletedTiles.length}`);
+            console.log(`tetrisGameRunning: ${tetrisGameRunning}`);
+            console.log(`Current word: ${tetrisCurrentWord}`);
+            console.log(`=== NEW LETTERS ANIMATION COMPLETE ===`);
+            console.log(`Game should now be fully playable with new letters and new word`);
+            
+            // Test if we can actually access the empty position
+            console.log(`Testing empty position access:`);
+            console.log(`tetrisBoard[${tetrisEmptyPos.r}][${tetrisEmptyPos.c}] = '${tetrisBoard[tetrisEmptyPos.r][tetrisEmptyPos.c]}'`);
+            console.log(`typeof tetrisBoard[${tetrisEmptyPos.r}][${tetrisEmptyPos.c}]: ${typeof tetrisBoard[tetrisEmptyPos.r][tetrisEmptyPos.c]}`);
+            
+            // Visual board representation for debugging
+            console.log(`=== VISUAL BOARD REPRESENTATION ===`);
+            for (let r = 0; r < 7; r++) {
+                let rowStr = `Row ${r}: `;
+                for (let c = 0; c < 7; c++) {
+                    const cell = tetrisBoard[r][c];
+                    const isEmpty = cell === '';
+                    const isEmptyPos = r === tetrisEmptyPos.r && c === tetrisEmptyPos.c;
+                    if (isEmpty && isEmptyPos) {
+                        rowStr += '[EMPTY] '; // This should be the functional empty cell
+                    } else if (isEmpty) {
+                        rowStr += '[BLANK] '; // Other empty cells
+                    } else {
+                        rowStr += `[${cell}] `;
+                    }
+                }
+                console.log(rowStr);
+            }
+            console.log(`=== END VISUAL BOARD ===`);
+            console.log(`=== END VERIFICATION ===`);
+            
+            // Final redraw to ensure everything is properly displayed
+            drawTetrisBoard();
+            
+            // Final board state verification before saving
+            console.log(`=== PRE-SAVE BOARD STATE ===`);
+            console.log(`tetrisEmptyPos: [${tetrisEmptyPos.r}][${tetrisEmptyPos.c}]`);
+            console.log(`Board at empty pos: '${tetrisBoard[tetrisEmptyPos.r][tetrisEmptyPos.c]}'`);
+            
+            // Count empty spaces to verify we have exactly one
+            let finalEmptyCount = 0;
+            for (let r = 0; r < 7; r++) {
+                for (let c = 0; c < 7; c++) {
+                    if (tetrisBoard[r][c] === '') {
+                        finalEmptyCount++;
+                        console.log(`Empty space found at [${r}][${c}]`);
+                    }
+                }
+            }
+            console.log(`Total empty spaces: ${finalEmptyCount}`);
+            console.log(`=== END PRE-SAVE VERIFICATION ===`);
             
             // Save game state
             saveTetrisGameState();
         }
     }
+    
+    // Store the animation function so the main game loop can call it
+    tetrisAnimation.animateFunction = animateNewLetters;
     
     animateNewLetters();
 }
@@ -4843,136 +5983,23 @@ function startNewLettersAnimation(completedTiles) {
 function drawFallingLetter(ctx, tile, x, y, cellSize, progress) {
     const blockSize = cellSize - 4;
     
-    // Add a subtle glow effect that intensifies as the letter gets closer
-    const glowIntensity = Math.min(progress * 2, 1);
-    ctx.save();
-    ctx.shadowColor = "#FFD700";
-    ctx.shadowBlur = 10 * glowIntensity;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
+    // Simple, clean Tetris-style falling letter - no fancy effects
+    const tileX = x - blockSize/2;
+    const tileY = y - blockSize/2;
     
-    // Draw enhanced 3D block tile for falling letter
-    const blockHeight = 18;
+    // Draw simple tile background
+    ctx.fillStyle = "#DEB887"; // Simple burlywood color
+    ctx.fillRect(tileX, tileY, blockSize, blockSize);
     
-    // Draw enhanced bottom shadow with multiple layers
-    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.fillRect(x - blockSize/2 + blockHeight, y - blockSize/2 + blockHeight, blockSize, blockSize);
+    // Draw simple border
+    ctx.strokeStyle = "#8B4513";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(tileX, tileY, blockSize, blockSize);
     
-    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
-    ctx.fillRect(x - blockSize/2 + blockHeight - 3, y - blockSize/2 + blockHeight - 3, blockSize, blockSize);
-    
-    ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
-    ctx.fillRect(x - blockSize/2 + blockHeight - 6, y - blockSize/2 + blockHeight - 6, blockSize, blockSize);
-    
-    // Draw right side of block with enhanced 3D
-    ctx.fillStyle = "#A0522D";
-    ctx.beginPath();
-    ctx.moveTo(x + blockSize/2 - 4, y - blockSize/2);
-    ctx.lineTo(x + blockSize/2 - 4 + blockHeight, y - blockSize/2 + blockHeight);
-    ctx.lineTo(x + blockSize/2 - 4 + blockHeight, y + blockSize/2 - 4 + blockHeight);
-    ctx.lineTo(x + blockSize/2 - 4, y + blockSize/2 - 4);
-    ctx.closePath();
-    ctx.fill();
-    
-    // Draw bottom side of block with enhanced 3D
-    ctx.fillStyle = "#8B4513";
-    ctx.beginPath();
-    ctx.moveTo(x - blockSize/2, y + blockSize/2 - 4);
-    ctx.lineTo(x + blockSize/2 - 4, y + blockSize/2 - 4);
-    ctx.lineTo(x + blockSize/2 - 4 + blockHeight, y + blockSize/2 - 4 + blockHeight);
-    ctx.lineTo(x - blockSize/2 + blockHeight, y + blockSize/2 - 4 + blockHeight);
-    ctx.closePath();
-    ctx.fill();
-    
-    // Add intense highlight on top edge for dramatic 3D effect
-    ctx.strokeStyle = "#FFFFFF";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(x - blockSize/2, y - blockSize/2);
-    ctx.lineTo(x + blockSize/2 - 4, y - blockSize/2);
-    ctx.stroke();
-    
-    // Add intense highlight on left edge for dramatic 3D effect
-    ctx.beginPath();
-    ctx.moveTo(x - blockSize/2, y - blockSize/2);
-    ctx.lineTo(x - blockSize/2, y + blockSize/2 - 4);
-    ctx.stroke();
-    
-    // Add secondary highlight for extra depth
-    ctx.strokeStyle = "#F5DEB3";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x - blockSize/2 + 1, y - blockSize/2 + 1);
-    ctx.lineTo(x + blockSize/2 - 5, y - blockSize/2 + 1);
-    ctx.stroke();
-    
-    ctx.beginPath();
-    ctx.moveTo(x - blockSize/2 + 1, y - blockSize/2 + 1);
-    ctx.lineTo(x - blockSize/2 + 1, y + blockSize/2 - 5);
-    ctx.stroke();
-    
-    // Draw main face of block with enhanced gradient for new letters
-    const tileGradient = ctx.createLinearGradient(x - blockSize/2, y - blockSize/2, x + blockSize/2, y + blockSize/2);
-    tileGradient.addColorStop(0, "#F5DEB3"); // Wheat
-    tileGradient.addColorStop(0.3, "#DEB887"); // Burlywood
-    tileGradient.addColorStop(0.7, "#D2B48C"); // Tan
-    tileGradient.addColorStop(1, "#BC8F8F"); // Rosy brown
-    
-    ctx.fillStyle = tileGradient;
-    ctx.fillRect(x - blockSize/2, y - blockSize/2, blockSize, blockSize);
-    
-    // Add wood grain to tile
-    ctx.strokeStyle = "#CD853F";
-    ctx.lineWidth = 0.5;
-    for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.moveTo(x - blockSize/2 + 5 + i * 8, y - blockSize/2 + 5);
-        ctx.lineTo(x - blockSize/2 + 8 + i * 8, y + blockSize/2 - 9);
-        ctx.stroke();
-    }
-    
-    // Draw letter with enhanced 3D effect
-    ctx.save();
+    // Draw letter
     ctx.font = `bold ${cellSize / 2.5}px Arial`;
+    ctx.fillStyle = "#654321";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "#654321"; // Darker brown
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
     ctx.fillText(tile.letter, x, y);
-    ctx.restore();
-    
-    // Add subtle highlight to letter
-    ctx.save();
-    ctx.font = `bold ${cellSize / 2.5}px Arial`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = "#8B4513";
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-    ctx.fillText(tile.letter, x - 1, y - 1);
-    ctx.restore();
-    
-    // Add landing effect - small particles when close to landing
-    if (progress > 0.8) {
-        const landingProgress = (progress - 0.8) / 0.2;
-        const particleCount = Math.floor(landingProgress * 8);
-        
-        ctx.fillStyle = `rgba(255, 215, 0, ${0.8 * landingProgress})`;
-        for (let i = 0; i < particleCount; i++) {
-            const particleX = x + (Math.random() - 0.5) * blockSize;
-            const particleY = y + blockSize/2 + Math.random() * 10;
-            const particleSize = Math.random() * 3 + 1;
-            
-            ctx.beginPath();
-            ctx.arc(particleX, particleY, particleSize, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-    
-    ctx.restore();
 }
