@@ -15,6 +15,18 @@
       <button class="menu-button" onclick="startOriginalGame()">🎮 Original Game</button>
       <button class="menu-button" onclick="startTetrisGame()">🔄 Tetris Style</button>
     </div>
+    
+    <!-- Login/User Profile Section -->
+    <div class="auth-section" id="authSection">
+      <button class="login-button" onclick="showLoginModal()" id="loginBtn">
+        <span class="login-icon">👤</span>
+        Sign In
+      </button>
+      <div class="user-profile" id="userProfile" style="display: none;">
+        <span class="username" id="usernameDisplay"></span>
+        <button class="logout-button" onclick="logout()">🚪 Sign Out</button>
+      </div>
+    </div>
   </div>
 
   <!-- Original Game Container -->
@@ -24,6 +36,7 @@
       <p>Level: <span id="levelDisplay">1</span>/20</p>
       <p>Slide tiles to form the words: <strong id="targetWords">FIVE, RICE, BIRD</strong></p>
       <p>Moves: <span id="moveCounter">0</span></p>
+      <p>Words Solved: <span id="wordsSolvedCounter">0</span></p>
     </div>
     <canvas id="gameCanvas" width="450" height="450"></canvas>
     <button class="button" onclick="resetGame()">Scramble Letters</button>
@@ -31,6 +44,7 @@
     <button class="button" onclick="newGame()">New Game</button>
     <button class="button" onclick="showHintConfirmation()">💡 Hint</button>
     <button class="button" onclick="showRulesModal()">❓ How to Play</button>
+    <button class="button leaderboard-btn" onclick="showLeaderboard('original')">🏆 Leaderboard</button>
     <button class="button back-to-menu" onclick="showMainMenu()">← Back to Menu</button>
   </div>
 
@@ -45,9 +59,74 @@
     <canvas id="tetrisCanvas" width="450" height="450"></canvas>
     <button class="button" onclick="newTetrisGame()">New Game</button>
     <button class="button" onclick="showTetrisRulesModal()">❓ How to Play</button>
+    <button class="button leaderboard-btn" onclick="showLeaderboard('tetris')">🏆 Leaderboard</button>
     <button class="button back-to-menu" onclick="showMainMenu()">← Back to Menu</button>
   </div>
 
   <script type="module" src="src/main.js"></script>
+  
+  <!-- Authentication Modal -->
+  <div id="authModal" class="auth-modal-overlay" style="display: none;">
+    <div class="auth-modal">
+      <div class="auth-modal-header">
+        <h2 id="authModalTitle">Welcome Back</h2>
+        <button class="auth-close-btn" onclick="closeAuthModal()">×</button>
+      </div>
+      
+      <form id="authForm" class="auth-form">
+        <div id="authError" class="auth-error" style="display: none;"></div>
+        
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" required placeholder="Enter your username">
+        </div>
+        
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required placeholder="Enter your password">
+        </div>
+        
+        <div class="form-group" id="confirmPasswordGroup" style="display: none;">
+          <label for="confirmPassword">Confirm Password</label>
+          <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Confirm your password">
+        </div>
+        
+        <button type="submit" class="auth-submit-btn" id="authSubmitBtn">Sign In</button>
+      </form>
+      
+      <div class="auth-footer">
+        <p id="authFooterText">
+          Don't have an account? 
+          <button type="button" class="auth-switch-btn" onclick="switchAuthMode()">Sign Up</button>
+        </p>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Leaderboard Modal -->
+  <div id="leaderboardModal" class="leaderboard-modal-overlay" style="display: none;">
+    <div class="leaderboard-modal">
+      <div class="leaderboard-header">
+        <h2 id="leaderboardTitle">Leaderboard</h2>
+        <button class="leaderboard-close-btn" onclick="closeLeaderboardModal()">×</button>
+      </div>
+      
+      <div class="leaderboard-content">
+        <div id="leaderboardLoading" class="leaderboard-loading">Loading leaderboard...</div>
+        <div id="leaderboardError" class="leaderboard-error" style="display: none;"></div>
+        <div id="leaderboardTable" class="leaderboard-table" style="display: none;"></div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Success Modal -->
+  <div id="successModal" class="success-modal-overlay" style="display: none;">
+    <div class="success-modal">
+      <div class="success-icon">🎉</div>
+      <h2 id="successTitle">Success!</h2>
+      <p id="successMessage">Operation completed successfully!</p>
+      <button class="success-close-btn" onclick="closeSuccessModal()">Continue</button>
+    </div>
+  </div>
 </body>
 </html>

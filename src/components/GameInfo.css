@@ -1,0 +1,76 @@
+/* GameInfo Component Styles */
+.game-info {
+  background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%);
+  border: 3px solid #654321;
+  border-radius: 15px;
+  padding: 20px;
+  margin: 20px 0;
+  box-shadow: 
+    0 10px 20px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.game-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.game-stats {
+  flex: 1;
+  min-width: 300px;
+}
+
+.game-stats p {
+  color: #F5DEB3;
+  margin: 8px 0;
+  font-size: 16px;
+  font-weight: 500;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.game-stats span {
+  color: #FFD700;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.game-stats strong {
+  color: #FFD700;
+  font-weight: bold;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Note: Leaderboard button styles are in the main styles.css file */
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .game-info-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .game-stats {
+    min-width: auto;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .game-info {
+    padding: 15px;
+    margin: 15px 0;
+  }
+  
+  .game-stats p {
+    font-size: 14px;
+  }
+  
+  .game-stats span,
+  .game-stats strong {
+    font-size: 16px;
+  }
+}

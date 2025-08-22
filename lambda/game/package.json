@@ -1,0 +1,12 @@
+{
+  "name": "wordslide-game-lambda",
+  "version": "1.0.0",
+  "description": "WordSlide Game Lambda Functions",
+  "main": "index.js",
+  "dependencies": {
+    "pg": "^8.11.3"
+  },
+  "scripts": {
+    "build": "npm install --production && zip -r ../game.zip ."
+  }
+}

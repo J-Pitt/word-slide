@@ -1,0 +1,12 @@
+{
+  "name": "wordslide-db-init-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function to initialize WordSlide database",
+  "main": "index.js",
+  "dependencies": {
+    "pg": "^8.11.3"
+  },
+  "scripts": {
+    "package": "zip -r init-database-lambda.zip ."
+  }
+}

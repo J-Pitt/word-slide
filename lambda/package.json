@@ -1,0 +1,24 @@
+{
+  "name": "wordslide-lambda-functions",
+  "version": "1.0.0",
+  "description": "AWS Lambda functions for WordSlide game backend",
+  "main": "index.js",
+  "scripts": {
+    "build": "npm run build:auth && npm run build:game && npm run build:user",
+    "build:auth": "cd auth && npm install --production && zip -r ../auth.zip .",
+    "build:game": "cd game && npm install --production && zip -r ../game.zip .",
+    "build:user": "cd user && npm install --production && zip -r ../user.zip .",
+    "deploy": "npm run build && aws lambda update-function-code --function-name wordslide-auth --zip-file fileb://auth.zip && aws lambda update-function-code --function-name wordslide-game --zip-file fileb://game.zip && aws lambda update-function-code --function-name wordslide-user --zip-file fileb://user.zip"
+  },
+  "dependencies": {
+    "pg": "^8.11.3",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "aws-sdk": "^2.1450.0"
+  },
+  "keywords": ["aws", "lambda", "game", "postgresql", "authentication"],
+  "author": "",
+  "license": "MIT"
+}

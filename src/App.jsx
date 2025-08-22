@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import GameBoard from './components/GameBoard'
 import GameInfo from './components/GameInfo'
+import UserProfile from './components/UserProfile'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import './styles.css'
 
 const ROWS = 7
@@ -31,6 +33,7 @@ function App() {
   const [animating, setAnimating] = useState(false)
   const [animation, setAnimation] = useState(null)
   const [gameWon, setGameWon] = useState(false)
+  const [gameMode, setGameMode] = useState('original') // Add game mode state
 
   // Shuffle array function
   const shuffleArray = (arr) => {
@@ -338,6 +341,15 @@ function App() {
     setCompletedTiles([])
     generateBoard()
   }, [generateBoard])
+
+  const switchGameMode = useCallback(() => {
+    const newMode = gameMode === 'original' ? 'tetris' : 'original'
+    setGameMode(newMode)
+    setCurrentLevel(1)
+    setMoveCount(0)
+    setCompletedTiles([])
+    generateBoard()
+  }, [gameMode, generateBoard])
 
   // Create dark wood paneling background function
   const createDarkWoodPaneling = useCallback(() => {
@@ -957,12 +969,46 @@ function App() {
 
   return (
     <div className="game-container">
-      <h1>WordSlide</h1>
+      {/* Debug test - remove this later */}
+      <div style={{ 
+        background: 'red', 
+        color: 'white', 
+        padding: '10px', 
+        margin: '10px', 
+        border: '3px solid yellow',
+        fontSize: '18px',
+        fontWeight: 'bold'
+      }}>
+        🚨 DEBUG: App component is rendering! Look for this red box!
+      </div>
+      
+      <div className="game-header">
+        <h1>WordSlide</h1>
+        <UserProfile />
+      </div>
+      
+      {/* Game Mode Selector */}
+      <div className="game-mode-selector">
+        <button 
+          className={`mode-btn ${gameMode === 'original' ? 'active' : ''}`}
+          onClick={() => gameMode !== 'original' && switchGameMode()}
+        >
+          🎯 Classic Mode
+        </button>
+        <button 
+          className={`mode-btn ${gameMode !== 'tetris' ? 'active' : ''}`}
+          onClick={() => gameMode !== 'tetris' && switchGameMode()}
+        >
+          🧩 Tetris Mode
+        </button>
+      </div>
+      
       <GameInfo 
         targetWords={getCurrentWordSet()}
         moveCount={moveCount}
         currentLevel={currentLevel}
         maxLevels={MAX_LEVELS}
+        gameMode={gameMode}
       />
       <GameBoard
         board={board}
@@ -978,4 +1024,10 @@ function App() {
   )
 }
 
-export default App 
+const AppWithAuth = () => (
+  <AuthProvider>
+    <App />
+  </AuthProvider>
+)
+
+export default AppWithAuth 

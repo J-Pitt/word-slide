@@ -1,0 +1,1 @@
+{"statusCode":500,"body":"{\"error\":\"Database initialization failed\",\"message\":\"database \\\"wordslide_game\\\" already exists\"}"}

@@ -73,6 +73,13 @@ function resetGame() {
     // Save the new state
     saveGameState();
     
+    // Save game stats to AWS backend when resetting (preserving completed words)
+    if (currentUser && preservedCompletedTiles.length > 0) {
+        const wordsSolved = preservedCompletedTiles.length / getCurrentWordSet()[0].length;
+        saveGameStats('original', wordsSolved, moveCount);
+        console.log(`Board reset - preserving stats: ${wordsSolved} words solved, ${moveCount} moves`);
+    }
+    
     console.log('Board reset complete - completed words preserved');
 }
 
@@ -890,6 +897,10 @@ function completeTetrisWord(startRow, startCol, direction) {
     
     // Save game state
     saveTetrisGameState();
+    
+    // Save game stats to AWS backend
+    saveGameStats('tetris', 1, tetrisMoveCount);
+    console.log(`Saving Tetris stats: 1 word solved, ${tetrisMoveCount} moves`);
 }
 
 function startBlinkingAnimation(completedTiles) {
@@ -2377,6 +2388,13 @@ function showWinPopup() {
 }
 
 function showFireworksCelebration(isFinalLevel = false) {
+    // Save final game stats to AWS backend when game ends
+    if (currentUser) {
+        const wordsSolved = completedTiles.length / getCurrentWordSet()[0].length;
+        saveGameStats('original', wordsSolved, moveCount);
+        console.log(`Game ended - saving final stats: ${wordsSolved} words solved, ${moveCount} moves`);
+    }
+    
     // Just start fireworks without any overlay - keep the game visible
     startFireworks();
     
@@ -2574,6 +2592,13 @@ function showCelebrationModal(isFinalLevel = false) {
         message.textContent = 'You\'ve completed all levels! You\'re a WordSlide master! 🏆';
     } else {
         message.textContent = `Level ${currentLevel} Complete! 🎯`;
+        
+        // Save level completion stats to AWS backend
+        if (currentUser) {
+            const wordsSolved = getCurrentWordSet().length; // All words in the level
+            saveGameStats('original', wordsSolved, moveCount);
+            console.log(`Level ${currentLevel} completed - saving stats: ${wordsSolved} words solved, ${moveCount} moves`);
+        }
     }
     message.style.cssText = `
         color: #FFFFFF;
@@ -4215,6 +4240,13 @@ function checkWordCompletion() {
     
     // Save state when words are completed
     saveGameState();
+    
+    // Save game stats to AWS backend if words were completed
+    if (newCompletedTiles.length > 0) {
+        const wordsSolved = newCompletedTiles.length / targetWords[0].length; // Assuming all words are same length
+        saveGameStats('original', wordsSolved, moveCount);
+        console.log(`Saving stats: ${wordsSolved} words solved, ${moveCount} moves`);
+    }
 }
 
 function wordsAreSolved() {
@@ -6003,3 +6035,343 @@ function drawFallingLetter(ctx, tile, x, y, cellSize, progress) {
     ctx.textBaseline = "middle";
     ctx.fillText(tile.letter, x, y);
 }
+
+// ===== AUTHENTICATION FUNCTIONS =====
+
+let currentUser = null;
+let authMode = 'login'; // 'login' or 'register'
+
+// Show the authentication modal
+function showLoginModal() {
+    console.log('Opening auth modal in mode:', authMode);
+    const modal = document.getElementById('authModal');
+    const title = document.getElementById('authModalTitle');
+    const submitBtn = document.getElementById('authSubmitBtn');
+    const footerText = document.getElementById('authFooterText');
+    const confirmPasswordGroup = document.getElementById('confirmPasswordGroup');
+    
+    // Set modal content based on mode
+    if (authMode === 'login') {
+        title.textContent = 'Welcome Back';
+        submitBtn.textContent = 'Sign In';
+        footerText.innerHTML = "Don't have an account? <button type='button' class='auth-switch-btn' onclick='switchAuthMode()'>Sign Up</button>";
+        confirmPasswordGroup.style.display = 'none';
+    } else {
+        title.textContent = 'Join the Game';
+        submitBtn.textContent = 'Create Account';
+        footerText.innerHTML = "Already have an account? <button type='button' class='auth-switch-btn' onclick='switchAuthMode()'>Sign In</button>";
+        confirmPasswordGroup.style.display = 'block';
+    }
+    
+    modal.style.display = 'flex';
+    
+    // Add form submit handler
+    const form = document.getElementById('authForm');
+    form.onsubmit = handleAuthSubmit;
+}
+
+// Close the authentication modal
+function closeAuthModal() {
+    const modal = document.getElementById('authModal');
+    modal.style.display = 'none';
+    
+    // Clear form
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
+    document.getElementById('confirmPassword').value = '';
+    document.getElementById('authError').style.display = 'none';
+}
+
+// Switch between login and register modes
+function switchAuthMode() {
+    authMode = authMode === 'login' ? 'register' : 'login';
+    showLoginModal(); // Reopen modal with new mode
+}
+
+// Handle authentication form submission
+async function handleAuthSubmit(event) {
+    event.preventDefault();
+    
+    const username = document.getElementById('username').value;
+    const password = document.getElementById('password').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const errorDiv = document.getElementById('authError');
+    
+    // Validation
+    if (!username || !password) {
+        showAuthError('Username and password are required');
+        return;
+    }
+    
+    if (authMode === 'register') {
+        if (password !== confirmPassword) {
+            showAuthError('Passwords do not match');
+            return;
+        }
+        if (password.length < 6) {
+            showAuthError('Password must be at least 6 characters long');
+            return;
+        }
+    }
+    
+    try {
+        // Use real AWS backend authentication
+        const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev';
+        const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register';
+        
+        const response = await fetch(`${API_BASE}${endpoint}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                username: username,
+                password: password
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            if (result.success) {
+                // Store user data with real ID from database
+                currentUser = {
+                    id: result.user.id,
+                    username: result.user.username
+                };
+                
+                const message = authMode === 'login' ? 'Login successful!' : 'Account created successfully!';
+                showAuthSuccess(message);
+                
+                // Update UI
+                updateAuthUI();
+                closeAuthModal();
+            } else {
+                showAuthError(result.error || 'Authentication failed');
+            }
+        } else {
+            const errorData = await response.json();
+            showAuthError(errorData.error || 'Authentication failed');
+        }
+        
+    } catch (error) {
+        showAuthError('Authentication failed: ' + error.message);
+    }
+}
+
+// Show authentication error
+function showAuthError(message) {
+    const errorDiv = document.getElementById('authError');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+}
+
+// Show authentication success
+function showAuthSuccess(message) {
+    const modal = document.getElementById('successModal');
+    const title = document.getElementById('successTitle');
+    const messageEl = document.getElementById('successMessage');
+    
+    // Set the success message
+    title.textContent = 'Success!';
+    messageEl.textContent = message;
+    
+    // Show the modal
+    modal.style.display = 'flex';
+}
+
+// Close success modal
+function closeSuccessModal() {
+    const modal = document.getElementById('successModal');
+    modal.style.display = 'none';
+}
+
+// Update authentication UI
+function updateAuthUI() {
+    const loginBtn = document.getElementById('loginBtn');
+    const userProfile = document.getElementById('userProfile');
+    const usernameDisplay = document.getElementById('usernameDisplay');
+    
+    if (currentUser) {
+        // User is logged in
+        loginBtn.style.display = 'none';
+        userProfile.style.display = 'flex';
+        usernameDisplay.textContent = currentUser.username;
+    } else {
+        // User is logged out
+        loginBtn.style.display = 'inline-flex';
+        userProfile.style.display = 'none';
+    }
+}
+
+// Logout function
+function logout() {
+    currentUser = null;
+    updateAuthUI();
+}
+
+// Show leaderboard modal
+async function showLeaderboard(gameMode) {
+    console.log('Opening leaderboard for mode:', gameMode);
+    const modal = document.getElementById('leaderboardModal');
+    const title = document.getElementById('leaderboardTitle');
+    const loadingDiv = document.getElementById('leaderboardLoading');
+    const errorDiv = document.getElementById('leaderboardError');
+    const tableDiv = document.getElementById('leaderboardTable');
+    
+    title.textContent = `${gameMode === 'original' ? 'Classic Mode' : 'Tetris Mode'} Leaderboard`;
+    modal.style.display = 'flex';
+    
+    // Show loading state
+    loadingDiv.style.display = 'block';
+    errorDiv.style.display = 'none';
+    tableDiv.style.display = 'none';
+    
+    try {
+        // API configuration
+        const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev';
+        
+        // Fetch leaderboard data from AWS
+        const response = await fetch(`${API_BASE}/game/leaderboard?gameMode=${gameMode}&limit=20`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            displayLeaderboard(data.leaderboard || [], gameMode);
+        } else {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+    } catch (error) {
+        console.error('Error fetching leaderboard:', error);
+        showLeaderboardError('Failed to load leaderboard. Please try again later.');
+    } finally {
+        loadingDiv.style.display = 'none';
+    }
+}
+
+// Display leaderboard data
+function displayLeaderboard(leaderboard, gameMode) {
+    const tableDiv = document.getElementById('leaderboardTable');
+    
+    if (leaderboard.length === 0) {
+        tableDiv.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #F5DEB3;">
+                <p style="font-size: 18px; margin-bottom: 10px;">No players yet for ${gameMode === 'original' ? 'Classic Mode' : 'Tetris Mode'}!</p>
+                <p style="font-size: 16px; color: #FFD700;">Be the first to set a record! 🏆</p>
+            </div>
+        `;
+    } else {
+        // Create leaderboard table
+        let tableHTML = `
+            <div class="leaderboard-table-content">
+                <div class="table-header">
+                    <div class="rank-col">Rank</div>
+                    <div class="player-col">Player</div>
+                    <div class="words-col">Words Solved</div>
+                    <div class="moves-col">Total Moves</div>
+                    <div class="games-col">Games Played</div>
+                </div>
+                <div class="table-body">
+        `;
+        
+        leaderboard.forEach((player, index) => {
+            const rank = index + 1;
+            const rankIcon = getRankIcon(rank);
+            const isTopThree = rank <= 3;
+            
+            tableHTML += `
+                <div class="table-row ${isTopThree ? 'top-three' : ''}">
+                    <div class="rank-col">
+                        <span class="rank-icon">${rankIcon}</span>
+                    </div>
+                    <div class="player-col">${player.username}</div>
+                    <div class="words-col">${formatNumber(player.words_solved)}</div>
+                    <div class="moves-col">${formatNumber(player.total_moves)}</div>
+                    <div class="games-col">${formatNumber(player.games_played)}</div>
+                </div>
+            `;
+        });
+        
+        tableHTML += `
+                </div>
+            </div>
+        `;
+        
+        tableDiv.innerHTML = tableHTML;
+    }
+    
+    tableDiv.style.display = 'block';
+}
+
+// Show leaderboard error
+function showLeaderboardError(message) {
+    const errorDiv = document.getElementById('leaderboardError');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+}
+
+// Get rank icon
+function getRankIcon(rank) {
+    if (rank === 1) return '🥇';
+    if (rank === 2) return '🥈';
+    if (rank === 3) return '🥉';
+    return `#${rank}`;
+}
+
+// Format numbers with commas
+function formatNumber(num) {
+    return num.toLocaleString();
+}
+
+// Close leaderboard modal
+function closeLeaderboardModal() {
+    const modal = document.getElementById('leaderboardModal');
+    modal.style.display = 'none';
+}
+
+// ===== GAME STATS SAVING =====
+// Save game stats to AWS backend
+async function saveGameStats(gameMode, wordsSolved, totalMoves) {
+    // Only save if user is logged in
+    if (!currentUser) {
+        console.log('User not logged in, skipping stats save');
+        return;
+    }
+    
+    try {
+        const API_BASE = process.env.NODE_ENV === 'production'
+            ? process.env.REACT_APP_API_BASE || 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
+            : 'http://localhost:3001/api';
+        
+        const response = await fetch(`${API_BASE}/game/stats`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                userId: currentUser.id,
+                gameMode: gameMode,
+                wordsSolved: wordsSolved,
+                totalMoves: totalMoves
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('Game stats saved successfully:', result);
+        } else {
+            console.error('Failed to save game stats:', response.status, response.statusText);
+        }
+    } catch (error) {
+        console.error('Error saving game stats:', error);
+    }
+}
+
+// Make functions globally accessible
+window.showLoginModal = showLoginModal;
+window.closeAuthModal = closeAuthModal;
+window.switchAuthMode = switchAuthMode;
+window.logout = logout;
+window.showLeaderboard = showLeaderboard;
+window.closeLeaderboardModal = closeLeaderboardModal;
+window.closeSuccessModal = closeSuccessModal;
