@@ -9,9 +9,7 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
   const [error, setError] = useState('');
   const { token, user } = useAuth();
 
-  const API_BASE = process.env.NODE_ENV === 'production' 
-    ? process.env.REACT_APP_API_BASE || 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
-    : 'http://localhost:3001/api';
+  const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev';
 
   useEffect(() => {
     if (isOpen) {
@@ -43,7 +41,11 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
 
   const fetchUserStats = async () => {
     try {
-      const response = await fetch(`${API_BASE}/user/stats`, {
+      const parts = token?.split('.')
+      const payload = parts?.length === 3 ? JSON.parse(atob(parts[1])) : null
+      const userId = payload?.userId
+      if (!userId) return
+      const response = await fetch(`${API_BASE}/user/${userId}/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -73,8 +75,31 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="leaderboard-modal-overlay" onClick={onClose}>
-      <div className="leaderboard-modal" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="leaderboard-modal-overlay"
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.7)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 10000,
+        backdropFilter: 'blur(5px)'
+      }}
+    >
+      <div
+        className="leaderboard-modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'relative',
+          zIndex: 10001
+        }}
+      >
         <div className="leaderboard-header">
           <h2>{gameMode === 'original' ? 'Classic Mode' : 'Tetris Mode'} Leaderboard</h2>
           <button className="leaderboard-close-btn" onClick={onClose}>×</button>

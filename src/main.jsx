@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import AppWithAuth from './App.jsx'
+import { AppWithAuth } from './App.jsx'
 import './styles.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(

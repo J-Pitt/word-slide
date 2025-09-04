@@ -6,19 +6,24 @@
 
 /* Login Button (when not authenticated) */
 .login-button {
-  background: linear-gradient(135deg, #654321 0%, #8B4513 100%);
-  color: #F5DEB3;
-  border: 2px solid #654321;
-  border-radius: 25px;
-  padding: 10px 20px;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, #654321 0%, #8B4513 100%) !important;
+  color: #F5DEB3 !important;
+  border: 2px solid #654321 !important;
+  border-radius: 25px !important;
+  padding: 10px 20px !important;
+  font-size: 16px !important;
+  font-weight: bold !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3) !important;
+  /* Force visibility */
+  visibility: visible !important;
+  opacity: 1 !important;
+  z-index: 10000 !important;
+  position: relative !important;
 }
 
 .login-button:hover {

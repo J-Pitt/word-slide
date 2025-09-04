@@ -184,8 +184,8 @@
   grid-template-columns: 80px 2fr 1fr 1fr 1fr;
   gap: 15px;
   padding: 12px 15px;
-  background: linear-gradient(135deg, #F5DEB3 0%, #DEB887 100%);
-  border-bottom: 1px solid #DEB887;
+  background: linear-gradient(135deg, #3D2318 0%, #2F1B14 100%);
+  border-bottom: 1px solid #654321;
   transition: all 0.3s ease;
   text-align: center;
   align-items: center;
@@ -196,18 +196,17 @@
 }
 
 .table-row:hover {
-  background: linear-gradient(135deg, #DEB887 0%, #D2B48C 100%);
+  background: linear-gradient(135deg, #4A2C1A 0%, #3D2318 100%);
   transform: translateX(5px);
 }
 
 .table-row.top-three {
-  background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
-  color: #654321;
+  background: linear-gradient(135deg, #3D2318 0%, #2F1B14 100%);
   font-weight: bold;
 }
 
 .table-row.top-three:hover {
-  background: linear-gradient(135deg, #FFA500 0%, #FF8C00 100%);
+  background: linear-gradient(135deg, #4A2C1A 0%, #3D2318 100%);
 }
 
 .rank-col {
@@ -223,12 +222,12 @@
 
 .player-col {
   font-weight: bold;
-  color: #654321;
+  color: #F5DEB3;
   text-align: left;
 }
 
 .words-col, .moves-col, .games-col {
-  color: #8B4513;
+  color: #F5DEB3;
   font-weight: bold;
 }
 

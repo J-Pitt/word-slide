@@ -1,365 +1,452 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
-import GameBoard from './components/GameBoard'
-import GameInfo from './components/GameInfo'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import LeaderboardModal from './components/LeaderboardModal'
 import UserProfile from './components/UserProfile'
-import { AuthProvider, useAuth } from './contexts/AuthContext'
+import AuthModal from './components/AuthModal'
+import { AuthProvider } from './contexts/AuthContext'
 import './styles.css'
 
-const ROWS = 7
-const COLS = 7
-const MAX_LEVELS = 10
-
-// Word sets for each level - now with longer words for 7x7 board
-const WORD_SETS = [
-  ["five", "rice", "bird"],    // Level 1
-  ["cat", "dog", "pig"],       // Level 2
-  ["red", "blue", "pink"],     // Level 3
-  ["sun", "moon", "star"],     // Level 4
-  ["book", "read", "write"],   // Level 5
-  ["tree", "leaf", "root"],    // Level 6
-  ["fish", "swim", "ocean"],   // Level 7
-  ["play", "game", "fun"],     // Level 8
-  ["food", "eat", "meal"],     // Level 9
-  ["love", "heart", "care"]    // Level 10
-]
-
-
 function App() {
+  console.log('App component rendering...')
+  
+  const [currentView, setCurrentView] = useState('menu')
+  
+  // Basic game state
   const [board, setBoard] = useState([])
   const [emptyPos, setEmptyPos] = useState({ r: 6, c: 6 })
   const [moveCount, setMoveCount] = useState(0)
   const [currentLevel, setCurrentLevel] = useState(1)
-  const [completedTiles, setCompletedTiles] = useState([])
+  const [completedWords, setCompletedWords] = useState(new Set())
+  const [showFireworks, setShowFireworks] = useState(false)
+  const [hintCount, setHintCount] = useState(3)
+  const [showRules, setShowRules] = useState(false)
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
+  
+  // Tetris-style word game state
+  const [tetrisBoard, setTetrisBoard] = useState([])
+  const [tetrisScore, setTetrisScore] = useState(0)
+  const [tetrisLevel, setTetrisLevel] = useState(1)
+  const [tetrisLines, setTetrisLines] = useState(0)
+  const [tetrisGameOver, setTetrisGameOver] = useState(false)
+  const [tetrisPaused, setTetrisPaused] = useState(false)
+  const [fallingBlocks, setFallingBlocks] = useState([])
+  const [fallingSpeed, setFallingSpeed] = useState(1000) // milliseconds
+  
+  // Animation state for tile sliding (matching original JS logic)
   const [animating, setAnimating] = useState(false)
   const [animation, setAnimation] = useState(null)
-  const [gameWon, setGameWon] = useState(false)
-  const [gameMode, setGameMode] = useState('original') // Add game mode state
+  // Measured tile step (tile width + gap) to ensure exact pixel movement
+  const [tileStep, setTileStep] = useState(0)
+  const boardRef = useRef(null)
+  const [swapHold, setSwapHold] = useState(null) // temporarily disable transition on destination tile
+  
+  // Tetris pieces for word generation
+  const TETRIS_PIECES = [
+    // I piece - 4 letters
+    [[1, 1, 1, 1]],
+    // O piece - 4 letters (2x2)
+    [[1, 1], [1, 1]],
+    // T piece - 3 letters
+    [[0, 1, 0], [1, 1, 1]],
+    // S piece - 4 letters
+    [[0, 1, 1], [1, 1, 0]],
+    // Z piece - 4 letters
+    [[1, 1, 0], [0, 1, 1]],
+    // J piece - 4 letters
+    [[1, 0, 0], [1, 1, 1]],
+    // L piece - 4 letters
+    [[0, 0, 1], [1, 1, 1]]
+  ]
 
-  // Shuffle array function
-  const shuffleArray = (arr) => {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-  }
-
-  const getCurrentWordSet = useCallback(() => {
-    return WORD_SETS[currentLevel - 1] || WORD_SETS[0]
-  }, [currentLevel])
-
-  const generateBoard = useCallback(() => {
-    const targetWords = getCurrentWordSet()
-    const newBoard = []
+  // Tetris colors
+  const TETRIS_COLORS = ['#FF69B4', '#00CED1', '#FFD700', '#90EE90', '#FF4500', '#9370DB', '#FF8C00']
+  
+  // Tetris game functions - defined early to avoid hoisting issues
+  const spawnFallingBlock = useCallback(() => {
+    if (tetrisGameOver || tetrisPaused) return
     
-    // Initialize empty board
-    for (let r = 0; r < ROWS; r++) {
-      newBoard[r] = []
-      for (let c = 0; c < COLS; c++) {
-        newBoard[r][c] = ""
+    // Generate random letter (A-Z)
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    const randomLetter = letters[Math.floor(Math.random() * letters.length)]
+    
+    // Spawn at top center of 7x8 board (column 3-4, row 0)
+    const newBlock = {
+      letter: randomLetter,
+      x: 3 + Math.floor(Math.random() * 2), // Random between columns 3-4
+      y: 0 // Start at the very top of the board
+    }
+    
+    setFallingBlocks([newBlock])
+  }, [tetrisGameOver, tetrisPaused])
+
+  // Measure the per-cell pixel step so animations never round or jump
+  useEffect(() => {
+    // Find any tile element
+    const sample = document.querySelector('[data-tile]')
+    if (sample) {
+      const rect = sample.getBoundingClientRect()
+      // Our grid uses 1px gaps between tiles except edges
+      const step = Math.round(rect.width + 1)
+      if (step && step !== tileStep) setTileStep(step)
+    }
+  }, [board, tileStep])
+
+  // Check if a Tetris block can move to a new position
+  const canBlockMove = useCallback((block, deltaX, deltaY) => {
+    if (!block || !tetrisBoard.length) return false
+    
+    const newX = block.x + deltaX
+    const newY = block.y + deltaY
+    
+    // Check boundaries for 7x8 board
+    if (newX < 0 || newX >= 8 || newY >= 7) {
+      return false
+    }
+    
+    // Check if new position is occupied (only check if moving down or to sides)
+    if (deltaY > 0 || deltaX !== 0) {
+      if (newY >= 0 && tetrisBoard[newY] && tetrisBoard[newY][newX]) {
+        return false
       }
     }
     
-    // Create a truly scrambled board based on current target words
-    const allLetters = []
+    return true
+  }, [tetrisBoard])
+
+  // Move falling block left
+  const moveBlockLeft = useCallback(() => {
+    if (tetrisGameOver || tetrisPaused || fallingBlocks.length === 0) return
     
-    // Add letters from target words
-    for (let r = 0; r < targetWords.length; r++) {
-      const word = targetWords[r]
-      for (let c = 0; c < word.length; c++) {
-        allLetters.push(word[c].toUpperCase())
-      }
-    }
-    
-    // Add random letters to fill the board
-    const remainingSlots = ROWS * COLS - allLetters.length - 1 // -1 for empty space
-    for (let i = 0; i < remainingSlots; i++) {
-      allLetters.push(String.fromCharCode(65 + Math.floor(Math.random() * 26)))
-    }
-    
-    // Shuffle all letters
-    shuffleArray(allLetters)
-    
-    // Place letters on the board in scrambled positions
-    let letterIndex = 0
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        if (r === ROWS - 1 && c === COLS - 1) {
-          newBoard[r][c] = "" // Empty space in bottom-right
-        } else {
-          newBoard[r][c] = allLetters[letterIndex++]
+    setFallingBlocks(prev => {
+      return prev.map(block => {
+        if (canBlockMove(block, -1, 0)) {
+          return { ...block, x: block.x - 1 }
         }
-      }
-    }
-    
-    // Ensure the board is not already solved by making strategic swaps
-    // This guarantees the puzzle requires solving
-    const scrambleMoves = Math.floor(Math.random() * 3) + 2 // 2-4 random moves
-    
-    for (let i = 0; i < scrambleMoves; i++) {
-      // Find two random positions to swap
-      let pos1 = { r: Math.floor(Math.random() * ROWS), c: Math.floor(Math.random() * COLS) }
-      let pos2 = { r: Math.floor(Math.random() * ROWS), c: Math.floor(Math.random() * COLS) }
-      
-      // Make sure we're not swapping with the empty space
-      while ((pos1.r === ROWS - 1 && pos1.c === COLS - 1) || 
-             (pos2.r === ROWS - 1 && pos2.c === COLS - 1)) {
-        pos1 = { r: Math.floor(Math.random() * ROWS), c: Math.floor(Math.random() * COLS) }
-        pos2 = { r: Math.floor(Math.random() * ROWS), c: Math.floor(Math.random() * COLS) }
-      }
-      
-      // Swap the letters
-      const temp = newBoard[pos1.r][pos1.c]
-      newBoard[pos1.r][pos1.c] = newBoard[pos2.r][pos2.c]
-      newBoard[pos2.r][pos2.c] = temp
-    }
-    
-    setBoard(newBoard)
-    setEmptyPos({ r: ROWS - 1, c: COLS - 1 })
-    setMoveCount(0)
-    setCompletedTiles([])
-    setGameWon(false)
-  }, [currentLevel, getCurrentWordSet])
-
-  const isWordCompleted = useCallback((rowIndex) => {
-    const targetWords = getCurrentWordSet()
-    if (rowIndex >= targetWords.length) return false
-    
-    const targetWord = targetWords[rowIndex]
-    let word = ""
-    for (let c = 0; c < targetWord.length; c++) {
-      if (!board[rowIndex] || typeof board[rowIndex][c] !== "string") return false
-      word += board[rowIndex][c]
-    }
-    // Convert both to uppercase for comparison since board letters are uppercase
-    const isCompleted = word.toUpperCase() === targetWord.toUpperCase()
-    console.log(`Row ${rowIndex}: "${word}" (${word.length} chars) === "${targetWord}" (${word.length} chars) = ${isCompleted}`) // Debug
-    console.log(`Row ${rowIndex} board:`, board[rowIndex]) // Debug
-    return isCompleted
-  }, [board, getCurrentWordSet])
-
-  const isWordCompletedVertical = useCallback((colIndex) => {
-    const targetWords = getCurrentWordSet()
-    if (colIndex >= targetWords.length) return false
-    
-    const targetWord = targetWords[colIndex]
-    let word = ""
-    for (let r = 0; r < targetWord.length; r++) {
-      if (!board[r] || typeof board[r][colIndex] !== "string") return false
-      word += board[r][colIndex]
-    }
-    // Convert both to uppercase for comparison since board letters are uppercase
-    const isCompleted = word.toUpperCase() === targetWord.toUpperCase()
-    console.log(`Col ${colIndex}: "${word}" (${word.length} chars) === "${targetWord}" (${word.length} chars) = ${isCompleted}`) // Debug
-    return isCompleted
-  }, [board, getCurrentWordSet])
-
-  const isTileCompleted = useCallback((r, c) => {
-    return completedTiles.some(tile => tile.r === r && tile.c === c)
-  }, [completedTiles])
-
-  const checkWordCompletion = useCallback(() => {
-    const targetWords = getCurrentWordSet()
-    const newCompletedTiles = []
-    
-    console.log("=== Word Completion Check ===") // Debug
-    console.log("Target words:", targetWords) // Debug
-    
-    // Check horizontal words (rows)
-    for (let i = 0; i < targetWords.length; i++) {
-      const isCompleted = isWordCompleted(i)
-      console.log(`Row ${i} completed: ${isCompleted}`) // Debug
-      
-      if (isCompleted) {
-        // Add all tiles from this completed word to the completed tiles list
-        const targetWord = targetWords[i]
-        for (let c = 0; c < targetWord.length; c++) {
-          newCompletedTiles.push({ r: i, c: c })
-        }
-        console.log(`Added tiles for row ${i}:`, newCompletedTiles) // Debug
-      }
-    }
-    
-    // Check vertical words (columns)
-    for (let i = 0; i < targetWords.length; i++) {
-      const isCompleted = isWordCompletedVertical(i)
-      console.log(`Col ${i} completed: ${isCompleted}`) // Debug
-      
-      if (isCompleted) {
-        // Add all tiles from this completed word to the completed tiles list
-        const targetWord = targetWords[i]
-        for (let r = 0; r < targetWord.length; r++) {
-          newCompletedTiles.push({ r: r, c: i })
-        }
-        console.log(`Added tiles for col ${i}:`, newCompletedTiles) // Debug
-      }
-    }
-    
-    console.log("Final completed tiles:", newCompletedTiles) // Debug
-    console.log("Current board:", board) // Debug
-    setCompletedTiles(newCompletedTiles)
-  }, [isWordCompleted, isWordCompletedVertical, board, getCurrentWordSet])
-
-  const wordsAreSolved = useCallback(() => {
-    const targetWords = getCurrentWordSet()
-    console.log("=== Checking if words are solved ===") // Debug
-    console.log("Target words:", targetWords) // Debug
-    console.log("Current board:", board) // Debug
-    
-    let solvedWords = 0
-    const totalWords = targetWords.length
-    
-    // Check horizontal words (rows)
-    for (let i = 0; i < targetWords.length; i++) {
-      let word = ""
-      for (let c = 0; c < targetWords[i].length; c++) {
-        if (!board[i] || typeof board[i][c] !== "string") {
-          console.log(`Row ${i}, col ${c}: missing or invalid`) // Debug
-          continue // Skip this word, check others
-        }
-        word += board[i][c]
-      }
-      console.log(`Row ${i}: "${word}" vs "${targetWords[i]}"`) // Debug
-      if (word.toUpperCase() === targetWords[i].toUpperCase()) {
-        console.log(`✅ Row ${i} is solved!`) // Debug
-        solvedWords++
-      }
-    }
-    
-    // Check vertical words (columns)
-    for (let i = 0; i < targetWords.length; i++) {
-      let word = ""
-      for (let r = 0; r < targetWords[i].length; r++) {
-        if (!board[r] || typeof board[r][i] !== "string") {
-          console.log(`Col ${i}, row ${r}: missing or invalid`) // Debug
-          continue // Skip this word, check others
-        }
-        word += board[r][i]
-      }
-      console.log(`Col ${i}: "${word}" vs "${targetWords[i]}"`) // Debug
-      if (word.toUpperCase() === targetWords[i].toUpperCase()) {
-        console.log(`✅ Col ${i} is solved!`) // Debug
-        solvedWords++
-      }
-    }
-    
-    console.log(`Solved words: ${solvedWords}/${totalWords}`) // Debug
-    
-    // Check if ALL words are solved (not just any)
-    if (solvedWords >= totalWords) {
-      console.log("🎉 ALL WORDS ARE SOLVED! WIN CONDITION MET!") // Debug
-      return true
-    }
-    
-    console.log("❌ Not all words are solved yet") // Debug
-    return false
-  }, [board, getCurrentWordSet])
-
-  const tryMove = useCallback((r, c) => {
-    if (animating || gameWon) return
-
-    // Check if the tile being moved is part of a completed word
-    if (isTileCompleted(r, c)) {
-      return; // Don't allow moving tiles from completed words
-    }
-
-    const dr = Math.abs(r - emptyPos.r)
-    const dc = Math.abs(c - emptyPos.c)
-    
-    if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
-      setAnimating(true)
-      setAnimation({
-        from: { r, c },
-        to: { r: emptyPos.r, c: emptyPos.c },
-        letter: board[r][c],
-        progress: 0,
-        duration: 15
+        return block
       })
-      
-      const newMoveCount = moveCount + 1
-      setMoveCount(newMoveCount)
-    }
-  }, [animating, gameWon, emptyPos, board, moveCount, isTileCompleted])
+    })
+  }, [tetrisGameOver, tetrisPaused, fallingBlocks.length, canBlockMove])
 
-  const updateAnimation = useCallback(() => {
-    if (!animating || !animation) return
+  // Move falling block right
+  const moveBlockRight = useCallback(() => {
+    if (tetrisGameOver || tetrisPaused || fallingBlocks.length === 0) return
+    
+    setFallingBlocks(prev => {
+      return prev.map(block => {
+        if (canBlockMove(block, 1, 0)) {
+          return { ...block, x: block.x + 1 }
+        }
+        return block
+      })
+    })
+  }, [tetrisGameOver, tetrisPaused, fallingBlocks.length, canBlockMove])
 
-    setAnimation(prev => {
-      const newProgress = prev.progress + 1
+  // Pause/Resume Tetris game
+  const pauseTetrisGame = useCallback(() => {
+    setTetrisPaused(prev => !prev)
+  }, [])
+
+  // Generate Tetris board with same dimensions as original game
+  const generateTetrisBoard = useCallback(() => {
+    // Create 7x8 board like original game (7 rows, 8 columns)
+    const newBoard = Array(7).fill(null).map(() => Array(8).fill(null))
+    setTetrisBoard(newBoard)
+    
+    // Start spawning falling blocks
+    setTimeout(() => {
+      spawnFallingBlock()
+    }, 1000)
+  }, [])
+
+  // Reset Tetris game
+  const resetTetrisGame = useCallback(() => {
+    setTetrisGameOver(false)
+    setTetrisPaused(false)
+    setTetrisScore(0)
+    setTetrisLevel(1)
+    setTetrisLines(0)
+    setFallingSpeed(1000)
+    generateTetrisBoard()
+  }, [generateTetrisBoard])
+
+  // Start Tetris game
+  const startTetrisGame = useCallback(() => {
+    console.log('Starting Tetris-style word game...')
+    setCurrentView('tetris')
+    setTetrisGameOver(false)
+    setTetrisPaused(false)
+    setFallingSpeed(1000)
+    generateTetrisBoard()
+  }, [generateTetrisBoard])
+
+  // Check for completed words (3+ letters horizontally)
+  const checkTetrisLines = useCallback(() => {
+    if (!tetrisBoard.length) return
+    
+    let wordsCleared = 0
+    const newBoard = tetrisBoard.map(row => [...row])
+    
+    // Check each row for word completion
+    for (let r = 0; r < newBoard.length; r++) {
+      const row = newBoard[r]
+      let currentWord = ''
+      let wordStart = -1
       
-      if (newProgress >= prev.duration) {
-        // Finish animation and swap
-        setBoard(currentBoard => {
-          const newBoard = currentBoard.map(row => [...row])
-          newBoard[prev.to.r][prev.to.c] = prev.letter
-          newBoard[prev.from.r][prev.from.c] = ""
-          return newBoard
-        })
-        
-        setEmptyPos({ r: prev.from.r, c: prev.from.c })
-        setAnimating(false)
-        
-        // Check for word completion after each move
-        checkWordCompletion()
-        
-        // Check for win condition
-        const newBoard = board.map(row => [...row])
-        newBoard[prev.to.r][prev.to.c] = prev.letter
-        newBoard[prev.from.r][prev.from.c] = ""
-        
-        const targetWords = getCurrentWordSet()
-        let allWordsSolved = true
-        for (let i = 0; i < targetWords.length; i++) {
-          let word = ""
-          for (let c = 0; c < targetWords[i].length; c++) {
-            if (!newBoard[i] || typeof newBoard[i][c] !== "string") {
-              allWordsSolved = false
-              break
+      // Scan row for consecutive letters
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] && row[c].letter) {
+          if (currentWord === '') {
+            wordStart = c
+            currentWord = row[c].letter
+          } else {
+            currentWord += row[c].letter
+          }
+        } else {
+          // Check if we have a completed word (3+ letters)
+          if (currentWord.length >= 3) {
+            // Clear the word
+            for (let i = wordStart; i < c; i++) {
+              newBoard[r][i] = null
             }
-            word += newBoard[i][c]
+            wordsCleared++
+            console.log(`Word completed: ${currentWord}`)
           }
-          if (word !== targetWords[i]) {
-            allWordsSolved = false
-            break
-          }
+          currentWord = ''
+          wordStart = -1
         }
-        
-        if (allWordsSolved) {
-          setGameWon(true)
-        }
-        
-        return null
       }
       
-      return { ...prev, progress: newProgress }
-    })
-  }, [animating, animation, board])
+      // Check word at end of row
+      if (currentWord.length >= 3) {
+        for (let i = wordStart; i < row.length; i++) {
+          newBoard[r][i] = null
+        }
+        wordsCleared++
+        console.log(`Word completed: ${currentWord}`)
+      }
+    }
+    
+    // Update board and score if words were cleared
+    if (wordsCleared > 0) {
+      setTetrisBoard(newBoard)
+      setTetrisScore(prev => prev + wordsCleared)
+      setTetrisLevel(prev => prev + 1)
+      
+      // Check if game over (board is full)
+      const isFull = newBoard.every(row => row.every(cell => cell !== null))
+      if (isFull) {
+        setTetrisGameOver(true)
+      }
+    }
+  }, [tetrisBoard])
+  
+  // Advanced word generation system for 20 levels (migrated from main.js)
+  const WORD_BANK = [
+    // 3-letter words
+    "CAT", "DOG", "BAT", "RAT", "HAT", "MAT", "SIT", "RUN", "JAM", "BAG",
+    "BIG", "HOT", "COW", "PIG", "FOX", "BOX", "TOP", "MAP", "CAP", "TAP",
+    "GAP", "LAP", "NAP", "RAP", "SAP", "ZAP", "BED", "RED", "FED", "LED",
+    "TEN", "PEN", "MEN", "DEN", "BEN", "SUN", "FUN", "GUN", "NUN", "BUN",
+    "CUP", "PUP", "UP", "TIP", "LIP", "RIP", "SIP", "DIP", "HIP", "KIP",
+    "JET", "PET", "SET", "WET", "GET", "LET", "MET", "NET", "YET", "VET",
+    "KEY", "DAY", "MAY", "SAY", "WAY", "PAY", "RAY", "LAY", "HAY", "JAY",
+    "BOY", "TOY", "JOY", "COY", "SOY", "ROY", "ZOO", "TOO", "TWO", "WHO",
+    "HOW", "NOW", "COW", "BOW", "ROW", "LOW", "MOW", "SOW", "TOW", "WOW",
+    "EAT", "FAT", "HAT", "MAT", "PAT", "RAT", "SAT", "VAT", "CAT", "BAT",
+    
+    // 4-letter words
+    "BIRD", "CARD", "DARK", "FARM", "GAME", "HAND", "JUMP", "KIND", "LAMP", "MIND",
+    "NEXT", "OPEN", "PLAY", "QUIT", "RACE", "SING", "TALK", "WALK", "YEAR", "ZERO",
+    "BOOK", "COOK", "LOOK", "TOOK", "HOOK", "ROOK", "SOOK", "WOOD", "FOOD", "MOOD",
+    "GOOD", "HOOD", "ROOM", "DOOM", "BOOM", "ZOOM", "COOL", "POOL", "TOOL", "FOOL",
+    "BALL", "CALL", "FALL", "HALL", "MALL", "TALL", "WALL", "SMALL", "STAR", "CARE",
+    "DARE", "FARE", "HARE", "MARE", "PARE", "RARE", "WARE", "BARE", "FIRE", "HIRE",
+    "MIRE", "SIRE", "TIRE", "WIRE", "LIRE", "CORE", "BORE", "FORE", "GORE", "MORE",
+    "PORE", "SORE", "TORE", "WORE", "YORE", "LORE", "RORE", "DORE", "FOUR", "HOUR",
+    "POUR", "SOUR", "TOUR", "YOUR", "COURT", "PORT", "SORT", "FORT", "WORT", "BORT",
+    "HURT", "CURT", "BURT", "TURT", "GURT", "LURT", "MURT", "PURT", "SURT", "WURT"
+  ]
 
-  const resetGame = useCallback(() => {
-    setCurrentLevel(1)
-    setMoveCount(0)
-    setCompletedTiles([])
-    generateBoard()
-  }, [generateBoard])
+  // Generate word sets for 20 levels
+  const generateWordSets = useCallback(() => {
+    const wordSets = []
+    const usedWords = new Set()
+    
+    for (let level = 1; level <= 20; level++) {
+      const levelWords = []
+      
+      // Level 1: Just one 3-letter word
+      if (level === 1) {
+        let selectedWord
+        let attempts = 0
+        
+        // Try to find an unused 3-letter word
+        do {
+          selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
+          attempts++
+        } while ((usedWords.has(selectedWord) || selectedWord.length !== 3) && attempts < 100)
+        
+        // If we can't find an unused 3-letter word, use any 3-letter word
+        if (attempts >= 100) {
+          const threeLetterWords = WORD_BANK.filter(word => word.length === 3)
+          selectedWord = threeLetterWords[Math.floor(Math.random() * threeLetterWords.length)]
+        }
+        
+        levelWords.push(selectedWord)
+        usedWords.add(selectedWord)
+      }
+      // Level 2: One 4-letter word
+      else if (level === 2) {
+        let selectedWord
+        let attempts = 0
+        
+        do {
+          selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
+          attempts++
+        } while ((usedWords.has(selectedWord) || selectedWord.length !== 4) && attempts < 100)
+        
+        if (attempts >= 100) {
+          const fourLetterWords = WORD_BANK.filter(word => word.length === 4)
+          selectedWord = fourLetterWords[Math.floor(Math.random() * fourLetterWords.length)]
+        }
+        
+        levelWords.push(selectedWord)
+        usedWords.add(selectedWord)
+      }
+      // Level 3: Two 3-letter words
+      else if (level === 3) {
+        for (let i = 0; i < 2; i++) {
+          let selectedWord
+          let attempts = 0
+          
+          do {
+            selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
+            attempts++
+          } while ((usedWords.has(selectedWord) || selectedWord.length !== 3) && attempts < 100)
+          
+          if (attempts >= 100) {
+            const threeLetterWords = WORD_BANK.filter(word => word.length === 3)
+            selectedWord = threeLetterWords[Math.floor(Math.random() * threeLetterWords.length)]
+          }
+          
+          levelWords.push(selectedWord)
+          usedWords.add(selectedWord)
+        }
+      }
+      // Level 4: One 3-letter and one 4-letter word
+      else if (level === 4) {
+        // Add 3-letter word
+        let selectedWord
+        let attempts = 0
+        
+        do {
+          selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
+          attempts++
+        } while ((usedWords.has(selectedWord) || selectedWord.length !== 3) && attempts < 100)
+        
+        if (attempts >= 100) {
+          const threeLetterWords = WORD_BANK.filter(word => word.length === 3)
+          selectedWord = threeLetterWords[Math.floor(Math.random() * threeLetterWords.length)]
+        }
+        
+        levelWords.push(selectedWord)
+        usedWords.add(selectedWord)
+        
+        // Add 4-letter word
+        attempts = 0
+        do {
+          selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
+          attempts++
+        } while ((usedWords.has(selectedWord) || selectedWord.length !== 4) && attempts < 100)
+        
+        if (attempts >= 100) {
+          const fourLetterWords = WORD_BANK.filter(word => word.length === 4)
+          selectedWord = fourLetterWords[Math.floor(Math.random() * fourLetterWords.length)]
+        }
+        
+        levelWords.push(selectedWord)
+        usedWords.add(selectedWord)
+      }
+      // Level 5+: Mix of word lengths
+      else {
+        // Word count rules:
+        // Levels 1-3: keep existing logic (progressive)
+        // Levels 4-8: exactly 3 words
+        // Levels 9-15: 4 words (mix of 3 and 4 letters)
+        // Levels 16-20: 5 words (mix of 3 and 4 letters)
+        let wordCount
+        if (level <= 3) {
+          wordCount = Math.min(level, 3)
+        } else if (level <= 8) {
+          wordCount = 3
+        } else if (level <= 15) {
+          wordCount = 4
+        } else {
+          wordCount = 5
+        }
+        const wordLengths = []
+        
+        // Distribute word lengths based on level
+        if (level <= 8) {
+          // Levels 1-8: 3-letter words (challenge ramps via count rules above)
+          for (let i = 0; i < wordCount; i++) wordLengths.push(3)
+        } else {
+          // Levels 9+: mix of 3 and 4 letters
+          const mix = []
+          for (let i = 0; i < wordCount; i++) mix.push(i % 2 === 0 ? 3 : 4)
+          wordLengths.push(...mix)
+        }
+        
+        // Shuffle word lengths for variety
+        for (let i = wordLengths.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1))
+          ;[wordLengths[i], wordLengths[j]] = [wordLengths[j], wordLengths[i]]
+        }
+        
+        // Select words for each length
+        for (const length of wordLengths) {
+          let selectedWord
+          let attempts = 0
+          
+          do {
+            selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
+            attempts++
+          } while ((usedWords.has(selectedWord) || selectedWord.length !== length) && attempts < 100)
+          
+          if (attempts >= 100) {
+            const wordsOfLength = WORD_BANK.filter(word => word.length === length)
+            selectedWord = wordsOfLength[Math.floor(Math.random() * wordsOfLength.length)]
+          }
+          
+          levelWords.push(selectedWord)
+          usedWords.add(selectedWord)
+        }
+      }
+      
+      wordSets.push(levelWords)
+    }
+    
+    return wordSets
+  }, []) // Empty dependency array since WORD_BANK is constant
 
-  const switchGameMode = useCallback(() => {
-    const newMode = gameMode === 'original' ? 'tetris' : 'original'
-    setGameMode(newMode)
-    setCurrentLevel(1)
-    setMoveCount(0)
-    setCompletedTiles([])
-    generateBoard()
-  }, [gameMode, generateBoard])
+  // Generate word sets for current game
+  const [WORD_SETS, setWORD_SETS] = useState([])
+  
+  useEffect(() => {
+    console.log('Initializing WORD_SETS...')
+    const wordSets = generateWordSets()
+    console.log('Generated word sets:', wordSets)
+    setWORD_SETS(wordSets)
+  }, [generateWordSets])
 
-  // Create dark wood paneling background function
-  const createDarkWoodPaneling = useCallback(() => {
-    // Remove existing paneling if it exists
+  // Create dark wood paneling background
+  useEffect(() => {
+    console.log('Creating wood paneling...')
     const existingPaneling = document.getElementById('dark-wood-paneling')
     if (existingPaneling) {
       existingPaneling.remove()
     }
     
-    // Create dark wood paneling background container
     const panelingContainer = document.createElement('div')
     panelingContainer.id = 'dark-wood-paneling'
     panelingContainer.style.cssText = `
@@ -368,666 +455,2395 @@ function App() {
       left: 0;
       width: 100%;
       height: 100%;
-      background: 
-          linear-gradient(135deg, #2F1B14 0%, #3D2318 20%, #4A2C1A 40%, #5D3A1F 60%, #4A2C1A 80%, #3D2318 100%),
-          repeating-linear-gradient(
-              90deg,
-              transparent,
-              transparent 1px,
-              rgba(47, 27, 20, 0.6) 1px,
-              rgba(47, 27, 20, 0.6) 3px
-          ),
-          repeating-linear-gradient(
-              0deg,
-              transparent,
-              transparent 2px,
-              rgba(61, 35, 24, 0.7) 2px,
-              rgba(61, 35, 24, 0.7) 15px
-          );
+      background: linear-gradient(135deg, #2F1B14 0%, #3D2318 20%, #4A2C1A 40%, #5D3A1F 60%, #4A2C1A 80%, #3D2318 100%);
       z-index: -1;
       pointer-events: none;
     `
     
-    // Create wood paneling strips - single column
-    const panelWidth = window.innerWidth // Full width
-    const panelHeight = 80 // Taller panels
-    const panelsPerCol = Math.ceil(window.innerHeight / panelHeight) + 1
-    
-    for (let row = 0; row < panelsPerCol; row++) {
-      const panel = document.createElement('div')
-      panel.style.cssText = `
-        position: absolute;
-        top: ${row * panelHeight}px;
-        left: 0;
-        width: ${panelWidth}px;
-        height: ${panelHeight}px;
-          background: 
-              linear-gradient(135deg, #2F1B14 0%, #3D2318 30%, #4A2C1A 50%, #5D3A1F 70%, #4A2C1A 90%, #3D2318 100%),
-              repeating-linear-gradient(
-                  90deg,
-                  transparent,
-                  transparent 1px,
-                  rgba(47, 27, 20, 0.8) 1px,
-                  rgba(47, 27, 20, 0.8) 2px
-              ),
-              repeating-linear-gradient(
-                  0deg,
-                  transparent,
-                  transparent 3px,
-                  rgba(61, 35, 24, 0.9) 3px,
-                  rgba(61, 35, 24, 0.9) 8px
-              );
-          border: 1px solid rgba(93, 58, 31, 0.6);
-          box-shadow: 
-              inset 0 0 10px rgba(0, 0, 0, 0.4),
-              inset 0 0 20px rgba(255, 255, 255, 0.05),
-              0 2px 4px rgba(0, 0, 0, 0.3);
-          pointer-events: none;
-        `
-        
-        // Add panel grain variations
-        const grainOverlay = document.createElement('div')
-        grainOverlay.style.cssText = `
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: 
-              linear-gradient(
-                  90deg,
-                  transparent 0%,
-                  rgba(255, 255, 255, 0.03) 20%,
-                  transparent 40%,
-                  rgba(0, 0, 0, 0.1) 60%,
-                  transparent 80%,
-                  rgba(255, 255, 255, 0.02) 100%
-              ),
-              repeating-linear-gradient(
-                  0deg,
-                  transparent,
-                  transparent 2px,
-                  rgba(93, 58, 31, 0.3) 2px,
-                  rgba(93, 58, 31, 0.3) 4px
-              );
-          pointer-events: none;
-        `
-        panel.appendChild(grainOverlay)
-        panelingContainer.appendChild(panel)
-    }
-    
-    // Add paneling trim and borders
-    const trim = document.createElement('div')
-    trim.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: 
-          linear-gradient(90deg, rgba(47, 27, 20, 0.8) 0%, transparent 2%, transparent 98%, rgba(47, 27, 20, 0.8) 100%),
-          linear-gradient(0deg, rgba(47, 27, 20, 0.8) 0%, transparent 2%, transparent 98%, rgba(47, 27, 20, 0.8) 100%);
-      pointer-events: none;
-    `
-    panelingContainer.appendChild(trim)
-    
-    // Add subtle ambient lighting
-    const ambientLight = document.createElement('div')
-    ambientLight.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: 
-          radial-gradient(ellipse at center top, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
-          radial-gradient(ellipse at center bottom, rgba(0, 0, 0, 0.3) 0%, transparent 50%);
-      pointer-events: none;
-    `
-    panelingContainer.appendChild(ambientLight)
-    
     document.body.appendChild(panelingContainer)
+    console.log('Wood paneling created')
   }, [])
 
-  // Initialize game
-  useEffect(() => {
-    createDarkWoodPaneling()
-    generateBoard()
-  }, [generateBoard, createDarkWoodPaneling])
-
-  // Check word completion when board changes
-  useEffect(() => {
-    if (board.length > 0) {
-      checkWordCompletion()
+  // Utility function to shuffle arrays
+  const shuffleArray = useCallback((arr) => {
+    // Fisher-Yates shuffle
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[arr[i], arr[j]] = [arr[j], arr[i]]
     }
-  }, [board, checkWordCompletion])
+    return arr
+  }, [])
 
-  // Animation loop
-  useEffect(() => {
-    if (animating) {
-      const interval = setInterval(updateAnimation, 16) // ~60fps
-      return () => clearInterval(interval)
+  // Check if a letter is part of a completed word
+  const isLetterInCompletedWord = useCallback((r, c) => {
+    if (!board || board.length === 0 || !board[0]) return false
+    
+    const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
+    if (!targetWords || targetWords.length === 0) return false
+    
+    for (const word of targetWords) {
+      if (!completedWords.has(word)) continue
+      
+      // Check horizontal words
+      for (let row = 0; row < board.length; row++) {
+        for (let col = 0; col <= board[row].length - word.length; col++) {
+          const horizontalWord = board[row].slice(col, col + word.length).join('').toLowerCase()
+          if (horizontalWord === word.toLowerCase()) {
+            if (row === r && c >= col && c < col + word.length) {
+              return true
+            }
+          }
+        }
+      }
+      
+      // Check vertical words
+      for (let col = 0; col < board[0].length; col++) {
+        for (let row = 0; row <= board.length - word.length; row++) {
+          const verticalWord = []
+          for (let i = 0; i < word.length; i++) {
+            verticalWord.push(board[row + i][col])
+          }
+          if (verticalWord.join('').toLowerCase() === word.toLowerCase()) {
+            if (col === c && r >= row && r < row + word.length) {
+              return true
+            }
+          }
+        }
+      }
     }
-  }, [animating, updateAnimation])
+    
+    return false
+  }, [board, currentLevel, completedWords, WORD_SETS])
 
-  // Show win celebration
-  useEffect(() => {
-    if (gameWon) {
-      setTimeout(() => {
-        if (currentLevel < MAX_LEVELS) {
-          showFireworksCelebration()
+  // Reset tile visual state
+  const resetTileVisualState = useCallback((r, c) => {
+    const tileElement = document.querySelector(`[data-tile="${r}-${c}"]`)
+    if (tileElement) {
+      tileElement.style.transform = ''
+      tileElement.style.filter = ''
+      tileElement.style.boxShadow = ''
+    }
+  }, [])
+
+  // Handle tile movement with frame-based sliding animation (matching original JS)
+  const tryMove = useCallback((r, c) => {
+    console.log(`tryMove called for position (${r}, ${c}), current animating state:`, animating)
+    
+    const dr = Math.abs(r - emptyPos.r)
+    const dc = Math.abs(c - emptyPos.c)
+    
+    if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
+      if (!animating) {
+        // Check if the tile being moved is part of a completed word
+        if (isLetterInCompletedWord(r, c)) {
+          console.log(`Tile is completed, cannot move`)
+          return // Don't allow moving tiles from completed words
+        }
+        
+        console.log(`Starting animation from (${r}, ${c}) to (${emptyPos.r}, ${emptyPos.c})`)
+        setAnimating(true)
+        // Compute DOM-based start/end pixels
+        try {
+          const fromEl = document.querySelector(`[data-tile="${r}-${c}"]`)
+          const surfaceEl = boardRef.current
+          const step = tileStep || (41 + 1)
+          if (fromEl && surfaceEl) {
+            const fromRect = fromEl.getBoundingClientRect()
+            const surfaceRect = surfaceEl.getBoundingClientRect()
+            const startX = Math.round(fromRect.left - surfaceRect.left)
+            const startY = Math.round(fromRect.top - surfaceRect.top)
+            const dC = emptyPos.c - c
+            const dR = emptyPos.r - r
+            const endX = startX + dC * step
+            const endY = startY + dR * step
+            setAnimation({ from: { r, c }, to: { r: emptyPos.r, c: emptyPos.c }, letter: board[r][c], startX, startY, endX, endY })
+          } else {
+            setAnimation({ from: { r, c }, to: { r: emptyPos.r, c: emptyPos.c }, letter: board[r][c] })
+          }
+        } catch {
+          setAnimation({ from: { r, c }, to: { r: emptyPos.r, c: emptyPos.c }, letter: board[r][c] })
+        }
+        setMoveCount(prev => prev + 1)
+      } else {
+        console.log(`Already animating, ignoring move`)
+      }
+    } else {
+      console.log(`Invalid move - not adjacent to empty space`)
+    }
+  }, [emptyPos, board, animating, isLetterInCompletedWord, tileStep])
+
+  // Simple fallback board generation (doesn't depend on WORD_SETS)
+  const generateFallbackBoard = useCallback(() => {
+    console.log('Generating fallback board...')
+    const fallbackBoard = []
+    for (let r = 0; r < 7; r++) {
+      fallbackBoard[r] = []
+      for (let c = 0; c < 7; c++) {
+        if (r === 6 && c === 6) {
+          fallbackBoard[r][c] = "" // Empty space
         } else {
-          showFireworksCelebration(true) // Final level
+          fallbackBoard[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26))
         }
-      }, 100)
+      }
     }
-  }, [gameWon, currentLevel])
+    setBoard(fallbackBoard)
+    setEmptyPos({ r: 6, c: 6 })
+    console.log('Fallback board generated:', fallbackBoard)
+  }, [])
 
-  const showFireworksCelebration = useCallback((isFinalLevel = false) => {
-    // Create celebration panel (not full overlay)
-    const overlay = document.createElement('div')
-    overlay.id = 'celebration-overlay'
-    overlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: transparent;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
-      font-family: Arial, sans-serif;
-      pointer-events: none;
-    `
+  // Check if a board is solvable by verifying target words can be reached
+  const isBoardSolvable = useCallback((board, targetWords) => {
+    if (!board || !targetWords) return false
     
-    // Create celebration content with dark wood paneling
-    const content = document.createElement('div')
-    content.style.cssText = `
-      background: transparent;
-      padding: 40px;
-      border-radius: 20px;
-      text-align: center;
-      box-shadow: 
-          0 10px 30px rgba(0, 0, 0, 0.5),
-          0 0 30px rgba(47, 27, 20, 0.6);
-      border: 4px solid #2F1B14;
-      max-width: 400px;
-      margin: 20px;
-      position: relative;
-      overflow: hidden;
-      pointer-events: auto;
-    `
-    
-    // Create dark wood paneling background (same as game)
-    const panelingBackground = document.createElement('div')
-    panelingBackground.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: 
-          linear-gradient(135deg, #2F1B14 0%, #3D2318 20%, #4A2C1A 40%, #5D3A1F 60%, #4A2C1A 80%, #3D2318 100%),
-          repeating-linear-gradient(
-              90deg,
-              transparent,
-              transparent 1px,
-              rgba(47, 27, 20, 0.6) 1px,
-              rgba(47, 27, 20, 0.6) 3px
-          ),
-          repeating-linear-gradient(
-              0deg,
-              transparent,
-              transparent 2px,
-              rgba(61, 35, 24, 0.7) 2px,
-              rgba(61, 35, 24, 0.7) 15px
-          );
-      pointer-events: none;
-      border-radius: 20px;
-    `
-    content.appendChild(panelingBackground)
-    
-    // Create individual wood panels (same as game paneling)
-    const panelWidth = 400 // Match content width
-    const panelHeight = 60 // Smaller panels for banner
-    const panelsPerCol = Math.ceil(200 / panelHeight) + 1 // Approximate content height
-    
-    for (let row = 0; row < panelsPerCol; row++) {
-      const panel = document.createElement('div')
-      panel.style.cssText = `
-        position: absolute;
-        top: ${row * panelHeight}px;
-        left: 0;
-        width: ${panelWidth}px;
-        height: ${panelHeight}px;
-        background: 
-            linear-gradient(135deg, #2F1B14 0%, #3D2318 30%, #4A2C1A 50%, #5D3A1F 70%, #4A2C1A 90%, #3D2318 100%),
-            repeating-linear-gradient(
-                90deg,
-                transparent,
-                transparent 1px,
-                rgba(47, 27, 20, 0.8) 1px,
-                rgba(47, 27, 20, 0.8) 2px
-            ),
-            repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 3px,
-                rgba(61, 35, 24, 0.9) 3px,
-                rgba(61, 35, 24, 0.9) 8px
-            );
-        border: 1px solid rgba(93, 58, 31, 0.6);
-        box-shadow: 
-            inset 0 0 10px rgba(0, 0, 0, 0.4),
-            inset 0 0 20px rgba(255, 255, 255, 0.05),
-            0 2px 4px rgba(0, 0, 0, 0.3);
-        pointer-events: none;
-        border-radius: 20px;
-      `
-      
-      // Add panel grain variations
-      const grainOverlay = document.createElement('div')
-      grainOverlay.style.cssText = `
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: 
-            linear-gradient(
-                90deg,
-                transparent 0%,
-                rgba(255, 255, 255, 0.03) 20%,
-                transparent 40%,
-                rgba(0, 0, 0, 0.1) 60%,
-                transparent 80%,
-                rgba(255, 255, 255, 0.02) 100%
-            ),
-            repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 2px,
-                rgba(93, 58, 31, 0.3) 2px,
-                rgba(93, 58, 31, 0.3) 4px
-            );
-        pointer-events: none;
-        border-radius: 20px;
-      `
-      panel.appendChild(grainOverlay)
-      content.appendChild(panel)
-    }
-    
-    // Add paneling trim and borders
-    const trim = document.createElement('div')
-    trim.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: 
-          linear-gradient(90deg, rgba(47, 27, 20, 0.8) 0%, transparent 2%, transparent 98%, rgba(47, 27, 20, 0.8) 100%),
-          linear-gradient(0deg, rgba(47, 27, 20, 0.8) 0%, transparent 2%, transparent 98%, rgba(47, 27, 20, 0.8) 100%);
-      pointer-events: none;
-      border-radius: 20px;
-    `
-    content.appendChild(trim)
-    
-    // Add subtle ambient lighting
-    const ambientLight = document.createElement('div')
-    ambientLight.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: 
-          radial-gradient(ellipse at center top, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
-          radial-gradient(ellipse at center bottom, rgba(0, 0, 0, 0.3) 0%, transparent 50%);
-      pointer-events: none;
-      border-radius: 20px;
-    `
-    content.appendChild(ambientLight)
-    
-    // Add oak wood highlights and variations
-    const woodHighlights = document.createElement('div')
-    woodHighlights.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: 
-          linear-gradient(
-              90deg,
-              transparent 0%,
-              rgba(255, 255, 255, 0.2) 10%,
-              transparent 25%,
-              rgba(0, 0, 0, 0.15) 40%,
-              transparent 55%,
-              rgba(255, 255, 255, 0.15) 70%,
-              transparent 85%,
-              rgba(0, 0, 0, 0.1) 100%
-          ),
-          linear-gradient(
-              0deg,
-              transparent 0%,
-              rgba(255, 255, 255, 0.15) 15%,
-              transparent 35%,
-              rgba(0, 0, 0, 0.1) 55%,
-              transparent 75%,
-              rgba(255, 255, 255, 0.1) 95%,
-              transparent 100%
-          );
-      pointer-events: none;
-      border-radius: 20px;
-    `
-    content.appendChild(woodHighlights)
-    
-    // Create title
-    const title = document.createElement('h2')
-    title.textContent = '🎉 Congratulations! 🎉'
-    title.style.cssText = `
-      color: #FFFFFF;
-      font-size: 28px;
-      margin: 0 0 20px 0;
-      text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8), 1px 1px 2px rgba(0, 0, 0, 0.9);
-      font-weight: bold;
-      position: relative;
-      z-index: 10;
-    `
-    
-    // Create message
-    const message = document.createElement('p')
-    if (isFinalLevel) {
-      message.textContent = 'You\'ve completed all levels! You\'re a WordSlide master! 🏆'
-    } else {
-      message.textContent = `Level ${currentLevel} Complete! 🎯`
-    }
-    message.style.cssText = `
-      color: #FFFFFF;
-      font-size: 20px;
-      margin: 0 0 30px 0;
-      font-weight: bold;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8), 1px 1px 2px rgba(0, 0, 0, 0.9);
-      position: relative;
-      z-index: 10;
-    `
-    
-    // Create button
-    const button = document.createElement('button')
-    if (isFinalLevel) {
-      button.textContent = 'Play Again'
-      button.onclick = () => {
-        setCurrentLevel(1)
-        setMoveCount(0)
-        setGameWon(false)
-        generateBoard()
-        document.body.removeChild(overlay)
-      }
-    } else {
-      button.textContent = 'Next Level'
-      button.onclick = () => {
-        setCurrentLevel(prev => prev + 1)
-        setMoveCount(0)
-        setGameWon(false)
-        generateBoard()
-        document.body.removeChild(overlay)
+    // Count all letters needed for target words
+    const requiredLetters = {}
+    for (let word of targetWords) {
+      for (let letter of word) {
+        const upperLetter = letter.toUpperCase()
+        requiredLetters[upperLetter] = (requiredLetters[upperLetter] || 0) + 1
       }
     }
-    button.style.cssText = `
-      background: linear-gradient(135deg, #32CD32, #228B22);
-      color: white;
-      border: none;
-      padding: 15px 30px;
-      font-size: 18px;
-      font-weight: bold;
-      border-radius: 10px;
-      cursor: pointer;
-      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5), 0 0 20px rgba(50, 205, 50, 0.3);
-      transition: transform 0.2s, box-shadow 0.2s;
-      position: relative;
-      z-index: 10;
-      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-    `
     
-    // Add hover effects
-    button.onmouseenter = () => {
-      button.style.transform = 'scale(1.05)'
-      button.style.boxShadow = '0 7px 20px rgba(0, 0, 0, 0.4)'
-    }
-    button.onmouseleave = () => {
-      button.style.transform = 'scale(1)'
-      button.style.boxShadow = '0 5px 15px rgba(0, 0, 0, 0.3)'
+    // Count available letters on the board
+    const availableLetters = {}
+    for (let r = 0; r < board.length; r++) {
+      for (let c = 0; c < board[r].length; c++) {
+        if (board[r][c] !== "") {
+          const letter = board[r][c]
+          availableLetters[letter] = (availableLetters[letter] || 0) + 1
+        }
+      }
     }
     
-    // Assemble the celebration
-    content.appendChild(title)
-    content.appendChild(message)
-    content.appendChild(button)
-    overlay.appendChild(content)
-    document.body.appendChild(overlay)
+    // Check if all required letters are available
+    for (let letter in requiredLetters) {
+      if (!availableLetters[letter] || availableLetters[letter] < requiredLetters[letter]) {
+        console.log(`Board not solvable: Missing ${requiredLetters[letter] - (availableLetters[letter] || 0)} letter(s) '${letter}'`)
+        return false
+      }
+    }
     
-    // Start fireworks animation
-    startFireworks()
-  }, [currentLevel, generateBoard, showFireworksCelebration])
+    console.log('Board is solvable: All required letters are available')
+    return true
+  }, [])
 
-  const startFireworks = () => {
-    const canvas = document.createElement('canvas')
-    canvas.id = 'fireworks-canvas'
-    canvas.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 1001;
-    `
-    document.body.appendChild(canvas)
+  // Generate a sophisticated game board that ensures target words are solvable
+  const generateBoard = useCallback(() => {
+    console.log('Generating solvable board...')
+    console.log('WORD_SETS:', WORD_SETS)
+    console.log('WORD_SETS length:', WORD_SETS?.length)
     
-    const ctx = canvas.getContext('2d')
-    canvas.width = window.innerWidth
-    canvas.height = window.innerHeight
+    if (!WORD_SETS || WORD_SETS.length === 0) {
+      console.log('WORD_SETS not ready, using fallback board generation')
+      generateFallbackBoard()
+      return
+    }
     
-    const fireworks = []
-    const particles = []
+    const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
+    console.log('Target words for level', currentLevel, ':', targetWords)
     
-    // Firework particle class
-    class Particle {
-      constructor(x, y, vx, vy, color) {
-        this.x = x
-        this.y = y
-        this.vx = vx
-        this.vy = vy
-        this.color = color
-        this.life = 100
-        this.decay = 0.98
+    if (!targetWords || targetWords.length === 0) {
+      console.log('No target words available, using fallback board generation')
+      generateFallbackBoard()
+      return
+    }
+    
+    let attempts = 0
+    const maxAttempts = 20 // Increased attempts for better boards
+    
+    do {
+      attempts++
+      console.log(`Board generation attempt ${attempts}/${maxAttempts}`)
+      
+      const newBoard = []
+      
+      // Initialize empty board
+      for (let r = 0; r < 7; r++) {
+        newBoard[r] = []
+        for (let c = 0; c < 7; c++) {
+          newBoard[r][c] = ""
+        }
       }
       
-      update() {
-        this.x += this.vx
-        this.y += this.vy
-        this.vy += 0.1 // gravity
-        this.vx *= this.decay
-        this.vy *= this.decay
-        this.life--
+      // Step 1: Create a solved board first (target words in their final positions)
+      const solvedBoard = []
+      for (let r = 0; r < 7; r++) {
+        solvedBoard[r] = []
+        for (let c = 0; c < 7; c++) {
+          solvedBoard[r][c] = ""
+        }
       }
       
-      draw() {
-        ctx.save()
-        ctx.globalAlpha = this.life / 100
-        ctx.shadowColor = this.color
-        ctx.shadowBlur = 8
-        ctx.fillStyle = this.color
-        ctx.beginPath()
-        ctx.arc(this.x, this.y, 3, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.restore()
+      // Place target words in their solved positions
+      let wordIndex = 0
+      for (let targetWord of targetWords) {
+        if (wordIndex === 0) {
+          // Place first word horizontally starting from (0,0)
+          for (let i = 0; i < targetWord.length; i++) {
+            solvedBoard[0][i] = targetWord[i].toUpperCase()
+          }
+        } else if (wordIndex === 1) {
+          // Place second word vertically starting from (1,0)
+          for (let i = 0; i < targetWord.length; i++) {
+            solvedBoard[1 + i][0] = targetWord[i].toUpperCase()
+          }
+        } else {
+          // Place additional words in available spaces
+          let placed = false
+          for (let r = 0; r < 7 && !placed; r++) {
+            for (let c = 0; c <= 7 - targetWord.length && !placed; c++) {
+              // Check if we can place horizontally
+              let canPlace = true
+              for (let i = 0; i < targetWord.length; i++) {
+                if (solvedBoard[r][c + i] !== "") {
+                  canPlace = false
+                  break
+                }
+              }
+              if (canPlace) {
+                for (let i = 0; i < targetWord.length; i++) {
+                  solvedBoard[r][c + i] = targetWord[i].toUpperCase()
+                }
+                placed = true
+              }
+            }
+          }
+          
+          // If horizontal placement failed, try vertical
+          if (!placed) {
+            for (let r = 0; r <= 7 - targetWord.length && !placed; r++) {
+              for (let c = 0; c < 7 && !placed; c++) {
+                let canPlace = true
+                for (let i = 0; i < targetWord.length; i++) {
+                  if (solvedBoard[r + i][c] !== "") {
+                    canPlace = false
+                    break
+                  }
+                }
+                if (canPlace) {
+                  for (let i = 0; i < targetWord.length; i++) {
+                    solvedBoard[r + i][c] = targetWord[i].toUpperCase()
+                  }
+                  placed = true
+                }
+              }
+            }
+          }
+        }
+        wordIndex++
+      }
+      
+      // Step 2: Fill remaining spaces with random letters
+      const allLetters = []
+      for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+          if (solvedBoard[r][c] !== "") {
+            allLetters.push(solvedBoard[r][c])
+          }
+        }
+      }
+      
+      // Add random letters to fill the board
+      const remainingSlots = 7 * 7 - allLetters.length - 1 // -1 for empty space
+      for (let i = 0; i < remainingSlots; i++) {
+        allLetters.push(String.fromCharCode(65 + Math.floor(Math.random() * 26)))
+      }
+      
+      // Shuffle all letters
+      shuffleArray(allLetters)
+      
+      // Step 3: Create the scrambled board
+      let letterIndex = 0
+      const emptyRow = Math.floor(Math.random() * 7)
+      const emptyCol = Math.floor(Math.random() * 7)
+      
+      for (let r = 0; r < 7; r++) {
+        for (let c = 0; c < 7; c++) {
+          if (r === emptyRow && c === emptyCol) {
+            newBoard[r][c] = "" // Empty space
+          } else {
+            newBoard[r][c] = allLetters[letterIndex++]
+          }
+        }
+      }
+      
+      // Step 4: Verify the board is solvable by checking if target words can be formed
+      let isSolvable = true
+      for (let targetWord of targetWords) {
+        let wordFound = false
+        
+        // Check if we can form this word by moving tiles
+        const wordLetters = targetWord.split('')
+        const letterCounts = {}
+        
+        // Count available letters
+        for (let letter of wordLetters) {
+          letterCounts[letter] = (letterCounts[letter] || 0) + 1
+        }
+        
+        // Count letters on the board
+        for (let r = 0; r < 7; r++) {
+          for (let c = 0; c < 7; c++) {
+            if (newBoard[r][c] !== "") {
+              const letter = newBoard[r][c]
+              if (letterCounts[letter]) {
+                letterCounts[letter]--
+              }
+            }
+          }
+        }
+        
+        // Check if all letters are available
+        for (let letter in letterCounts) {
+          if (letterCounts[letter] > 0) {
+            isSolvable = false
+            console.log(`Missing letter ${letter} for word ${targetWord}`)
+            break
+          }
+        }
+        
+        if (!isSolvable) break
+      }
+      
+      // Step 5: If solvable, ensure it's not already solved
+      if (isSolvable) {
+      let hasSolvedWords = false
+      for (let targetWord of targetWords) {
+        // Check horizontal positions
+        for (let r = 0; r < 7; r++) {
+          for (let c = 0; c <= 7 - targetWord.length; c++) {
+            let word = ""
+            for (let i = 0; i < targetWord.length; i++) {
+              if (newBoard[r] && newBoard[r][c + i]) {
+                word += newBoard[r][c + i]
+              }
+            }
+            if (word.toUpperCase() === targetWord.toUpperCase()) {
+              hasSolvedWords = true
+              break
+            }
+          }
+          if (hasSolvedWords) break
+        }
+        
+        // Check vertical positions
+        if (!hasSolvedWords) {
+          for (let r = 0; r <= 7 - targetWord.length; r++) {
+            for (let c = 0; c < 7; c++) {
+              let word = ""
+              for (let i = 0; i < targetWord.length; i++) {
+                if (newBoard[r + i] && newBoard[r + i][c]) {
+                  word += newBoard[r + i][c]
+                }
+              }
+              if (word.toUpperCase() === targetWord.toUpperCase()) {
+                hasSolvedWords = true
+                break
+              }
+            }
+            if (hasSolvedWords) break
+          }
+        }
+      }
+      
+      // If no words are solved, this is a good board
+      if (!hasSolvedWords) {
+        setBoard(newBoard)
+          setEmptyPos({ r: emptyRow, c: emptyCol })
+          console.log('Generated solvable board with empty position:', { r: emptyRow, c: emptyCol })
+          console.log('Target words can be solved:', targetWords)
+          console.log('New board:', newBoard)
+        return
+        }
+      }
+      
+    } while (attempts < maxAttempts)
+    
+    // If we couldn't generate a good board, use fallback
+    console.log('Could not generate solvable board, using fallback')
+    generateFallbackBoard()
+  }, [currentLevel, WORD_SETS, generateFallbackBoard])
+
+  // Check for word completion in Tetris board
+  const checkTetrisWordCompletion = useCallback(() => {
+    const newBoard = tetrisBoard.map(row => [...row])
+    let wordsCompleted = 0
+    
+    // Check for completed horizontal words (3+ letters)
+    for (let r = 0; r < 20; r++) {
+      let wordStart = -1
+      let wordLength = 0
+      
+      for (let c = 0; c < 10; c++) {
+        if (newBoard[r][c] && newBoard[r][c].letter) {
+          if (wordStart === -1) wordStart = c
+          wordLength++
+        } else {
+          if (wordLength >= 3) {
+            // Clear the completed word
+            for (let i = 0; i < wordLength; i++) {
+              newBoard[r][wordStart + i] = null
+            }
+            wordsCompleted++
+          }
+          wordStart = -1
+          wordLength = 0
+        }
+      }
+      
+      // Check word at end of row
+      if (wordLength >= 3) {
+        for (let i = 0; i < wordLength; i++) {
+          newBoard[r][wordStart + i] = null
+        }
+        wordsCompleted++
       }
     }
     
-    // Create firework
-    function createFirework() {
-      const x = Math.random() * canvas.width
-      const y = canvas.height
-      const targetY = Math.random() * canvas.height * 0.6
-      const speed = 8 + Math.random() * 4
-      const angle = Math.atan2(targetY - y, x - x)
+    // Check for completed vertical words (3+ letters)
+    for (let c = 0; c < 10; c++) {
+      let wordStart = -1
+      let wordLength = 0
       
-      fireworks.push({
-        x: x,
-        y: y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        targetY: targetY,
-        exploded: false
+      for (let r = 0; r < 20; r++) {
+        if (newBoard[r][c] && newBoard[r][c].letter) {
+          if (wordStart === -1) wordStart = r
+          wordLength++
+        } else {
+          if (wordLength >= 3) {
+            // Clear the completed word
+            for (let i = 0; i < wordLength; i++) {
+              newBoard[wordStart + i][c] = null
+            }
+            wordsCompleted++
+          }
+          wordStart = -1
+          wordLength = 0
+        }
+      }
+      
+      // Check word at end of column
+      if (wordLength >= 3) {
+        for (let i = 0; i < wordLength; i++) {
+          newBoard[wordStart + i][c] = null
+        }
+        wordsCompleted++
+      }
+    }
+    
+    if (wordsCompleted > 0) {
+      // Apply gravity - blocks fall down to fill empty spaces
+      for (let c = 0; c < 10; c++) {
+        let writeRow = 19
+        for (let r = 19; r >= 0; r--) {
+          if (newBoard[r][c]) {
+            if (writeRow !== r) {
+              newBoard[writeRow][c] = newBoard[r][c]
+              newBoard[r][c] = null
+            }
+            writeRow--
+          }
+        }
+      }
+      
+      setTetrisBoard(newBoard)
+      setTetrisScore(prev => prev + (wordsCompleted * 100 * tetrisLevel))
+      setTetrisLines(prev => prev + wordsCompleted)
+      
+      // Level up every 10 words
+      if (tetrisLines + wordsCompleted >= tetrisLevel * 10) {
+        setTetrisLevel(prev => prev + 1)
+        setFallingSpeed(prev => Math.max(200, prev - 100)) // Increase speed
+      }
+      
+      // Show fireworks for word completion
+      setShowFireworks(true)
+      setTimeout(() => setShowFireworks(false), 3000)
+    }
+  }, [tetrisBoard, tetrisLevel, tetrisLines])
+
+  // Add a landed block to the board
+  const addBlockToBoard = useCallback((block) => {
+    setTetrisBoard(prev => {
+      const newBoard = prev.map(row => [...row])
+      let shouldEndGame = false
+      
+      for (let r = 0; r < block.shape.length; r++) {
+        for (let c = 0; c < block.shape[r].length; c++) {
+          if (block.shape[r][c]) {
+            const boardY = block.y + r
+            const boardX = block.x + c
+            if (boardY >= 0) {
+              newBoard[boardY][boardX] = {
+                letter: block.letters[r][c],
+                color: block.color
+              }
+              
+              // Check for game over - if block is placed at the very top
+              if (boardY === 0) {
+                shouldEndGame = true
+              }
+            }
+          }
+        }
+      }
+      
+      if (shouldEndGame) {
+        setTetrisGameOver(true)
+      }
+      
+      return newBoard
+    })
+    
+    // Check for word completion after adding block
+    setTimeout(() => checkTetrisWordCompletion(), 100)
+    
+    // Spawn the next block after a short delay
+    setTimeout(() => spawnFallingBlock(), 500)
+  }, [checkTetrisWordCompletion, spawnFallingBlock])
+
+  // Move falling blocks down and handle collisions
+  const moveFallingBlocks = useCallback(() => {
+    if (tetrisGameOver || tetrisPaused || fallingBlocks.length === 0) return
+    
+    setFallingBlocks(prev => {
+      const newBlocks = prev.map(block => {
+        const newY = block.y + 1
+        
+        // Check if block can move down
+        if (canBlockMove(block, 0, 1)) {
+          return { ...block, y: newY }
+        } else {
+          // Block landed, add to board
+          const newBoard = [...tetrisBoard]
+          if (newBoard[block.y] && newBoard[block.y][block.x] === null) {
+            newBoard[block.y][block.x] = { letter: block.letter }
+            setTetrisBoard(newBoard)
+            
+            // Check for word completion after placing block
+            setTimeout(() => checkTetrisLines(), 100)
+          }
+          return null
+        }
+      }).filter(Boolean)
+      
+      // If no blocks left, spawn new one
+      if (newBlocks.length === 0) {
+        setTimeout(() => spawnFallingBlock(), 800) // Slightly longer delay for smoother experience
+      }
+      
+      return newBlocks
+    })
+  }, [tetrisGameOver, tetrisPaused, fallingBlocks.length, tetrisBoard, canBlockMove, checkTetrisLines, spawnFallingBlock])
+
+  // Game loop for Tetris
+  useEffect(() => {
+    if (currentView !== 'tetris' || tetrisGameOver || tetrisPaused) return
+    
+    const interval = setInterval(() => {
+      moveFallingBlocks()
+    }, 500)
+    
+    return () => clearInterval(interval)
+  }, [currentView, tetrisGameOver, tetrisPaused, moveFallingBlocks])
+
+  // Handle keyboard controls for Tetris
+  useEffect(() => {
+    if (currentView !== 'tetris') return
+    
+    const handleKeyDown = (e) => {
+      if (tetrisGameOver || tetrisPaused) return
+      
+      switch (e.key) {
+        case 'ArrowLeft':
+        case 'a':
+        case 'A':
+          e.preventDefault()
+          moveBlockLeft()
+          break
+        case 'ArrowRight':
+        case 'd':
+        case 'D':
+          e.preventDefault()
+          moveBlockRight()
+          break
+        case ' ':
+          e.preventDefault()
+          pauseTetrisGame()
+          break
+        default:
+          break
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [currentView, tetrisGameOver, tetrisPaused, moveBlockLeft, moveBlockRight, pauseTetrisGame])
+
+  // Game loop for falling blocks
+  useEffect(() => {
+    if (currentView !== 'tetris' || tetrisGameOver || tetrisPaused) return
+    
+    const gameLoop = setInterval(() => {
+      setFallingBlocks(prev => {
+        if (prev.length === 0) {
+          spawnFallingBlock()
+          return prev
+        }
+        
+        return prev.map(block => {
+          const newY = block.y + 1
+          
+          // Check if block has landed
+          if (newY >= tetrisBoard.length || tetrisBoard[newY][block.x]) {
+            // Place block on board
+            setTetrisBoard(currentBoard => {
+              const newBoard = currentBoard.map(row => [...row])
+              if (block.y < newBoard.length && block.x < newBoard[0].length) {
+                newBoard[block.y][block.x] = {
+                  letter: block.letter,
+                  color: block.color
+                }
+              }
+              return newBoard
+            })
+            
+            // Check for completed lines
+            checkTetrisLines()
+            
+            // Spawn new block
+            setTimeout(() => spawnFallingBlock(), 500)
+            
+            return null // Remove this block
+          }
+          
+          return { ...block, y: newY }
+        }).filter(Boolean) // Remove null blocks
       })
+    }, fallingSpeed)
+    
+    return () => clearInterval(gameLoop)
+  }, [currentView, tetrisGameOver, tetrisPaused, fallingSpeed, tetrisBoard, spawnFallingBlock, checkTetrisLines])
+
+  // Initialize board when component mounts
+  useEffect(() => {
+    console.log('Board initialization useEffect triggered')
+    console.log('currentView:', currentView)
+    console.log('board.length:', board.length)
+    console.log('WORD_SETS ready:', WORD_SETS.length > 0)
+    
+    if (currentView === 'original' && board.length === 0) {
+      console.log('Calling generateBoard from initialization useEffect')
+      generateBoard()
     }
     
-    // Explode firework
-    function explodeFirework(fw) {
-      const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#FF4500', '#00FFFF', '#FF1493', '#00FF00']
-      const particleCount = 80 + Math.floor(Math.random() * 40)
+    // Fallback: if we're in original view but no board after a delay, generate one
+    if (currentView === 'original' && board.length === 0) {
+      const timer = setTimeout(() => {
+        if (board.length === 0) {
+          console.log('Fallback: generating fallback board after delay')
+          generateFallbackBoard()
+        }
+      }, 1000)
       
-      for (let i = 0; i < particleCount; i++) {
-        const angle = (Math.PI * 2 * i) / particleCount
-        const speed = 3 + Math.random() * 4
-        const color = colors[Math.floor(Math.random() * colors.length)]
-        
-        particles.push(new Particle(
-          fw.x,
-          fw.y,
-          Math.cos(angle) * speed,
-          Math.sin(angle) * speed,
-          color
-        ))
+      return () => clearTimeout(timer)
+    }
+  }, [currentView, board.length, generateBoard, WORD_SETS, generateFallbackBoard])
+
+  // Initialize Tetris board when Tetris view is selected
+  useEffect(() => {
+    if (currentView === 'tetris' && tetrisBoard.length === 0) {
+      generateTetrisBoard()
+    }
+  }, [currentView, tetrisBoard.length, generateTetrisBoard])
+
+  // Rotate a block
+  const rotateBlock = useCallback((block) => {
+    if (!block) return block
+    
+    const rotatedShape = []
+    const rotatedLetters = []
+    const rows = block.shape.length
+    const cols = block.shape[0].length
+    
+    for (let c = 0; c < cols; c++) {
+      rotatedShape[c] = []
+      rotatedLetters[c] = []
+      for (let r = rows - 1; r >= 0; r--) {
+        rotatedShape[c][rows - 1 - r] = block.shape[r][c]
+        rotatedLetters[c][rows - 1 - r] = block.letters[r][c]
       }
     }
     
-    // Animation loop
-    function animate() {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.05)'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      
-      // Update and draw fireworks
-      for (let i = fireworks.length - 1; i >= 0; i--) {
-        const fw = fireworks[i]
-        fw.x += fw.vx
-        fw.y += fw.vy
-        
-        // Draw firework trail with glow effect
-        ctx.save()
-        ctx.shadowColor = '#FFD700'
-        ctx.shadowBlur = 10
-        ctx.fillStyle = '#FFD700'
-        ctx.beginPath()
-        ctx.arc(fw.x, fw.y, 4, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.restore()
-        
-        // Check if firework reached target
-        if (fw.y <= fw.targetY && !fw.exploded) {
-          explodeFirework(fw)
-          fireworks.splice(i, 1)
+    return {
+      ...block,
+      shape: rotatedShape,
+      letters: rotatedLetters
+    }
+  }, [])
+
+  // Check for word completion
+  const checkWordCompletion = useCallback(() => {
+    if (!board || board.length === 0 || !board[0]) return
+    
+    const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
+    if (!targetWords || targetWords.length === 0) return
+    
+    const newCompletedWords = new Set(completedWords)
+    
+    for (const word of targetWords) {
+      // Check horizontal words
+      for (let row = 0; row < board.length; row++) {
+        for (let col = 0; col <= board[row].length - word.length; col++) {
+          const horizontalWord = board[row].slice(col, col + word.length).join('').toLowerCase()
+          if (horizontalWord === word.toLowerCase()) {
+            newCompletedWords.add(word)
+            break
+          }
         }
       }
       
-      // Update and draw particles
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i]
-        p.update()
-        p.draw()
-        
-        if (p.life <= 0) {
-          particles.splice(i, 1)
+      // Check vertical words
+      for (let col = 0; col < board[0].length; col++) {
+        for (let row = 0; row <= board.length - word.length; row++) {
+          const verticalWord = []
+          for (let i = 0; i < word.length; i++) {
+            verticalWord.push(board[row + i][col])
+          }
+          if (verticalWord.join('').toLowerCase() === word.toLowerCase()) {
+            newCompletedWords.add(word)
+            break
+          }
+        }
+      }
+    }
+    
+    setCompletedWords(newCompletedWords)
+    
+    // Check if level is completed
+    if (newCompletedWords.size === targetWords.length) {
+      setShowFireworks(true)
+      setTimeout(() => {
+        setShowFireworks(false)
+        if (currentLevel < 20) {
+          setCurrentLevel(prev => prev + 1)
+          setCompletedWords(new Set())
+          generateBoard()
+        } else {
+          // Game completed!
+          setCurrentView('menu')
+        }
+      }, 3000)
+    }
+  }, [board, currentLevel, completedWords, WORD_SETS, generateBoard])
+
+  // Touch and mouse gesture handling for mobile and desktop
+  const [touchStart, setTouchStart] = useState(null)
+  const [touchEnd, setTouchEnd] = useState(null)
+  const [selectedTile, setSelectedTile] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
+
+  const handleTouchStart = useCallback((e, r, c) => {
+    if (!board[r][c]) return // Don't select empty tiles
+    
+    // Add visual feedback for touch
+    const tileElement = e.currentTarget
+    if (tileElement) {
+      tileElement.style.transform = 'scale(1.1)'
+      tileElement.style.filter = 'brightness(1.2)'
+      tileElement.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.8)'
+    }
+    
+    setTouchStart({
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+      r: r,
+      c: c
+    })
+    setSelectedTile({ r, c })
+  }, [board])
+
+  const handleMouseDown = useCallback((e, r, c) => {
+    if (!board[r][c]) return // Don't select empty tiles
+    
+    e.preventDefault()
+    
+    // Add visual feedback for mouse interaction
+    const tileElement = e.currentTarget
+    if (tileElement) {
+      tileElement.style.transform = 'scale(1.1)'
+      tileElement.style.filter = 'brightness(1.2)'
+      tileElement.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.8)'
+    }
+    
+    setTouchStart({
+      x: e.clientX,
+      y: e.clientY,
+      r: r,
+      c: c
+    })
+    setSelectedTile({ r, c })
+    setIsDragging(true)
+  }, [board])
+
+  const handleTouchMove = useCallback((e) => {
+    if (!touchStart || !selectedTile) return
+    
+    e.preventDefault() // Prevent scrolling while dragging
+    
+    const currentX = e.touches[0].clientX
+    const currentY = e.touches[0].clientY
+    
+    setTouchEnd({
+      x: currentX,
+      y: currentY
+    })
+  }, [touchStart, selectedTile])
+
+  const handleMouseMove = useCallback((e) => {
+    if (!touchStart || !selectedTile || !isDragging) return
+    
+    e.preventDefault()
+    
+    setTouchEnd({
+      x: e.clientX,
+      y: e.clientY
+    })
+  }, [touchStart, selectedTile, isDragging])
+
+  const handleTouchEnd = useCallback((e) => {
+    if (!touchStart || !touchEnd || !selectedTile) {
+      setTouchStart(null)
+      setTouchEnd(null)
+      setSelectedTile(null)
+      return
+    }
+    
+    const deltaX = touchEnd.x - touchStart.x
+    const deltaY = touchEnd.y - touchStart.y
+    const minSwipeDistance = 30 // Minimum distance to trigger a move
+    
+    // Determine swipe direction and move tile
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
+      // Horizontal swipe
+      if (deltaX > 0) {
+        // Swipe right - move tile to the right (if empty space is to the right)
+        if (emptyPos.r === selectedTile.r && emptyPos.c === selectedTile.c + 1) {
+          tryMove(selectedTile.r, selectedTile.c)
+        }
+      } else {
+        // Swipe left - move tile to the left (if empty space is to the left)
+        if (emptyPos.r === selectedTile.r && emptyPos.c === selectedTile.c - 1) {
+          tryMove(selectedTile.r, selectedTile.c)
+        }
+      }
+    } else if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > minSwipeDistance) {
+      // Vertical swipe
+      if (deltaY > 0) {
+        // Swipe down - move tile down (if empty space is below)
+        if (emptyPos.c === selectedTile.c && emptyPos.r === selectedTile.r + 1) {
+          tryMove(selectedTile.r, selectedTile.c)
+        }
+      } else {
+        // Swipe up - move tile up (if empty space is above)
+        if (emptyPos.c === selectedTile.c && emptyPos.r === selectedTile.r - 1) {
+          tryMove(selectedTile.r, selectedTile.c)
+        }
+      }
+    }
+    
+    // Reset touch state and visual feedback
+    if (selectedTile) {
+      resetTileVisualState(selectedTile.r, selectedTile.c)
+    }
+    setTouchStart(null)
+    setTouchEnd(null)
+    setSelectedTile(null)
+  }, [touchStart, touchEnd, selectedTile, board, tryMove, emptyPos])
+
+  const handleMouseUp = useCallback((e) => {
+    if (!touchStart || !touchEnd || !selectedTile) {
+      setTouchStart(null)
+      setTouchEnd(null)
+      setSelectedTile(null)
+      setIsDragging(false)
+      return
+    }
+    
+    const deltaX = touchEnd.x - touchStart.x
+    const deltaY = touchEnd.y - touchStart.y
+    const minSwipeDistance = 30 // Minimum distance to trigger a move
+    
+    // Determine swipe direction and move tile
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
+      // Horizontal swipe
+      if (deltaX > 0) {
+        // Swipe right - move tile to the right (if empty space is to the right)
+        if (emptyPos.r === selectedTile.r && emptyPos.c === selectedTile.c + 1) {
+          tryMove(selectedTile.r, selectedTile.c)
+        }
+      } else {
+        // Swipe left - move tile to the left (if empty space is to the left)
+        if (emptyPos.r === selectedTile.r && emptyPos.c === selectedTile.c - 1) {
+          tryMove(selectedTile.r, selectedTile.c)
+        }
+      }
+    } else if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > minSwipeDistance) {
+      // Vertical swipe
+      if (deltaY > 0) {
+        // Swipe down - move tile down (if empty space is below)
+        if (emptyPos.c === selectedTile.c && emptyPos.r === selectedTile.r + 1) {
+          tryMove(selectedTile.r, selectedTile.c)
+        }
+      } else {
+        // Swipe up - move tile up (if empty space is above)
+        if (emptyPos.c === selectedTile.c && emptyPos.r === selectedTile.r - 1) {
+          tryMove(selectedTile.r, selectedTile.c)
+        }
+      }
+    }
+    
+    // Reset mouse state and visual feedback
+    if (selectedTile) {
+      resetTileVisualState(selectedTile.r, selectedTile.c)
+    }
+    setTouchStart(null)
+    setTouchEnd(null)
+    setSelectedTile(null)
+    setIsDragging(false)
+  }, [touchStart, touchEnd, selectedTile, board, tryMove, emptyPos])
+
+  // Global mouse up handler for when mouse is released outside tiles
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDragging) {
+        // Reset visual state of selected tile
+        if (selectedTile) {
+          resetTileVisualState(selectedTile.r, selectedTile.c)
+        }
+        setTouchStart(null)
+        setTouchEnd(null)
+        setSelectedTile(null)
+        setIsDragging(false)
+      }
+    }
+
+    document.addEventListener('mouseup', handleGlobalMouseUp)
+    return () => document.removeEventListener('mouseup', handleGlobalMouseUp)
+  }, [isDragging, selectedTile, resetTileVisualState])
+
+  // Cleanup animation overlay when animation state changes
+  useEffect(() => {
+    // Reset animation state when view changes
+    if (currentView !== 'original') {
+      setAnimating(false)
+      setAnimation(null)
+    }
+    
+    return () => {
+      // Cleanup when component unmounts
+      setAnimating(false)
+      setAnimation(null)
+    }
+  }, [currentView])
+
+  // Remove JS progress loop; CSS transform-based animation is used
+  useEffect(() => {
+    if (!animating || !animation) return
+    const overlay = document.querySelector('[data-animation-overlay]')
+    if (overlay) {
+      // Force a reflow then animate to destination
+      overlay.offsetHeight
+      const step = tileStep || (41 + 1)
+      overlay.style.transform = `translate(${step * animation.to.c}px, ${step * animation.to.r}px)`
+      const onEnd = () => {
+        // 1) Commit swap so destination letter renders underneath
+        setBoard(prevBoard => {
+          const b = prevBoard.map(row => [...row])
+          b[animation.to.r][animation.to.c] = animation.letter
+          b[animation.from.r][animation.from.c] = ''
+          return b
+        })
+        setEmptyPos({ r: animation.from.r, c: animation.from.c })
+
+        // 2) Force a micro-hold on the destination tile to avoid any transition flicker
+        setSwapHold({ r: animation.to.r, c: animation.to.c })
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setAnimating(false)
+            setAnimation(null)
+            // release hold after next paint
+            setTimeout(() => setSwapHold(null), 0)
+          })
+        })
+
+        overlay.removeEventListener('transitionend', onEnd)
+        setTimeout(() => checkWordCompletion(), 100)
+      }
+      overlay.addEventListener('transitionend', onEnd, { once: true })
+    }
+  }, [animating, animation, checkWordCompletion, tileStep])
+
+  // Start original game
+  const startOriginalGame = useCallback(() => {
+    console.log('Starting original game...')
+    console.log('Current WORD_SETS:', WORD_SETS)
+    console.log('Current board:', board)
+    setCurrentView('original')
+    console.log('Set currentView to original')
+    
+    // Try to generate the main board first
+    if (WORD_SETS && WORD_SETS.length > 0) {
+      generateBoard()
+      console.log('Called generateBoard')
+    } else {
+      // Fallback to simple board if WORD_SETS not ready
+      console.log('WORD_SETS not ready, using fallback board')
+      generateFallbackBoard()
+    }
+  }, [generateBoard, generateFallbackBoard, WORD_SETS, board])
+
+  // Show hint confirmation
+  const showHintConfirmation = useCallback(() => {
+    if (hintCount > 0) {
+      setHintCount(prev => prev - 1)
+      // Highlight an uncompleted word
+      const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
+      const uncompletedWords = targetWords.filter(word => !completedWords.has(word))
+      if (uncompletedWords.length > 0) {
+        alert(`Hint: Look for the word "${uncompletedWords[0].toUpperCase()}"`)
+      }
+    } else {
+      alert('No hints remaining! Complete the level to earn more.')
+    }
+  }, [hintCount, currentLevel, completedWords, WORD_SETS])
+
+  // Show rules modal
+  const showRulesModal = useCallback(() => {
+    setShowRules(true)
+  }, [])
+
+  // Close rules modal
+  const closeRulesModal = useCallback(() => {
+    setShowRules(false)
+  }, [])
+
+  // Earn hint for completing words
+  const earnHint = useCallback(() => {
+    setHintCount(prev => prev + 1)
+  }, [])
+
+  // Fireworks component
+  const Fireworks = () => (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      pointerEvents: 'none',
+      zIndex: 9999,
+      overflow: 'hidden',
+      maxWidth: '100vw',
+      maxHeight: '100vh'
+    }}>
+      {Array.from({ length: 20 }, (_, i) => (
+        <div
+          key={i}
+          style={{
+            position: 'absolute',
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+            width: '4px',
+            height: '4px',
+            backgroundColor: ['#FFD700', '#FF69B4', '#00CED1', '#90EE90', '#FF4500'][Math.floor(Math.random() * 5)],
+            borderRadius: '50%',
+            animation: `firework ${1 + Math.random() * 2}s ease-out forwards`
+          }}
+        />
+      ))}
+    </div>
+  )
+
+  // Add CSS keyframes for title animations
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.textContent = `
+      @keyframes titleEntrance {
+        0% {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0);
         }
       }
       
-      // Create new fireworks
-      if (Math.random() < 0.08) {
-        createFirework()
+      @keyframes letterSlideIn {
+        0% {
+          opacity: 0;
+          transform: translateX(100px);
+        }
+        100% {
+          opacity: 1;
+          transform: translateX(0);
+        }
       }
-      
-      requestAnimationFrame(animate)
+    `
+    document.head.appendChild(style)
+    
+    return () => {
+      document.head.removeChild(style)
     }
-    
-    animate()
-    
-    // Clean up fireworks after 5 seconds
-    setTimeout(() => {
-      if (document.body.contains(canvas)) {
-        document.body.removeChild(canvas)
-      }
-    }, 5000)
-  }
-
-
+  }, [])
 
   return (
-    <div className="game-container">
-      {/* Debug test - remove this later */}
-      <div style={{ 
-        background: 'red', 
-        color: 'white', 
-        padding: '10px', 
-        margin: '10px', 
-        border: '3px solid yellow',
-        fontSize: '18px',
-        fontWeight: 'bold'
-      }}>
-        🚨 DEBUG: App component is rendering! Look for this red box!
-      </div>
+    <div className="game-container" style={{
+      width: '100vw',
+      height: '100vh',
+      overflow: 'hidden',
+      position: 'relative',
+      maxWidth: '100vw',
+      maxHeight: '100vh'
+    }}>
+      {currentView === 'menu' && (
+        <div className="main-menu" style={{
+          zIndex: 1000, 
+          position: 'relative',
+          padding: '20px 10px',
+          maxWidth: '100vw',
+          maxHeight: '100vh',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          minHeight: '100vh',
+          paddingTop: '40px'
+        }}>
+          <h1 className="game-title" style={{
+            fontSize: 'clamp(32px, 8vw, 48px)',
+            textAlign: 'center',
+            margin: '20px 0',
+            color: '#F5DEB3',
+            textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0'
+          }}>
+            <span style={{
+              animation: 'titleEntrance 1s ease-out forwards'
+            }}>
+              WordSlid
+            </span>
+            <span style={{
+              animation: 'letterSlideIn 1.2s ease-out 0.3s forwards',
+              transform: 'translateX(100px)',
+              opacity: 0
+            }}>
+              e
+            </span>
+          </h1>
+          
+          <p className="subtitle" style={{
+            fontSize: 'clamp(16px, 4vw, 20px)',
+            textAlign: 'center',
+            margin: '20px 0',
+            color: '#F5DEB3'
+          }}>
+            Choose your game mode
+          </p>
+          
+          {/* Debug Modal State */}
+          {/* removed debug box */}
+          
+          <div className="menu-buttons" style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '15px',
+            alignItems: 'center',
+            margin: '20px 0'
+          }}>
+            <button 
+              className="menu-button" 
+              onClick={() => setShowLeaderboard(true)}
+              style={{
+                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                color: '#654321',
+                border: '3px solid #8B4513',
+                padding: 'clamp(16px, 4vw, 20px) clamp(30px, 8vw, 50px)',
+                fontSize: 'clamp(18px, 5vw, 22px)',
+                fontWeight: 'bold',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                minHeight: '60px',
+                minWidth: '200px',
+                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                touchAction: 'manipulation',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-3px) scale(1.02)'
+                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0) scale(1)'
+                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+              }}
+            >
+              🏆 Leaderboard
+            </button>
+            <button 
+              className="menu-button" 
+              onClick={startOriginalGame}
+              style={{
+                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                color: '#654321',
+                border: '3px solid #8B4513',
+                padding: 'clamp(16px, 4vw, 20px) clamp(30px, 8vw, 50px)',
+                fontSize: 'clamp(18px, 5vw, 22px)',
+                fontWeight: 'bold',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                minHeight: '60px',
+                minWidth: '200px',
+                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                touchAction: 'manipulation',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-3px) scale(1.02)'
+                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0) scale(1)'
+                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+              }}
+            >
+              🎮 Original Game
+            </button>
+            
+            <button 
+              className="menu-button" 
+              onClick={startTetrisGame}
+              style={{
+                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                color: '#654321',
+                border: '3px solid #8B4513',
+                padding: 'clamp(16px, 4vw, 20px) clamp(30px, 8vw, 50px)',
+                fontSize: 'clamp(18px, 5vw, 22px)',
+                fontWeight: 'bold',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                minHeight: '60px',
+                minWidth: '200px',
+                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                touchAction: 'manipulation',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-3px) scale(1.02)'
+                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0) scale(1)'
+                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+              }}
+            >
+              🔄 Tetris Style
+            </button>
+            
+            {/* Login Button - Added directly to menu-buttons */}
+            <button 
+              className="menu-button" 
+              onClick={() => {
+                console.log('🔍 Login button clicked!')
+                console.log('🔍 Current showAuthModal state:', showAuthModal)
+                setShowAuthModal(true)
+                console.log('🔍 Set showAuthModal to true')
+              }}
+              style={{
+                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                color: '#654321',
+                border: '3px solid #8B4513',
+                padding: 'clamp(16px, 4vw, 20px) clamp(30px, 8vw, 50px)',
+                fontSize: 'clamp(18px, 5vw, 22px)',
+                fontWeight: 'bold',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                minHeight: '60px',
+                minWidth: '200px',
+                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                touchAction: 'manipulation',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-3px) scale(1.02)'
+                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0) scale(1)'
+                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+              }}
+            >
+              👤 Sign In
+            </button>
+          </div>
+          
+          {/* Login/User Profile Section */}
+          <div className="auth-section" style={{
+            marginTop: '20px',
+            textAlign: 'center'
+          }}>
+            <UserProfile />
+          </div>
+          
+          {/* Auth Modal */}
+          <AuthModal 
+            isOpen={showAuthModal} 
+            onClose={() => {
+              console.log('🔍 AuthModal onClose called')
+              setShowAuthModal(false)
+            }}
+            initialMode="login"
+          />
+
+          {/* Leaderboard Modal */}
+          <LeaderboardModal
+            isOpen={showLeaderboard}
+            onClose={() => setShowLeaderboard(false)}
+            gameMode="original"
+          />
+        </div>
+      )}
+
+      {currentView === 'original' && (
+        <div style={{
+          maxHeight: '100vh',
+          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          backgroundColor: '#2F1B14',
+          backgroundImage: `
+            repeating-linear-gradient(
+              0deg,
+              transparent,
+              transparent 60px,
+              #3D2318 60px,
+              #3D2318 65px
+            ),
+            repeating-linear-gradient(
+              90deg,
+              transparent,
+              transparent 3px,
+              rgba(47, 27, 20, 0.9) 3px,
+              rgba(47, 27, 20, 0.9) 6px
+            ),
+            repeating-linear-gradient(
+              0deg,
+              transparent,
+              transparent 6px,
+              rgba(61, 35, 24, 0.5) 6px,
+              rgba(61, 35, 24, 0.5) 12px
+            ),
+            repeating-linear-gradient(
+              0deg,
+              transparent,
+              transparent 60px,
+              rgba(255, 255, 255, 0.03) 60px,
+              rgba(255, 255, 255, 0.03) 65px
+            )
+          `,
+          minHeight: '100vh',
+          padding: '20px'
+        }}>
+          <h1 style={{
+            fontSize: 'clamp(24px, 6vw, 32px)',
+            textAlign: 'center',
+            margin: '10px 0',
+            color: '#F5DEB3'
+          }}>
+            WordSlide - Level {currentLevel}
+          </h1>
+          
+          <div style={{
+            background: 'rgba(139, 69, 19, 0.1)',
+            border: '2px solid #8B4513',
+            borderRadius: '10px',
+            padding: '15px',
+            margin: '10px auto',
+            maxWidth: '90vw',
+            textAlign: 'center'
+          }}>
+            <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
+              Target words: <strong style={{color: '#F5DEB3'}}>
+                {WORD_SETS[currentLevel - 1]?.join(', ').toUpperCase()}
+              </strong>
+            </p>
+            <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
+              Completed: <span style={{color: '#F5DEB3'}}>
+                {completedWords.size}/{WORD_SETS[currentLevel - 1]?.length || 0}
+              </span>
+            </p>
+            <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
+              Moves: <span style={{color: '#F5DEB3'}}>{moveCount}</span>
+            </p>
+            
+            {/* Game controls */}
+            <div style={{
+              marginTop: '10px',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '8px',
+              justifyContent: 'center'
+            }}>
+              <button 
+                onClick={showHintConfirmation}
+                disabled={hintCount <= 0}
+                style={{
+                  background: hintCount > 0 
+                    ? 'linear-gradient(135deg, #FFD700, #FFA500)' 
+                    : 'linear-gradient(135deg, #666, #888)',
+                  color: hintCount > 0 ? '#2F1B14' : '#CCC',
+                  border: `2px solid ${hintCount > 0 ? '#B8860B' : '#555'}`,
+                  padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
+                  borderRadius: '10px',
+                  fontSize: 'clamp(13px, 3.5vw, 15px)',
+                  fontWeight: 'bold',
+                  cursor: hintCount > 0 ? 'pointer' : 'not-allowed',
+                  minHeight: '36px',
+                  minWidth: '100px',
+                  boxShadow: hintCount > 0 
+                    ? '0 4px 12px rgba(255, 215, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)' 
+                    : '0 2px 8px rgba(0, 0, 0, 0.2)',
+                  transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                  touchAction: 'manipulation',
+                  textShadow: hintCount > 0 ? '0 1px 2px rgba(255, 255, 255, 0.3)' : 'none',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+                onMouseEnter={(e) => {
+                  if (hintCount > 0) {
+                    e.target.style.transform = 'translateY(-1px) scale(1.02)'
+                    e.target.style.boxShadow = '0 6px 16px rgba(255, 215, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (hintCount > 0) {
+                    e.target.style.transform = 'translateY(0) scale(1)'
+                    e.target.style.boxShadow = '0 4px 12px rgba(255, 215, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+                  }
+                }}
+              >
+                💡 Hint ({hintCount})
+              </button>
+              
+              <button 
+                onClick={showRulesModal}
+                style={{
+                  background: 'linear-gradient(135deg, #00CED1, #20B2AA)',
+                  color: '#2F1B14',
+                  border: '2px solid #008B8B',
+                  padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
+                  borderRadius: '10px',
+                  fontSize: 'clamp(13px, 3.5vw, 15px)',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  minHeight: '36px',
+                  minWidth: '100px',
+                  boxShadow: '0 4px 12px rgba(0, 206, 209, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                  transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                  touchAction: 'manipulation',
+                  textShadow: '0 1px 2px rgba(255, 255, 255, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-1px) scale(1.02)'
+                  e.target.style.boxShadow = '0 6px 16px rgba(0, 206, 209, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0) scale(1)'
+                  e.target.style.boxShadow = '0 4px 12px rgba(0, 206, 209, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+                }}
+              >
+                📖 Rules
+              </button>
+            </div>
+            
+            {/* Rules Modal */}
+            {showRules && (
+              <div
+                onClick={closeRulesModal}
+                style={{
+                  position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                  background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  zIndex: 10000, backdropFilter: 'blur(4px)'
+                }}
+              >
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    background: 'linear-gradient(135deg, #F5DEB3 0%, #DEB887 100%)',
+                    border: '3px solid #8B4513', borderRadius: '14px', padding: '24px',
+                    width: 'min(92vw, 700px)', maxHeight: '80vh', overflowY: 'auto',
+                    boxShadow: '0 20px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.3)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <h2 style={{ margin: 0, color: '#654321' }}>How to Play - Original Mode</h2>
+                    <button onClick={closeRulesModal} style={{
+                      background: 'linear-gradient(135deg, #F5DEB3, #DEB887)', color: '#654321', border: '2px solid #8B4513', borderRadius: 8,
+                      padding: '6px 10px', cursor: 'pointer', fontWeight: 'bold'
+                    }}>×</button>
+                  </div>
+
+                  <div style={{ color: '#654321', lineHeight: 1.5 }}>
+                    <p><strong>Goal:</strong> Slide tiles to form the target words shown above the board.</p>
+                    <ul style={{ paddingLeft: 18 }}>
+                      <li>Only the tile adjacent to the empty cell can move.</li>
+                      <li>Tap/click a tile next to the empty space to slide it into the empty cell.</li>
+                      <li>Form all target words to complete the round.</li>
+                      <li>When a word is completed, its tiles turn green and lock in place.</li>
+                      <li>Moves are counted; try to solve with the fewest moves.</li>
+                    </ul>
+                    <p><strong>Tips:</strong></p>
+                    <ul style={{ paddingLeft: 18 }}>
+                      <li>Look for near-complete words and free up the needed letter.</li>
+                      <li>Use the empty space strategically to rotate letters into position.</li>
+                    </ul>
+                  </div>
+
+                  <div style={{ textAlign: 'right', marginTop: 12 }}>
+                    <button onClick={closeRulesModal} style={{
+                      background: 'linear-gradient(135deg, #F5DEB3, #DEB887)', color: '#654321',
+                      border: '3px solid #8B4513', fontWeight: 'bold', borderRadius: 10,
+                      padding: '8px 16px', cursor: 'pointer'
+                    }}>Got it</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Word completion status */}
+            <div style={{
+              marginTop: '10px',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '8px',
+              justifyContent: 'center'
+            }}>
+              {WORD_SETS[currentLevel - 1]?.map((word, index) => (
+                <span
+                  key={word}
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: 'clamp(12px, 3vw, 14px)',
+                    fontWeight: 'bold',
+                    backgroundColor: completedWords.has(word) ? '#90EE90' : 'rgba(139, 69, 19, 0.3)',
+                    color: completedWords.has(word) ? '#006400' : '#F5DEB3',
+                    border: `2px solid ${completedWords.has(word) ? '#228B22' : '#8B4513'}`,
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {word.toUpperCase()}
+                  {completedWords.has(word) && ' ✓'}
+                </span>
+              ))}
+            </div>
+          </div>
+          
+          {/* Game Board */}
+          <div style={{
+            maxWidth: '95vw',
+            maxHeight: '70vh',
+            overflow: 'visible',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            position: 'relative',
+            isolation: 'isolate',
+            contain: 'layout'
+          }}>
+            {/* Touch Instructions */}
+            <div style={{
+              textAlign: 'center',
+              marginBottom: '15px',
+              padding: '10px',
+              backgroundColor: 'rgba(139, 69, 19, 0.2)',
+              borderRadius: '8px',
+              border: '1px solid #8B4513',
+              maxWidth: '90vw'
+            }}>
+              <p style={{
+                margin: '0',
+                fontSize: 'clamp(12px, 3vw, 14px)',
+                color: '#F5DEB3'
+              }}>
+                🎮 <strong>Controls:</strong> Click tiles to move them into the empty space
+              </p>
+            </div>
+            
+            {/* Board Container - Connected Surface */}
+            <div 
+              ref={boardRef}
+              style={{
+                maxWidth: '90vw',
+                overflow: 'visible',
+                backgroundColor: '#654321', // Dark brown like wood paneling
+                padding: '0px', // Remove padding to align edges with tiles
+                borderRadius: '12px',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.1)',
+                border: '2px solid #8B4513',
+                position: 'relative', // For animation overlay positioning
+                // Ensure board stability during animation
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
+                contain: 'layout',
+                isolation: 'isolate'
+              }}
+              onTouchStart={(e) => {
+                const touch = e.touches[0]
+                const rect = e.currentTarget.getBoundingClientRect()
+                const touchX = touch.clientX - rect.left
+                const centerX = rect.width / 2
+                
+                if (touchX < centerX) {
+                  moveBlockLeft()
+                } else {
+                  moveBlockRight()
+                }
+              }}
+            >
+              {/* Board Rows - 7x8 grid like original game */}
+            {board.map((row, r) => (
+                <div key={r} style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  maxWidth: '90vw',
+                  position: 'relative',
+                  zIndex: 1,
+                  contain: 'layout',
+                  isolation: 'isolate',
+                  flexShrink: 0,
+                  flexGrow: 0,
+                  width: 'fit-content',
+                  height: 'fit-content',
+                  // Prevent any layout movement during animation
+                  transform: 'translateZ(0)',
+                  backfaceVisibility: 'hidden',
+                  // Ensure absolute positioning stability
+                  position: 'relative',
+                  left: 0,
+                  top: 0
+                }}>
+                  {row.map((cell, c) => (
+                  <div
+                    key={`${r}-${c}`}
+                    data-tile={`${r}-${c}`}
+                    onMouseDown={(e) => handleMouseDown(e, r, c)}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp}
+                    onTouchStart={(e) => handleTouchStart(e, r, c)}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
+                      onClick={() => tryMove(r, c)}
+                    style={{
+                        width: 'clamp(40px, 10vw, 55px)',
+                        height: 'clamp(40px, 10vw, 55px)',
+                        margin: '1px', // Reduced gap between tiles
+                        marginLeft: c === 0 ? '0px' : '1px', // First tile touches left edge
+                        marginRight: c === row.length - 1 ? '0px' : '1px', // Last tile touches right edge
+                        marginTop: r === 0 ? '0px' : '1px', // First row touches top edge
+                        marginBottom: r === board.length - 1 ? '0px' : '1px', // Last row touches bottom edge
+                        backgroundColor: cell ? '#F5DEB3' : 'transparent',
+                        border: 'none', // Remove conflicting shorthand border
+                        borderRadius: cell ? '6px' : '0', // Smaller radius for connected appearance
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                        fontSize: 'clamp(16px, 4vw, 22px)',
+                      fontWeight: 'bold',
+                        color: '#654321',
+                        cursor: cell ? (isDragging ? 'grabbing' : 'grab') : 'default',
+                        boxShadow: cell ? '0 4px 8px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.2)' : 'none',
+                        transition: 'all 0.1s ease',
+                      position: 'relative',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                      WebkitTapHighlightColor: 'transparent',
+                        // Make tiles appear as raised sections of the board
+                        transform: cell ? 'translateZ(2px)' : 'none',
+                        // Connected surface effect - use specific border properties
+                        borderRight: c < row.length - 1 ? '1px solid #654321' : 'none',
+                        borderBottom: r < board.length - 1 ? '1px solid #654321' : 'none',
+                        // Add top and left borders for complete tile definition
+                        borderTop: cell ? '2px solid #8B4513' : 'none',
+                        borderLeft: cell ? '2px solid #8B4513' : 'none',
+                      // Highlight completed words in green
+                        ...(cell && isLetterInCompletedWord(r, c) && {
+                        backgroundColor: '#90EE90',
+                        color: '#006400',
+                          borderTop: '2px solid #228B22',
+                          borderLeft: '2px solid #228B22',
+                          borderRight: c < row.length - 1 ? '1px solid #228B22' : 'none',
+                          borderBottom: r < board.length - 1 ? '1px solid #228B22' : 'none',
+                          boxShadow: '0 6px 12px rgba(34,139,34,0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2)',
+                          animation: 'completedWordPulse 1.5s ease-in-out infinite',
+                          transform: 'translateZ(4px) perspective(100px) rotateX(3deg)'
+                        }),
+                        // Highlight selected tile with enhanced 3D effects
+                        ...(selectedTile && selectedTile.r === r && selectedTile.c === c && {
+                          transform: 'translateZ(6px) perspective(100px) rotateX(6deg) scale(1.1)',
+                          zIndex: 10,
+                          boxShadow: '0 0 25px rgba(255, 215, 0, 0.9), 0 8px 20px rgba(139, 69, 19, 0.7), inset 0 2px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.3)',
+                          transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                          filter: 'brightness(1.15)'
+                      }),
+                      // Hide tile during animation if it's the moving tile
+                      ...(animating && animation && animation.from.r === r && animation.from.c === c && {
+                          opacity: 0,
+                          visibility: 'hidden',
+                          pointerEvents: 'none'
+                        }),
+                        
+                      }}
+                      onMouseEnter={(e) => {
+                        if (cell) {
+                          e.target.style.transform = 'translateZ(4px) scale(1.05)'
+                          e.target.style.boxShadow = '0 6px 12px rgba(139, 69, 19, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(0, 0, 0, 0.3)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (cell) {
+                          e.target.style.transform = 'translateZ(2px) scale(1)'
+                          e.target.style.boxShadow = '0 4px 8px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.2)'
+                        }
+                      }}
+                    >
+                      {cell ? cell.toUpperCase() : ''}
+                  </div>
+                ))}
+              </div>
+            ))}
+          
+              {/* Animation Overlay - Positioned relative to the connected board surface */}
+          {animating && animation && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                    overflow: 'visible',
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                pointerEvents: 'none',
+                zIndex: 100
+              }}
+            >
+              <div
+                    data-animation-overlay
+                style={{
+                  position: 'absolute',
+                      width: 'clamp(40px, 10vw, 55px)',
+                      height: 'clamp(40px, 10vw, 55px)',
+                  backgroundColor: '#F5DEB3',
+                  border: '2px solid #8B4513',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                      fontSize: 'clamp(16px, 4vw, 22px)',
+                  fontWeight: 'bold',
+                  color: '#654321',
+                      boxShadow: '0 6px 12px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.3)',
+                      zIndex: 101,
+                      pointerEvents: 'none',
+                      // Use transform-based slide for smooth animation with measured step
+                      left: 0,
+                      top: 0,
+                      transform: tileStep
+                        ? `translate(${tileStep * animation.from.c}px, ${tileStep * animation.from.r}px)`
+                        : `translate(${(41 + 1) * animation.from.c}px, ${(41 + 1) * animation.from.r}px)`,
+                      transition: 'transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                      willChange: 'transform',
+                      // Ensure solid appearance
+                      backdropFilter: 'none',
+                      WebkitBackdropFilter: 'none'
+                }}
+              >
+                {animation.letter.toUpperCase()}
+              </div>
+            </div>
+          )}
+            </div>
+          </div>
+          
+          {/* Main Menu Button */}
+          <div style={{
+            textAlign: 'center', 
+            marginTop: '20px',
+            marginBottom: '20px'
+          }}>
+            <button 
+              onClick={() => setCurrentView('menu')}
+              style={{
+                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                color: '#654321',
+                border: '3px solid #8B4513',
+                padding: 'clamp(14px, 3.5vw, 18px) clamp(24px, 6vw, 36px)',
+                borderRadius: '12px',
+                fontSize: 'clamp(15px, 4.5vw, 17px)',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                minHeight: '48px',
+                minWidth: '140px',
+                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                touchAction: 'manipulation',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-3px) scale(1.02)'
+                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0) scale(1)'
+                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+              }}
+            >
+              🏠 Main Menu
+            </button>
+          </div>
+        </div>
+      )}
+
+      {currentView === 'tetris' && (
+        <div style={{
+          maxHeight: '100vh',
+          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          backgroundColor: '#2F1B14',
+          backgroundImage: `
+            repeating-linear-gradient(
+              0deg,
+              transparent,
+              transparent 60px,
+              #3D2318 60px,
+              #3D2318 65px
+            ),
+            repeating-linear-gradient(
+              90deg,
+              transparent,
+              transparent 3px,
+              rgba(47, 27, 20, 0.9) 3px,
+              rgba(47, 27, 20, 0.9) 6px
+            ),
+            repeating-linear-gradient(
+              0deg,
+              transparent,
+              transparent 6px,
+              rgba(61, 35, 24, 0.5) 6px,
+              rgba(61, 35, 24, 0.5) 12px
+            ),
+            repeating-linear-gradient(
+              0deg,
+              transparent,
+              transparent 60px,
+              rgba(255, 255, 255, 0.03) 60px,
+              rgba(255, 255, 255, 0.03) 65px
+            )
+          `,
+          minHeight: '100vh',
+          padding: '20px'
+        }}>
+          {/* Game Header */}
+          <div style={{
+            textAlign: 'center',
+            marginBottom: '20px',
+            color: '#F5DEB3'
+          }}>
+            <h1 style={{
+              fontSize: 'clamp(24px, 6vw, 32px)',
+              margin: '0 0 10px 0',
+              color: '#F5DEB3',
+              textShadow: '2px 2px 4px rgba(0, 0, 0, 0.5)'
+            }}>
+              WordSlide - Tetris Style
+            </h1>
+            
+          <div style={{
+            display: 'flex',
+              justifyContent: 'center',
+              gap: '15px',
+            flexWrap: 'wrap',
+              marginBottom: '20px'
+            }}>
+          <div style={{
+                backgroundColor: 'rgba(139, 69, 19, 0.3)',
+                padding: '10px 15px',
+                borderRadius: '8px',
+                border: '1px solid #8B4513'
+              }}>
+                <strong>Words Solved:</strong> {tetrisScore}
+                    </div>
+              <div style={{
+                backgroundColor: 'rgba(139, 69, 19, 0.3)',
+                padding: '10px 15px',
+                borderRadius: '8px',
+                border: '1px solid #8B4513'
+              }}>
+                <strong>Target Word:</strong> {tetrisBoard.length > 0 ? 'Form 3+ Letter Words' : 'Loading...'}
+                </div>
+              <div style={{
+                backgroundColor: 'rgba(139, 69, 19, 0.3)',
+                padding: '10px 15px',
+                borderRadius: '8px',
+                border: '1px solid #8B4513'
+              }}>
+                <strong>Moves:</strong> {tetrisLevel}
+              </div>
+          </div>
+          
+            {/* Game Controls */}
+          <div style={{
+            display: 'flex',
+              justifyContent: 'center',
+              gap: '10px',
+            flexWrap: 'wrap',
+              marginBottom: '20px'
+          }}>
+            <button
+              onClick={pauseTetrisGame}
+              style={{
+                  background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                  color: '#654321',
+                  border: '3px solid #8B4513',
+                  padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
+                  borderRadius: '10px',
+                  fontSize: 'clamp(13px, 3.5vw, 15px)',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                  minHeight: '36px',
+                  minWidth: '100px',
+                  boxShadow: '0 4px 12px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                touchAction: 'manipulation',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.3)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-1px) scale(1.02)'
+                  e.target.style.boxShadow = '0 6px 16px rgba(139, 69, 19, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0) scale(1)'
+                  e.target.style.boxShadow = '0 4px 12px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+              }}
+            >
+              {tetrisPaused ? '▶️ Resume' : '⏸️ Pause'}
+            </button>
+            
+            <button
+              onClick={resetTetrisGame}
+              style={{
+                  background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                  color: '#654321',
+                  border: '3px solid #8B4513',
+                  padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
+                  borderRadius: '10px',
+                  fontSize: 'clamp(13px, 3.5vw, 15px)',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                  minHeight: '36px',
+                  minWidth: '100px',
+                  boxShadow: '0 4px 12px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                touchAction: 'manipulation',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.3)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-1px) scale(1.02)'
+                  e.target.style.boxShadow = '0 6px 16px rgba(139, 69, 19, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0) scale(1)'
+                  e.target.style.boxShadow = '0 4px 12px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+              }}
+            >
+              🔄 Reset
+            </button>
+            
+            <button
+                onClick={() => setShowRules(true)}
+              style={{
+                  background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                  color: '#654321',
+                  border: '3px solid #8B4513',
+                  padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
+                  borderRadius: '10px',
+                  fontSize: 'clamp(13px, 3.5vw, 15px)',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                  minHeight: '36px',
+                  minWidth: '100px',
+                  boxShadow: '0 4px 12px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                touchAction: 'manipulation',
+                  textShadow: '0 1px 2px rgba(255, 255, 255, 0.3)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-1px) scale(1.02)'
+                  e.target.style.boxShadow = '0 6px 16px rgba(139, 69, 19, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0) scale(1)'
+                  e.target.style.boxShadow = '0 4px 12px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+              }}
+            >
+                ❓ How to Play
+            </button>
+              
+              
+          </div>
+        </div>
+          
+          {/* Tetris Board - Same layout as original game */}
+        <div style={{
+            maxWidth: '95vw',
+            maxHeight: '70vh',
+            overflow: 'visible',
+          display: 'flex',
+            flexDirection: 'column',
+          alignItems: 'center',
+            position: 'relative',
+            isolation: 'isolate',
+            contain: 'layout'
+          }}>
+            {/* Board Container - Connected Surface */}
+            <div 
+              style={{
+                maxWidth: '90vw',
+                overflow: 'visible',
+                backgroundColor: '#654321', // Dark brown like wood paneling
+                padding: '0px', // Remove padding to align edges with tiles
+                borderRadius: '12px',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.1)',
+                border: '2px solid #8B4513',
+                position: 'relative', // For animation overlay positioning
+                // Ensure board stability during animation
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
+                contain: 'layout',
+                isolation: 'isolate'
+              }}
+              onTouchStart={(e) => {
+                const touch = e.touches[0]
+                const rect = e.currentTarget.getBoundingClientRect()
+                const touchX = touch.clientX - rect.left
+                const centerX = rect.width / 2
+                
+                if (touchX < centerX) {
+                  moveBlockLeft()
+                } else {
+                  moveBlockRight()
+                }
+              }}
+            >
+              {/* Board Rows - 7x8 grid like original game */}
+              {tetrisBoard.map((row, r) => (
+                <div key={r} style={{
+                  display: 'flex',
+          justifyContent: 'center',
+                  maxWidth: '90vw',
+                  position: 'relative',
+                  zIndex: 1,
+                  contain: 'layout',
+                  isolation: 'isolate',
+                  flexShrink: 0,
+                  flexGrow: 0,
+                  width: 'fit-content',
+                  height: 'fit-content',
+                  // Prevent any layout movement during animation
+                  transform: 'translateZ(0)',
+                  backfaceVisibility: 'hidden',
+                  // Ensure absolute positioning stability
+                  position: 'relative',
+                  left: 0,
+                  top: 0
+                }}>
+                  {row.map((cell, c) => (
+                    <div
+                      key={`${r}-${c}`}
+                      style={{
+                        width: 'clamp(40px, 10vw, 55px)',
+                        height: 'clamp(40px, 10vw, 55px)',
+                        margin: '1px', // Reduced gap between tiles
+                        marginLeft: c === 0 ? '0px' : '1px', // First tile touches left edge
+                        marginRight: c === row.length - 1 ? '0px' : '1px', // Last tile touches right edge
+                        marginTop: r === 0 ? '0px' : '1px', // First row touches top edge
+                        marginBottom: r === tetrisBoard.length - 1 ? '0px' : '1px', // Last row touches bottom edge
+                        backgroundColor: cell ? '#F5DEB3' : 'rgba(139, 69, 19, 0.3)', // Show empty cells
+                        border: 'none', // Remove conflicting shorthand border
+                        borderRadius: cell ? '6px' : '4px', // Smaller radius for connected appearance
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 'clamp(16px, 4vw, 22px)',
+                        fontWeight: 'bold',
+                        color: cell ? '#654321' : 'rgba(139, 69, 19, 0.5)',
+                        cursor: 'default',
+                        boxShadow: cell ? '0 4px 8px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.2)' : '0 2px 4px rgba(0, 0, 0, 0.2)',
+                        transition: 'all 0.1s ease',
+                        position: 'relative',
+                        userSelect: 'none',
+                        WebkitUserSelect: 'none',
+                        WebkitTapHighlightColor: 'transparent',
+                        // Make tiles appear as raised sections of the board
+                        transform: cell ? 'translateZ(2px)' : 'none',
+                        // Connected surface effect - use specific border properties
+                        borderRight: c < row.length - 1 ? '1px solid #654321' : 'none',
+                        borderBottom: r < tetrisBoard.length - 1 ? '1px solid #654321' : 'none',
+                        // Add top and left borders for complete tile definition
+                        borderTop: cell ? '2px solid #8B4513' : '1px solid #654321',
+                        borderLeft: cell ? '2px solid #8B4513' : '1px solid #654321'
+                      }}
+                    >
+                      {cell ? cell.letter : ''}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Game Instructions */}
+          <div style={{
+              textAlign: 'center',
+            marginTop: '20px',
+            padding: '15px',
+            backgroundColor: 'rgba(139, 69, 19, 0.2)',
+            borderRadius: '8px',
+            border: '1px solid #8B4513',
+            maxWidth: '90vw'
+          }}>
+            <p style={{
+              margin: '0',
+              fontSize: 'clamp(12px, 3vw, 14px)',
+              color: '#F5DEB3'
+            }}>
+              🎮 <strong>Controls:</strong> Use A/D keys or Arrow keys to slide falling blocks left/right. 
+              Touch left/right side of board on mobile. Spacebar to pause.
+            </p>
+            <p style={{
+              margin: '8px 0 0 0',
+              fontSize: 'clamp(12px, 3vw, 14px)',
+              color: '#F5DEB3'
+            }}>
+              🎯 <strong>Goal:</strong> Slide blocks into position to form 3+ letter words horizontally. Words automatically disappear when completed!
+            </p>
+            <p style={{
+              margin: '8px 0 0 0',
+              fontSize: 'clamp(12px, 3vw, 14px)',
+              color: '#F5DEB3'
+            }}>
+              📱 <strong>How to Play:</strong> Letter blocks fall from the top. Slide them left/right to land in the right cells and form words!
+            </p>
+            </div>
+            
+          {/* Main Menu Button - Styled like original game */}
+          <div style={{
+            textAlign: 'center',
+            marginTop: '20px',
+            marginBottom: '20px'
+          }}>
+            <button 
+              onClick={() => setCurrentView('menu')}
+              style={{
+                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                color: '#654321',
+                border: '3px solid #8B4513',
+                padding: 'clamp(14px, 3.5vw, 18px) clamp(24px, 6vw, 36px)',
+                borderRadius: '12px',
+                fontSize: 'clamp(15px, 4.5vw, 17px)',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                minHeight: '48px',
+                minWidth: '140px',
+                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                touchAction: 'manipulation',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-3px) scale(1.02)'
+                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0) scale(1)'
+                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+              }}
+            >
+              🏠 Main Menu
+            </button>
+          </div>
+          
+          {/* Falling Block */}
+          {fallingBlocks.length > 0 && !tetrisPaused && !tetrisGameOver && (
+            <div style={{
+              position: 'absolute',
+              top: '8px', // Match board padding
+              left: '8px', // Match board padding
+              width: '100%',
+              height: '100%',
+              overflow: 'visible',
+              maxWidth: '100%',
+              maxHeight: '100%',
+              pointerEvents: 'none',
+              zIndex: 200
+            }}>
+              {fallingBlocks.map((block, index) => (
+                <div
+                  key={index}
+                  style={{
+                    position: 'absolute',
+                    width: 'clamp(40px, 10vw, 55px)',
+                    height: 'clamp(40px, 10vw, 55px)',
+                    backgroundColor: '#F5DEB3',
+                    border: '2px solid #8B4513',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 'clamp(16px, 4vw, 22px)',
+                    fontWeight: 'bold',
+                    color: '#654321',
+                    boxShadow: '0 6px 12px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.3)',
+                    zIndex: 201,
+                    pointerEvents: 'none',
+                    // Position relative to the board cells for proper cell-to-cell movement
+                    left: `${(41 + 1) * block.x}px`,
+                    top: `${(41 + 1) * block.y}px`,
+                    transform: 'perspective(100px) rotateX(2deg) translateZ(6px)',
+                    transition: 'none'
+                  }}
+                >
+                  {block.letter}
+                </div>
+              ))}
+        </div>
+      )}
+          
+          {/* Game Over Message */}
+          {tetrisGameOver && (
+            <div style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              backgroundColor: 'rgba(139, 69, 19, 0.95)',
+              padding: 'clamp(20px, 5vw, 30px)',
+              borderRadius: '15px',
+              border: '3px solid #8B4513',
+              textAlign: 'center',
+              zIndex: 1000,
+              maxWidth: '90vw',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)'
+            }}>
+              <h2 style={{ color: '#F5DEB3', margin: '0 0 20px 0' }}>Game Over!</h2>
+              <p style={{ color: '#F5DEB3', margin: '0 0 20px 0' }}>
+                Final Score: {tetrisScore} words
+              </p>
+              <button
+                onClick={resetTetrisGame}
+                style={{
+                  background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                  color: '#654321',
+                  border: '3px solid #8B4513',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  marginRight: '10px'
+                }}
+              >
+                Play Again
+              </button>
+              <button
+                onClick={() => setCurrentView('menu')}
+                style={{
+                  background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                  color: '#654321',
+                  border: '3px solid #8B4513',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                Main Menu
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       
-      <div className="game-header">
-        <h1>WordSlide</h1>
-        <UserProfile />
-      </div>
-      
-      {/* Game Mode Selector */}
-      <div className="game-mode-selector">
-        <button 
-          className={`mode-btn ${gameMode === 'original' ? 'active' : ''}`}
-          onClick={() => gameMode !== 'original' && switchGameMode()}
-        >
-          🎯 Classic Mode
-        </button>
-        <button 
-          className={`mode-btn ${gameMode !== 'tetris' ? 'active' : ''}`}
-          onClick={() => gameMode !== 'tetris' && switchGameMode()}
-        >
-          🧩 Tetris Mode
-        </button>
-      </div>
-      
-      <GameInfo 
-        targetWords={getCurrentWordSet()}
-        moveCount={moveCount}
-        currentLevel={currentLevel}
-        maxLevels={MAX_LEVELS}
-        gameMode={gameMode}
-      />
-      <GameBoard
-        board={board}
-        emptyPos={emptyPos}
-        animation={animation}
-        completedTiles={completedTiles}
-        onTileClick={tryMove}
-      />
-      <button className="button" onClick={resetGame}>
-        New Game
-      </button>
     </div>
   )
 }
 
-const AppWithAuth = () => (
+export default App
+
+// Wrap App with AuthProvider for components that need authentication
+function AppWithAuth() {
+  return (
   <AuthProvider>
     <App />
   </AuthProvider>
 )
+}
 
-export default AppWithAuth 
+export { AppWithAuth }

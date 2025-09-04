@@ -11,10 +11,20 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showResult, setShowResult] = useState(false);
+  const [resultMessage, setResultMessage] = useState('');
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const { login, register } = useAuth();
 
-  if (!isOpen) return null;
+  console.log('🔍 AuthModal rendering with isOpen:', isOpen);
+
+  if (!isOpen) {
+    console.log('🔍 AuthModal not open, returning null');
+    return null;
+  }
+
+  console.log('🔍 AuthModal is open, rendering modal');
 
   const handleInputChange = (e) => {
     setFormData({
@@ -52,10 +62,23 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
       }
 
       if (result.success) {
-        onClose();
+        setResultMessage(mode === 'login' ? 'Login Successful! 🎉' : 'Account Created Successfully! 🎉');
+        setIsSuccess(true);
+        setShowResult(true);
         setFormData({ username: '', password: '', confirmPassword: '' });
+        // Close the modal after 2 seconds
+        setTimeout(() => {
+          setShowResult(false);
+          onClose();
+        }, 2000);
       } else {
-        setError(result.error);
+        setResultMessage(result.error);
+        setIsSuccess(false);
+        setShowResult(true);
+        // Hide error after 3 seconds
+        setTimeout(() => {
+          setShowResult(false);
+        }, 3000);
       }
     } catch (error) {
       setError('An unexpected error occurred');
@@ -71,8 +94,31 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
   };
 
   return (
-    <div className="auth-modal-overlay" onClick={onClose}>
-      <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="auth-modal-overlay" onClick={onClose} style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'rgba(0, 0, 0, 0.7)',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 10000,
+      backdropFilter: 'blur(5px)'
+    }}>
+      <div className="auth-modal" onClick={(e) => e.stopPropagation()} style={{
+        background: 'linear-gradient(135deg, #8B4513 0%, #A0522D 50%, #8B4513 100%)',
+        border: '3px solid #654321',
+        borderRadius: '15px',
+        padding: '30px',
+        width: '90%',
+        maxWidth: '400px',
+        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+        position: 'relative',
+        overflow: 'hidden',
+        zIndex: 10001
+      }}>
         <div className="auth-modal-header">
           <h2>{mode === 'login' ? 'Welcome Back' : 'Join the Game'}</h2>
           <button className="auth-close-btn" onClick={onClose}>×</button>
@@ -144,6 +190,35 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
           </p>
         </div>
       </div>
+
+      {/* Result Modal */}
+      {showResult && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 10002,
+          background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+          color: '#654321',
+          border: '3px solid #8B4513',
+          padding: 'clamp(20px, 5vw, 30px) clamp(30px, 8vw, 50px)',
+          fontSize: 'clamp(18px, 5vw, 22px)',
+          fontWeight: 'bold',
+          borderRadius: '12px',
+          minHeight: '80px',
+          minWidth: '250px',
+          boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
+          textAlign: 'center',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+          animation: isSuccess ? 'successPulse 0.5s ease-in-out' : 'errorShake 0.5s ease-in-out'
+        }}>
+          {resultMessage}
+        </div>
+      )}
     </div>
   );
 };

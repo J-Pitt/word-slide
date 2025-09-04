@@ -187,6 +187,31 @@
   text-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
 }
 
+/* Animations for result modal */
+@keyframes successPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes errorShake {
+  0%, 100% {
+    transform: translate(-50%, -50%) translateX(0);
+  }
+  25% {
+    transform: translate(-50%, -50%) translateX(-5px);
+  }
+  75% {
+    transform: translate(-50%, -50%) translateX(5px);
+  }
+}
+
 /* Responsive design */
 @media (max-width: 480px) {
   .auth-modal {
