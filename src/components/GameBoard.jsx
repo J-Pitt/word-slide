@@ -1,59 +1,80 @@
-import React, { useRef, useEffect, useCallback } from 'react'
+import React, { useRef, useEffect, useCallback, useState } from 'react'
 
 const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) => {
   const canvasRef = useRef(null)
-  const cellSize = 490 / 7 // 490px canvas / 7 columns (increased from 420px)
+  const [boardSize, setBoardSize] = useState(280)
+  const cellSize = boardSize / 7 // Dynamic cell size based on viewport
+  const canvasPadding = 20 // Padding around the tile area - consistent throughout
+
+  // Calculate optimal board size based on viewport width
+  const calculateBoardSize = useCallback(() => {
+    const viewportWidth = window.innerWidth
+    const padding = 80 // Increased padding for better spacing from viewport edges
+    const availableWidth = viewportWidth - padding
+    
+    // Calculate maximum size that fits in viewport
+    const maxSize = Math.min(availableWidth, 280) // Cap at 280px for very large screens
+    const minSize = 210 // Minimum size for playability
+    
+    // Round down to nearest 7 to ensure clean cell division
+    const calculatedSize = Math.max(minSize, Math.floor(maxSize / 7) * 7)
+    
+    return calculatedSize
+  }, [])
 
   const drawBoard = useCallback((ctx) => {
+    // Clear canvas with transparent background
+    ctx.clearRect(0, 0, canvasSize, canvasSize)
+    
+    // Fill canvas with a subtle background color to show padding
+    ctx.fillStyle = "rgba(139, 69, 19, 0.1)" // Very subtle brown tint
+    ctx.fillRect(0, 0, canvasSize, canvasSize)
+    
     ctx.font = `bold ${cellSize / 2.5}px Arial`
     ctx.textAlign = "center"
     ctx.textBaseline = "middle"
 
-    // Draw wooden board background with enhanced 3D effect
-    const boardGradient = ctx.createLinearGradient(0, 0, 490, 490)
+    // Calculate the actual tile area size (7x7 grid)
+    const tileAreaSize = cellSize * 7
+    
+    // Draw wooden board background - exactly matching tile area with no border
+    const boardGradient = ctx.createLinearGradient(canvasPadding, canvasPadding, canvasPadding + tileAreaSize, canvasPadding + tileAreaSize)
     boardGradient.addColorStop(0, "#8B4513") // Saddle brown
     boardGradient.addColorStop(0.3, "#A0522D") // Sienna
     boardGradient.addColorStop(0.7, "#8B4513") // Saddle brown
     boardGradient.addColorStop(1, "#654321") // Dark brown
     
+    // Draw the main board background - exactly matching tile area with no border
     ctx.fillStyle = boardGradient
-    ctx.fillRect(0, 0, 490, 490)
+    ctx.fillRect(canvasPadding, canvasPadding, tileAreaSize, tileAreaSize)
     
     // Add enhanced wood grain effect
     ctx.strokeStyle = "#654321"
     ctx.lineWidth = 1
-    for (let i = 0; i < 490; i += 20) {
+    for (let i = canvasPadding; i < canvasPadding + tileAreaSize; i += 20) {
       ctx.beginPath()
-      ctx.moveTo(i, 0)
-      ctx.lineTo(i + 10, 490)
+      ctx.moveTo(i, canvasPadding)
+      ctx.lineTo(i + 10, canvasPadding + tileAreaSize)
       ctx.stroke()
     }
-    
-    // Add board shadow for 3D effect
-    ctx.fillStyle = "rgba(0, 0, 0, 0.3)"
-    ctx.fillRect(15, 15, 490, 490)
-    
-    // Draw board with 3D border
-    ctx.fillStyle = boardGradient
-    ctx.fillRect(0, 0, 490 - 15, 490 - 15)
 
     for (let r = 0; r < 7; r++) {
       for (let c = 0; c < 7; c++) {
-        const x = c * cellSize
-        const y = r * cellSize
+        const x = canvasPadding + c * cellSize
+        const y = canvasPadding + r * cellSize
         
         // If animating, skip drawing the moving letter in its original spot
         if (animation && animation.from.r === r && animation.from.c === c) continue
 
         if (board[r] && board[r][c] === "") {
-          // Draw empty space as a recessed area
+          // Draw empty space as a recessed area - exactly matching cell boundaries
           ctx.fillStyle = "#654321"
-          ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4)
+          ctx.fillRect(x, y, cellSize, cellSize)
           
           // Add shadow to make it look recessed
           ctx.strokeStyle = "#4A2C1A"
-          ctx.lineWidth = 2
-          ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4)
+          ctx.lineWidth = 1
+          ctx.strokeRect(x, y, cellSize, cellSize)
         } else if (board[r] && board[r][c]) {
           // Check if this tile is part of a completed word
           const isCompleted = completedTiles.some(tile => tile.r === r && tile.c === c)
@@ -63,32 +84,32 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
           
           // Draw enhanced bottom shadow with multiple layers
           ctx.fillStyle = "rgba(0, 0, 0, 0.6)"
-          ctx.fillRect(x + blockHeight, y + blockHeight, cellSize - 4, cellSize - 4)
+          ctx.fillRect(x + blockHeight, y + blockHeight, cellSize, cellSize)
           
           // Draw additional shadow layers for extreme depth
           ctx.fillStyle = "rgba(0, 0, 0, 0.4)"
-          ctx.fillRect(x + blockHeight - 3, y + blockHeight - 3, cellSize - 4, cellSize - 4)
+          ctx.fillRect(x + blockHeight - 3, y + blockHeight - 3, cellSize, cellSize)
           
           ctx.fillStyle = "rgba(0, 0, 0, 0.2)"
-          ctx.fillRect(x + blockHeight - 6, y + blockHeight - 6, cellSize - 4, cellSize - 4)
+          ctx.fillRect(x + blockHeight - 6, y + blockHeight - 6, cellSize, cellSize)
           
           // Draw right side of block with enhanced 3D
           ctx.fillStyle = isCompleted ? "#2E8B57" : "#A0522D" // Green for completed
           ctx.beginPath()
-          ctx.moveTo(x + cellSize - 4, y)
-          ctx.lineTo(x + cellSize - 4 + blockHeight, y + blockHeight)
-          ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight)
-          ctx.lineTo(x + cellSize - 4, y + cellSize - 4)
+          ctx.moveTo(x + cellSize, y)
+          ctx.lineTo(x + cellSize + blockHeight, y + blockHeight)
+          ctx.lineTo(x + cellSize + blockHeight, y + cellSize + blockHeight)
+          ctx.lineTo(x + cellSize, y + cellSize)
           ctx.closePath()
           ctx.fill()
           
           // Draw bottom side of block with enhanced 3D
           ctx.fillStyle = isCompleted ? "#228B22" : "#8B4513" // Green for completed
           ctx.beginPath()
-          ctx.moveTo(x, y + cellSize - 4)
-          ctx.lineTo(x + cellSize - 4, y + cellSize - 4)
-          ctx.lineTo(x + cellSize - 4 + blockHeight, y + cellSize - 4 + blockHeight)
-          ctx.lineTo(x + blockHeight, y + cellSize - 4 + blockHeight)
+          ctx.moveTo(x, y + cellSize)
+          ctx.lineTo(x + cellSize, y + cellSize)
+          ctx.lineTo(x + cellSize + blockHeight, y + cellSize + blockHeight)
+          ctx.lineTo(x + blockHeight, y + cellSize + blockHeight)
           ctx.closePath()
           ctx.fill()
           
@@ -97,13 +118,13 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
           ctx.lineWidth = 3
           ctx.beginPath()
           ctx.moveTo(x, y)
-          ctx.lineTo(x + cellSize - 4, y)
+          ctx.lineTo(x + cellSize, y)
           ctx.stroke()
           
           // Add intense highlight on left edge for dramatic 3D effect
           ctx.beginPath()
           ctx.moveTo(x, y)
-          ctx.lineTo(x, y + cellSize - 4)
+          ctx.lineTo(x, y + cellSize)
           ctx.stroke()
           
           // Add secondary highlight for extra depth
@@ -111,12 +132,12 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
           ctx.lineWidth = 1
           ctx.beginPath()
           ctx.moveTo(x + 1, y + 1)
-          ctx.lineTo(x + cellSize - 5, y + 1)
+          ctx.lineTo(x + cellSize - 1, y + 1)
           ctx.stroke()
           
           ctx.beginPath()
           ctx.moveTo(x + 1, y + 1)
-          ctx.lineTo(x + 1, y + cellSize - 5)
+          ctx.lineTo(x + 1, y + cellSize - 1)
           ctx.stroke()
           
           // Draw main face of block
@@ -136,7 +157,7 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
           }
           
           ctx.fillStyle = tileGradient
-          ctx.fillRect(x, y, cellSize - 4, cellSize - 4)
+          ctx.fillRect(x, y, cellSize, cellSize)
           
           // Add wood grain to tile
           ctx.strokeStyle = "#CD853F"
@@ -144,7 +165,7 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
           for (let i = 0; i < 3; i++) {
             ctx.beginPath()
             ctx.moveTo(x + 5 + i * 8, y + 5)
-            ctx.lineTo(x + 8 + i * 8, y + cellSize - 9)
+            ctx.lineTo(x + 8 + i * 8, y + cellSize - 5)
             ctx.stroke()
           }
           
@@ -157,8 +178,8 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
           ctx.shadowOffsetY = 2
           ctx.fillText(
             board[r][c],
-            x + (cellSize - 4) / 2,
-            y + (cellSize - 4) / 2
+            x + cellSize / 2,
+            y + cellSize / 2
           )
           ctx.restore()
 
@@ -169,10 +190,10 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
     // Draw the moving letter if animating
     if (animation) {
       const t = animation.progress / animation.duration
-      const startX = animation.from.c * cellSize + (cellSize - 4) / 2
-      const startY = animation.from.r * cellSize + (cellSize - 4) / 2
-      const endX = animation.to.c * cellSize + (cellSize - 4) / 2
-      const endY = animation.to.r * cellSize + (cellSize - 4) / 2
+      const startX = canvasPadding + animation.from.c * cellSize + cellSize / 2
+      const startY = canvasPadding + animation.from.r * cellSize + cellSize / 2
+      const endX = canvasPadding + animation.to.c * cellSize + cellSize / 2
+      const endY = canvasPadding + animation.to.r * cellSize + cellSize / 2
       const x = startX + (endX - startX) * t
       const y = startY + (endY - startY) * t
 
@@ -223,7 +244,7 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
       ctx.restore()
 
     }
-  }, [board, animation, completedWords, cellSize])
+  }, [board, animation, completedTiles, cellSize, boardSize, canvasPadding, canvasSize])
 
   const handleClick = useCallback((event) => {
     const canvas = canvasRef.current
@@ -231,13 +252,13 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
     const x = event.clientX - rect.left
     const y = event.clientY - rect.top
     
-    const c = Math.floor(x / cellSize)
-    const r = Math.floor(y / cellSize)
+    const c = Math.floor((x - canvasPadding) / cellSize)
+    const r = Math.floor((y - canvasPadding) / cellSize)
     
-    if (r >= 0 && r < 5 && c >= 0 && c < 5) {
+    if (r >= 0 && r < 7 && c >= 0 && c < 7) {
       onTileClick(r, c)
     }
-  }, [onTileClick, cellSize])
+  }, [onTileClick, cellSize, canvasPadding])
 
   const handleTouch = useCallback((event) => {
     event.preventDefault()
@@ -247,13 +268,30 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
     const x = touch.clientX - rect.left
     const y = touch.clientY - rect.top
     
-    const c = Math.floor(x / cellSize)
-    const r = Math.floor(y / cellSize)
+    const c = Math.floor((x - canvasPadding) / cellSize)
+    const r = Math.floor((y - canvasPadding) / cellSize)
     
-    if (r >= 0 && r < 5 && c >= 0 && c < 5) {
+    if (r >= 0 && r < 7 && c >= 0 && c < 7) {
       onTileClick(r, c)
     }
-  }, [onTileClick, cellSize])
+  }, [onTileClick, cellSize, canvasPadding])
+
+  // Initialize board size on mount
+  useEffect(() => {
+    const newSize = calculateBoardSize()
+    setBoardSize(newSize)
+  }, [calculateBoardSize])
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      const newSize = calculateBoardSize()
+      setBoardSize(newSize)
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [calculateBoardSize])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -261,18 +299,26 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
     drawBoard(ctx)
   }, [drawBoard])
 
+  // Calculate canvas size with padding around the tile area
+  const tileAreaSize = cellSize * 7
+  const canvasSize = tileAreaSize + (canvasPadding * 2)
+
   return (
     <canvas
       ref={canvasRef}
-      width={490}
-      height={490}
+      width={canvasSize}
+      height={canvasSize}
       onClick={handleClick}
       onTouchStart={handleTouch}
       style={{
         borderRadius: '8px',
         boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.2)',
         touchAction: 'none',
-        cursor: 'pointer'
+        cursor: 'pointer',
+        maxWidth: '100%',
+        height: 'auto',
+        margin: '20px auto', // Center with additional margin
+        display: 'block'
       }}
     />
   )

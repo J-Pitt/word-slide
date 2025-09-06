@@ -3115,6 +3115,39 @@ Note: Some browsers don't support PWA installation in development mode.`)
             >
               🏠 Main Menu
             </button>
+            {showInstallButton && (
+              <button 
+                onClick={handleInstallClick}
+                style={{
+                  background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+                  color: 'white',
+                  border: '3px solid #4CAF50',
+                  padding: 'clamp(14px, 3.5vw, 18px) clamp(24px, 6vw, 36px)',
+                  borderRadius: '12px',
+                  fontSize: 'clamp(15px, 4.5vw, 17px)',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  minHeight: '48px',
+                  minWidth: '100px',
+                  boxShadow: '0 8px 16px rgba(76, 175, 80, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
+                  transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                  touchAction: 'manipulation',
+                  textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-3px) scale(1.02)'
+                  e.target.style.boxShadow = '0 12px 24px rgba(76, 175, 80, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0) scale(1)'
+                  e.target.style.boxShadow = '0 8px 16px rgba(76, 175, 80, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+                }}
+              >
+                📱 Install
+              </button>
+            )}
           </div>
           
           {/* Fireworks Animation */}
@@ -4002,47 +4035,6 @@ Note: Some browsers don't support PWA installation in development mode.`)
         </div>
       )}
 
-      {/* PWA Install Button */}
-      {showInstallButton && (
-        <div style={{
-          position: 'fixed',
-          bottom: '20px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 10000,
-          animation: 'fadeIn 0.5s ease-in'
-        }}>
-          <button
-            onClick={handleInstallClick}
-            style={{
-              background: 'linear-gradient(135deg, #4CAF50, #45a049)',
-              color: 'white',
-              border: '2px solid rgba(255, 255, 255, 0.2)',
-              padding: '12px 24px',
-              borderRadius: '25px',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              boxShadow: '0 4px 15px rgba(76, 175, 80, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.3s ease',
-              backdropFilter: 'blur(10px)'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.transform = 'scale(1.05)'
-              e.target.style.boxShadow = '0 6px 20px rgba(76, 175, 80, 0.4)'
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.transform = 'scale(1)'
-              e.target.style.boxShadow = '0 4px 15px rgba(76, 175, 80, 0.3)'
-            }}
-          >
-            📱 Install Crosslide
-          </button>
-        </div>
-      )}
       
     </div>
   )

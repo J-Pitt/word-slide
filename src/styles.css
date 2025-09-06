@@ -1326,6 +1326,10 @@ h1 {
         font-size: 16px;
         margin: 15px 0;
     }
+    
+    canvas {
+        margin: 5px 0;
+    }
 }
 
 /* Landscape mobile optimization */
@@ -1355,6 +1359,10 @@ h1 {
     .subtitle {
         font-size: 14px;
         margin: 10px 0;
+    }
+    
+    canvas {
+        margin: 5px 0;
     }
 }
 
