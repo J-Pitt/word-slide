@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useCallback } from 'react'
 
 const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) => {
   const canvasRef = useRef(null)
-  const cellSize = 350 / 7 // 350px canvas / 7 columns
+  const cellSize = 490 / 7 // 490px canvas / 7 columns (increased from 420px)
 
   const drawBoard = useCallback((ctx) => {
     ctx.font = `bold ${cellSize / 2.5}px Arial`
@@ -10,32 +10,32 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
     ctx.textBaseline = "middle"
 
     // Draw wooden board background with enhanced 3D effect
-    const boardGradient = ctx.createLinearGradient(0, 0, 350, 350)
+    const boardGradient = ctx.createLinearGradient(0, 0, 490, 490)
     boardGradient.addColorStop(0, "#8B4513") // Saddle brown
     boardGradient.addColorStop(0.3, "#A0522D") // Sienna
     boardGradient.addColorStop(0.7, "#8B4513") // Saddle brown
     boardGradient.addColorStop(1, "#654321") // Dark brown
     
     ctx.fillStyle = boardGradient
-    ctx.fillRect(0, 0, 350, 350)
+    ctx.fillRect(0, 0, 490, 490)
     
     // Add enhanced wood grain effect
     ctx.strokeStyle = "#654321"
     ctx.lineWidth = 1
-    for (let i = 0; i < 350; i += 20) {
+    for (let i = 0; i < 490; i += 20) {
       ctx.beginPath()
       ctx.moveTo(i, 0)
-      ctx.lineTo(i + 10, 350)
+      ctx.lineTo(i + 10, 490)
       ctx.stroke()
     }
     
     // Add board shadow for 3D effect
     ctx.fillStyle = "rgba(0, 0, 0, 0.3)"
-    ctx.fillRect(15, 15, 350, 350)
+    ctx.fillRect(15, 15, 490, 490)
     
     // Draw board with 3D border
     ctx.fillStyle = boardGradient
-    ctx.fillRect(0, 0, 350 - 15, 350 - 15)
+    ctx.fillRect(0, 0, 490 - 15, 490 - 15)
 
     for (let r = 0; r < 7; r++) {
       for (let c = 0; c < 7; c++) {
@@ -264,8 +264,8 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
   return (
     <canvas
       ref={canvasRef}
-      width={350}
-      height={350}
+      width={490}
+      height={490}
       onClick={handleClick}
       onTouchStart={handleTouch}
       style={{

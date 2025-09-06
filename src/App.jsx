@@ -2288,7 +2288,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 display: 'grid',
                 gridTemplateColumns: 'repeat(5, 1fr)',
                 gap: '3px',
-                width: 'clamp(200px, 25vw, 300px)',
+                width: 'clamp(300px, 35vw, 400px)',
                 aspectRatio: '1',
                 background: 'rgba(47, 27, 20, 0.3)',
                 padding: '8px',
@@ -2851,7 +2851,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
                     style={{
-                        width: 'clamp(40px, 10vw, 55px)',
+                        width: 'clamp(60px, 14vw, 80px)',
                         height: 'clamp(40px, 10vw, 55px)',
                         margin: '1px',
                         boxSizing: 'border-box',
@@ -2884,10 +2884,10 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         ` : 'none',
                         // Prevent size changes during transforms
                         transformOrigin: 'center center',
-                        minWidth: 'clamp(40px, 10vw, 55px)',
-                        minHeight: 'clamp(40px, 10vw, 55px)',
-                        maxWidth: 'clamp(40px, 10vw, 55px)',
-                        maxHeight: 'clamp(40px, 10vw, 55px)',
+                        minWidth: 'clamp(60px, 14vw, 80px)',
+                        minHeight: 'clamp(60px, 14vw, 80px)',
+                        maxWidth: 'clamp(60px, 14vw, 80px)',
+                        maxHeight: 'clamp(60px, 14vw, 80px)',
                         // transition: 'all 0.1s ease', // Disabled to prevent ghosting
                       position: 'relative',
                       userSelect: 'none',
@@ -2974,7 +2974,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     data-animation-overlay
                 style={{
                   position: 'absolute',
-                      width: 'clamp(40px, 10vw, 55px)',
+                      width: 'clamp(60px, 14vw, 80px)',
                       height: 'clamp(40px, 10vw, 55px)',
                   backgroundColor: '#F5DEB3',
                   border: '2px solid #8B4513',
@@ -3784,7 +3784,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     <div
                       key={`${r}-${c}`}
                       style={{
-                        width: 'clamp(40px, 10vw, 55px)',
+                        width: 'clamp(60px, 14vw, 80px)',
                         height: 'clamp(40px, 10vw, 55px)',
                         margin: '1px', // Reduced gap between tiles
                         marginLeft: c === 0 ? '0px' : '1px', // First tile touches left edge
