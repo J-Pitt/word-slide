@@ -9,17 +9,6 @@ const GameInfo = ({ targetWords, moveCount, currentLevel, maxLevels, gameMode = 
 
   return (
     <div className="game-info">
-      {/* Debug test - remove this later */}
-      <div style={{ 
-        background: 'green', 
-        color: 'white', 
-        padding: '5px', 
-        margin: '5px', 
-        border: '2px solid lime',
-        fontSize: '12px'
-      }}>
-        🟢 GameInfo rendering
-      </div>
       
       <div className="game-info-header">
         <div className="game-stats">
@@ -27,7 +16,7 @@ const GameInfo = ({ targetWords, moveCount, currentLevel, maxLevels, gameMode = 
             Level: <span>{currentLevel}</span>/{maxLevels}
           </p>
           <p>
-            Slide tiles to form the words: <strong>{targetWords.join(', ').toUpperCase()}</strong>
+            Slide tiles to form the {targetWords.length === 1 ? 'word' : 'words'}: <strong>{targetWords.join(', ').toUpperCase()}</strong>
           </p>
           <p>
             Moves: <span>{moveCount}</span>

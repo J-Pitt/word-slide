@@ -7,12 +7,14 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
   const [userStats, setUserStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
   const { token, user } = useAuth();
 
   const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev';
 
   useEffect(() => {
     if (isOpen) {
+      setRetryCount(0);
       fetchLeaderboard();
       if (token) {
         fetchUserStats();
@@ -20,20 +22,34 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
     }
   }, [isOpen, gameMode, token]);
 
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+    fetchLeaderboard();
+    if (token) {
+      fetchUserStats();
+    }
+  };
+
   const fetchLeaderboard = async () => {
     try {
       setLoading(true);
+      setError('');
       const response = await fetch(`${API_BASE}/game/leaderboard?gameMode=${gameMode}&limit=20`);
       
       if (response.ok) {
         const data = await response.json();
-        setLeaderboard(data.leaderboard);
+        if (data.success && data.leaderboard) {
+          setLeaderboard(data.leaderboard);
+        } else {
+          setError('Invalid leaderboard data received');
+        }
       } else {
-        setError('Failed to fetch leaderboard');
+        const errorData = await response.json().catch(() => ({}));
+        setError(errorData.error || `Failed to fetch leaderboard (${response.status})`);
       }
     } catch (error) {
       console.error('Error fetching leaderboard:', error);
-      setError('Network error');
+      setError('Unable to connect to leaderboard service. Please check your internet connection.');
     } finally {
       setLoading(false);
     }
@@ -44,7 +60,12 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
       const parts = token?.split('.')
       const payload = parts?.length === 3 ? JSON.parse(atob(parts[1])) : null
       const userId = payload?.userId
-      if (!userId) return
+      
+      if (!userId) {
+        console.warn('No user ID found in token');
+        return;
+      }
+      
       const response = await fetch(`${API_BASE}/user/${userId}/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -53,8 +74,14 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
       
       if (response.ok) {
         const data = await response.json();
-        const currentModeStats = data.stats.find(stat => stat.game_mode === gameMode);
-        setUserStats(currentModeStats);
+        if (data.success && data.stats) {
+          const currentModeStats = data.stats.find(stat => stat.game_mode === gameMode);
+          setUserStats(currentModeStats || null);
+        } else {
+          console.warn('Invalid user stats data received');
+        }
+      } else {
+        console.warn(`Failed to fetch user stats (${response.status})`);
       }
     } catch (error) {
       console.error('Error fetching user stats:', error);
@@ -62,7 +89,17 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
   };
 
   const formatNumber = (num) => {
-    return num.toLocaleString();
+    const number = Number(num);
+    return isNaN(number) ? '0' : number.toLocaleString();
+  };
+
+  const validatePlayerData = (player) => {
+    return {
+      username: player.username || player.user_name || 'Anonymous',
+      words_solved: Math.max(0, Number(player.words_solved || player.wordsSolved || 0)),
+      total_moves: Math.max(0, Number(player.total_moves || player.totalMoves || 0)),
+      games_played: Math.max(0, Number(player.games_played || 0))
+    };
   };
 
   const getRankIcon = (rank) => {
@@ -101,12 +138,23 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
         }}
       >
         <div className="leaderboard-header">
-          <h2>{gameMode === 'original' ? 'Classic Mode' : 'Tetris Mode'} Leaderboard</h2>
+          <h2>Leaderboard</h2>
           <button className="leaderboard-close-btn" onClick={onClose}>×</button>
         </div>
 
         <div className="leaderboard-content">
-          {error && <div className="leaderboard-error">{error}</div>}
+          {error && (
+            <div className="leaderboard-error">
+              <div>{error}</div>
+              <button 
+                className="retry-button" 
+                onClick={handleRetry}
+                disabled={loading}
+              >
+                {loading ? 'Retrying...' : 'Try Again'}
+              </button>
+            </div>
+          )}
           
           {loading ? (
             <div className="leaderboard-loading">Loading leaderboard...</div>
@@ -119,19 +167,19 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
                   <div className="stats-grid">
                     <div className="stat-item">
                       <span className="stat-label">Words Solved:</span>
-                      <span className="stat-value">{formatNumber(userStats.words_solved)}</span>
+                      <span className="stat-value">{formatNumber(userStats.words_solved || 0)}</span>
                     </div>
                     <div className="stat-item">
                       <span className="stat-label">Total Moves:</span>
-                      <span className="stat-value">{formatNumber(userStats.total_moves)}</span>
+                      <span className="stat-value">{formatNumber(userStats.total_moves || 0)}</span>
                     </div>
                     <div className="stat-item">
                       <span className="stat-label">Games Played:</span>
-                      <span className="stat-value">{formatNumber(userStats.games_played)}</span>
+                      <span className="stat-value">{formatNumber(userStats.games_played || 0)}</span>
                     </div>
                     <div className="stat-item">
                       <span className="stat-label">Best Score:</span>
-                      <span className="stat-value">{formatNumber(userStats.best_score)}</span>
+                      <span className="stat-value">{formatNumber(userStats.best_score || 0)}</span>
                     </div>
                   </div>
                 </div>
@@ -145,21 +193,36 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
                   <div className="player-col">Player</div>
                   <div className="words-col">Words</div>
                   <div className="moves-col">Moves</div>
-                  <div className="games-col">Games</div>
                 </div>
                 
                 <div className="table-body">
-                  {leaderboard.map((player, index) => (
-                    <div key={index} className={`table-row ${index < 3 ? 'top-three' : ''}`}>
-                      <div className="rank-col">
-                        <span className="rank-icon">{getRankIcon(index + 1)}</span>
+                  {leaderboard.map((player, index) => {
+                    const validatedPlayer = validatePlayerData(player);
+                    return (
+                      <div 
+                        key={index} 
+                        className={`table-row ${index < 3 ? 'top-three' : ''}`}
+                      >
+                        <div className="rank-col">
+                          <span className={`rank-icon ${index < 3 ? 'top-rank' : ''}`}>
+                            {getRankIcon(index + 1)}
+                          </span>
+                        </div>
+                        <div 
+                          className="player-col" 
+                          title={validatedPlayer.username}
+                        >
+                          {validatedPlayer.username}
+                        </div>
+                        <div className="words-col">
+                          {formatNumber(validatedPlayer.words_solved)}
+                        </div>
+                        <div className="moves-col">
+                          {formatNumber(validatedPlayer.total_moves)}
+                        </div>
                       </div>
-                      <div className="player-col">{player.username}</div>
-                      <div className="words-col">{formatNumber(player.words_solved)}</div>
-                      <div className="moves-col">{formatNumber(player.total_moves)}</div>
-                      <div className="games-col">{formatNumber(player.games_played)}</div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

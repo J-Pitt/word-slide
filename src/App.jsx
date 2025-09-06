@@ -6,9 +6,12 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import './styles.css'
 
 function App() {
-  console.log('App component rendering...')
   
-  const { user, isAuthenticated } = useAuth?.() || {}
+  const { user, isAuthenticated, token } = useAuth() || {}
+  
+  // PWA install state
+  const [deferredPrompt, setDeferredPrompt] = useState(null)
+  const [showInstallButton, setShowInstallButton] = useState(false)
   
   const [currentView, setCurrentView] = useState('menu')
   
@@ -26,6 +29,23 @@ function App() {
   const [showRules, setShowRules] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
+  
+  // Mini gameboard play button state
+  const [miniGameCompleted, setMiniGameCompleted] = useState(false)
+  const [miniEmptyPos, setMiniEmptyPos] = useState({ r: 2, c: 3 }) // Row 2 (middle), Col 3 (empty space)
+  const [miniBoard, setMiniBoard] = useState([
+    ['R', 'T', 'K', 'M', 'N'],
+    ['B', 'F', 'H', 'S', 'C'],
+    ['P', 'L', 'A', '', 'Y'], // Middle row with PLAY
+    ['D', 'W', 'Z', 'V', 'Q'],
+    ['J', 'G', 'X', 'U', 'I']
+  ])
+  const [dragState, setDragState] = useState({
+    isDragging: false,
+    draggedTile: null, // {r, c}
+    dragOffset: { x: 0, y: 0 },
+    startPos: { x: 0, y: 0 }
+  })
   
   // Tetris-style word game state
   const [tetrisBoard, setTetrisBoard] = useState([])
@@ -48,6 +68,113 @@ function App() {
     setEmptyPos({ r: 6, c: 6 })
     // Board will regenerate via existing effect when board is empty
   }, [])
+
+  // Update database with level completion stats
+  const updateDatabaseStats = useCallback(async (level, moves, wordsCompleted) => {
+    if (!user || !token) {
+      console.log('No user or token, skipping database update')
+      return
+    }
+    
+    console.log('Updating database stats:', { level, moves, wordsCompleted, user, token })
+    
+    try {
+      const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
+      const response = await fetch(`${API_BASE}/game/stats`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          gameMode: 'original',
+          wordsSolved: wordsCompleted,
+          totalMoves: moves
+        })
+      })
+      
+      if (!response.ok) {
+        console.error('Failed to update database:', response.statusText, response.status)
+        console.error('This might be a CORS issue - check server configuration')
+      } else {
+        console.log('Database update successful')
+      }
+    } catch (error) {
+      console.error('Error updating database:', error)
+    }
+  }, [user, token])
+
+  // PWA install prompt handling
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault()
+      // Stash the event so it can be triggered later
+      setDeferredPrompt(e)
+      // Show the install button
+      setShowInstallButton(true)
+    }
+
+    const handleAppInstalled = () => {
+      setShowInstallButton(false)
+      setDeferredPrompt(null)
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    window.addEventListener('appinstalled', handleAppInstalled)
+
+    // Check if already installed
+    let timer = null
+    if (!window.matchMedia('(display-mode: standalone)').matches) {
+      // For testing purposes, show button after 3 seconds if no prompt
+      timer = setTimeout(() => {
+        setShowInstallButton(true)
+      }, 3000)
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', handleAppInstalled)
+      if (timer) clearTimeout(timer)
+    }
+  }, [])
+
+  // Handle PWA install button click
+  const handleInstallClick = async () => {
+    
+    if (!deferredPrompt) {
+      // Show instructions if no prompt is available
+      alert(`To install Crosslide as an app:
+
+🖥️ Desktop (Chrome/Edge):
+• Look for install icon (⊞) in address bar
+• Or go to Settings → Install Crosslide
+
+📱 Mobile:
+• Chrome: Menu → Add to Home screen
+• Safari: Share → Add to Home Screen
+
+Note: Some browsers don't support PWA installation in development mode.`)
+      return
+    }
+
+    try {
+      // Show the install prompt
+      deferredPrompt.prompt()
+      
+      // Wait for the user to respond to the prompt
+      const { outcome } = await deferredPrompt.userChoice
+      
+      // Handle install outcome
+      
+      // Clear the deferredPrompt
+      setDeferredPrompt(null)
+      setShowInstallButton(false)
+    } catch (error) {
+      console.error('PWA install error:', error)
+    }
+  }
 
   // Advance to next level
   const goToNextLevel = useCallback(() => {
@@ -204,7 +331,7 @@ function App() {
 
   // Start Tetris game
   const startTetrisGame = useCallback(() => {
-    console.log('Starting Tetris-style word game...')
+    // Starting Tetris-style word game
     setCurrentView('tetris')
     setTetrisGameOver(false)
     setTetrisPaused(false)
@@ -242,7 +369,7 @@ function App() {
               newBoard[r][i] = null
             }
             wordsCleared++
-            console.log(`Word completed: ${currentWord}`)
+            // Word completed
           }
           currentWord = ''
           wordStart = -1
@@ -466,15 +593,12 @@ function App() {
   const [WORD_SETS, setWORD_SETS] = useState([])
   
   useEffect(() => {
-    console.log('Initializing WORD_SETS...')
     const wordSets = generateWordSets()
-    console.log('Generated word sets:', wordSets)
     setWORD_SETS(wordSets)
   }, [generateWordSets])
 
   // Create dark wood paneling background
   useEffect(() => {
-    console.log('Creating wood paneling...')
     const existingPaneling = document.getElementById('dark-wood-paneling')
     if (existingPaneling) {
       existingPaneling.remove()
@@ -494,7 +618,6 @@ function App() {
     `
     
     document.body.appendChild(panelingContainer)
-    console.log('Wood paneling created')
   }, [])
 
   // Utility function to shuffle arrays
@@ -563,6 +686,137 @@ function App() {
     }
   }, [])
 
+  // Fast word completion check - runs synchronously during moves
+  const checkWordCompletionSync = useCallback((boardToCheck) => {
+    if (!boardToCheck || boardToCheck.length === 0 || !boardToCheck[0] || currentView !== 'original') return
+    if (levelTransitioning) return
+
+    const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
+    if (!targetWords || targetWords.length === 0) return
+
+    // Check for completed words - proper position checking
+    const newCompletedWords = new Set()
+    
+    for (const word of targetWords) {
+      const wordLower = word.toLowerCase()
+      let wordFound = false
+      
+      // Check horizontal words
+      for (let row = 0; row < boardToCheck.length && !wordFound; row++) {
+        for (let col = 0; col <= boardToCheck[row].length - word.length && !wordFound; col++) {
+          const horizontalWord = boardToCheck[row].slice(col, col + word.length).join('').toLowerCase()
+          if (horizontalWord === wordLower) {
+            newCompletedWords.add(word)
+            wordFound = true
+          }
+        }
+      }
+      
+      // Check vertical words
+      for (let col = 0; col < boardToCheck[0].length && !wordFound; col++) {
+        for (let row = 0; row <= boardToCheck.length - word.length && !wordFound; row++) {
+          const verticalWord = []
+          for (let i = 0; i < word.length; i++) {
+            verticalWord.push(boardToCheck[row + i][col])
+          }
+          if (verticalWord.join('').toLowerCase() === wordLower) {
+            newCompletedWords.add(word)
+            wordFound = true
+          }
+        }
+      }
+    }
+    
+    // Update completed words immediately - this will trigger the existing isLetterInCompletedWord logic
+    if (newCompletedWords.size > 0) {
+      setCompletedWords(newCompletedWords)
+      
+      // Check if level is completed
+      if (newCompletedWords.size === targetWords.length && !levelTransitioning) {
+        setLevelTransitioning(true)
+        setShowFireworks(true)
+        
+        // Update database stats after UI updates (non-blocking)
+        setTimeout(() => {
+          updateDatabaseStats(currentLevel, moveCount, newCompletedWords.size)
+        }, 100)
+        
+        // Extravagant fireworks - particles launch from bottom and explode over board
+        const colors = ['#FFD700', '#FF4757', '#5352ed', '#00d2d3', '#ff6348', '#FF69B4', '#32CD32', '#FF8C00', '#8A2BE2', '#00CED1']
+        const newFireworks = []
+        
+        // Create 12 main fireworks that launch from below screen
+        for (let i = 0; i < 12; i++) {
+          const launchX = 5 + Math.random() * 90 // Spread across entire width
+          const explodeY = 10 + Math.random() * 50 // Explode over the game board
+          const explodeX = launchX + (Math.random() - 0.5) * 25 // More horizontal drift
+          
+          newFireworks.push({
+            id: i,
+            launchX: launchX,
+            launchY: 100, // Start from below screen
+            explodeX: explodeX,
+            explodeY: explodeY,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            delay: i * 200, // Faster launches
+            size: 1.3,
+            intensity: 'high',
+            particleCount: 30 + Math.floor(Math.random() * 20) // 30-50 particles per firework
+          })
+        }
+        
+        // Add secondary wave of fireworks
+        for (let i = 12; i < 18; i++) {
+          const launchX = 10 + Math.random() * 80
+          const explodeY = 20 + Math.random() * 40
+          const explodeX = launchX + (Math.random() - 0.5) * 20
+          
+          newFireworks.push({
+            id: i,
+            launchX: launchX,
+            launchY: 100,
+            explodeX: explodeX,
+            explodeY: explodeY,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            delay: 1500 + (i - 12) * 150,
+            size: 1.0,
+            intensity: 'high',
+            particleCount: 20 + Math.floor(Math.random() * 15) // 20-35 particles
+          })
+        }
+        
+        // Add final wave of smaller fireworks
+        for (let i = 18; i < 24; i++) {
+          const launchX = 15 + Math.random() * 70
+          const explodeY = 25 + Math.random() * 35
+          const explodeX = launchX + (Math.random() - 0.5) * 15
+          
+          newFireworks.push({
+            id: i,
+            launchX: launchX,
+            launchY: 100,
+            explodeX: explodeX,
+            explodeY: explodeY,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            delay: 3000 + (i - 18) * 100,
+            size: 0.8,
+            intensity: 'medium',
+            particleCount: 15 + Math.floor(Math.random() * 10) // 15-25 particles
+          })
+        }
+        setFireworks(newFireworks)
+        
+        // Show level complete modal after 9 seconds (more time for massive fireworks display)
+        setTimeout(() => {
+          setShowFireworks(false)
+          setFireworks([])
+          setShowLevelCompleteModal(true)
+        }, 9000)
+      }
+    }
+  }, [currentLevel, currentView, levelTransitioning, moveCount, updateDatabaseStats])
+
+
   // Handle tile movement with frame-based sliding animation (matching original JS)
   // Direct move without animation overlay
   const directMove = useCallback((r, c) => {
@@ -570,19 +824,21 @@ function App() {
       return // Don't allow moving tiles from completed words
     }
 
-    setBoard(prevBoard => {
-      const b = prevBoard.map(row => [...row])
-      b[emptyPos.r][emptyPos.c] = board[r][c]
-      b[r][c] = ''
-      setTimeout(() => checkWordCompletion(b), 0)
-      return b
-    })
+    // Create the new board state first
+    const newBoard = board.map(row => [...row])
+    newBoard[emptyPos.r][emptyPos.c] = board[r][c]
+    newBoard[r][c] = ''
+    
+    // Check word completion immediately with the new board state
+    checkWordCompletionSync(newBoard)
+    
+    // Then update the state
+    setBoard(newBoard)
     setEmptyPos({ r, c })
     setMoveCount(prev => prev + 1)
-  }, [emptyPos, board, isLetterInCompletedWord])
+  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync])
 
   const tryMove = useCallback((r, c) => {
-    console.log(`tryMove called for position (${r}, ${c})`)
 
     const dr = Math.abs(r - emptyPos.r)
     const dc = Math.abs(c - emptyPos.c)
@@ -590,29 +846,28 @@ function App() {
     if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
       // Check if the tile being moved is part of a completed word
       if (isLetterInCompletedWord(r, c)) {
-        console.log(`Tile is completed, cannot move`)
         return // Don't allow moving tiles from completed words
       }
 
-      console.log(`Moving from (${r}, ${c}) to (${emptyPos.r}, ${emptyPos.c})`)
       // Direct move without animation
-      setBoard(prevBoard => {
-        const b = prevBoard.map(row => [...row])
-        b[emptyPos.r][emptyPos.c] = board[r][c]
-        b[r][c] = ''
-        setTimeout(() => checkWordCompletion(b), 0)
-        return b
-      })
+      // Create the new board state first
+      const newBoard = board.map(row => [...row])
+      newBoard[emptyPos.r][emptyPos.c] = board[r][c]
+      newBoard[r][c] = ''
+      
+      // Check word completion immediately with the new board state
+      checkWordCompletionSync(newBoard)
+      
+      // Then update the state
+      setBoard(newBoard)
       setEmptyPos({ r, c })
       setMoveCount(prev => prev + 1)
     } else {
-      console.log(`Invalid move - not adjacent to empty space`)
     }
-  }, [emptyPos, board, isLetterInCompletedWord])
+  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync])
 
   // Simple fallback board generation (doesn't depend on WORD_SETS)
   const generateFallbackBoard = useCallback(() => {
-    console.log('Generating fallback board...')
     const fallbackBoard = []
     for (let r = 0; r < 7; r++) {
       fallbackBoard[r] = []
@@ -626,7 +881,6 @@ function App() {
     }
     setBoard(fallbackBoard)
     setEmptyPos({ r: 6, c: 6 })
-    console.log('Fallback board generated:', fallbackBoard)
   }, [])
 
   // Check if a board is solvable by verifying target words can be reached
@@ -656,32 +910,24 @@ function App() {
     // Check if all required letters are available
     for (let letter in requiredLetters) {
       if (!availableLetters[letter] || availableLetters[letter] < requiredLetters[letter]) {
-        console.log(`Board not solvable: Missing ${requiredLetters[letter] - (availableLetters[letter] || 0)} letter(s) '${letter}'`)
         return false
       }
     }
     
-    console.log('Board is solvable: All required letters are available')
     return true
   }, [])
 
   // Generate a sophisticated game board that ensures target words are solvable
   const generateBoard = useCallback(() => {
-    console.log('Generating solvable board...')
-    console.log('WORD_SETS:', WORD_SETS)
-    console.log('WORD_SETS length:', WORD_SETS?.length)
     
     if (!WORD_SETS || WORD_SETS.length === 0) {
-      console.log('WORD_SETS not ready, using fallback board generation')
       generateFallbackBoard()
       return
     }
     
     const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
-    console.log('Target words for level', currentLevel, ':', targetWords)
     
     if (!targetWords || targetWords.length === 0) {
-      console.log('No target words available, using fallback board generation')
       generateFallbackBoard()
       return
     }
@@ -729,11 +975,9 @@ function App() {
           }
           setBoard(newBoard)
           setEmptyPos({ r: row, c: emptyCol })
-          console.log('Level 1 board set for one-slide solve.', { empty: { r: row, c: emptyCol }, word: firstWord })
           return
         }
       } catch (e) {
-        console.warn('Level 1 one-slide setup failed, falling back to normal generation', e)
       }
     }
     
@@ -742,7 +986,6 @@ function App() {
     
     do {
       attempts++
-      console.log(`Board generation attempt ${attempts}/${maxAttempts}`)
       
       const newBoard = []
       
@@ -914,9 +1157,6 @@ function App() {
       if (!hasSolvedWords) {
         setBoard(newBoard)
           setEmptyPos({ r: emptyRow, c: emptyCol })
-          console.log('Generated solvable board with empty position:', { r: emptyRow, c: emptyCol })
-          console.log('Target words can be solved:', targetWords)
-          console.log('New board:', newBoard)
         return
         }
       }
@@ -924,7 +1164,6 @@ function App() {
     } while (attempts < maxAttempts)
     
     // If we couldn't generate a good board, use fallback
-    console.log('Could not generate solvable board, using fallback')
     generateFallbackBoard()
   }, [currentLevel, WORD_SETS, generateFallbackBoard])
 
@@ -1191,13 +1430,8 @@ function App() {
 
   // Initialize board when component mounts
   useEffect(() => {
-    console.log('Board initialization useEffect triggered')
-    console.log('currentView:', currentView)
-    console.log('board.length:', board.length)
-    console.log('WORD_SETS ready:', WORD_SETS.length > 0)
     
     if (currentView === 'original' && board.length === 0) {
-      console.log('Calling generateBoard from initialization useEffect')
       generateBoard()
     }
     
@@ -1205,7 +1439,6 @@ function App() {
     if (currentView === 'original' && board.length === 0) {
       const timer = setTimeout(() => {
         if (board.length === 0) {
-          console.log('Fallback: generating fallback board after delay')
           generateFallbackBoard()
         }
       }, 1000)
@@ -1217,7 +1450,6 @@ function App() {
   // Generate board when level changes (but not on initial load)
   useEffect(() => {
     if (currentLevel > 1 && currentView === 'original') {
-      console.log(`Level changed to ${currentLevel}, generating new board`)
       generateBoard()
     }
   }, [currentLevel, currentView, generateBoard])
@@ -1254,82 +1486,12 @@ function App() {
     }
   }, [])
 
-  // Check for word completion
-  const checkWordCompletion = useCallback((boardOverride) => {
-    const boardToCheck = boardOverride || board
-    if (!boardToCheck || boardToCheck.length === 0 || !boardToCheck[0]) return
-    
-    const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
-    if (!targetWords || targetWords.length === 0) return
-    
-    const newCompletedWords = new Set(completedWords)
-    
-    for (const word of targetWords) {
-      // Check horizontal words
-      for (let row = 0; row < boardToCheck.length; row++) {
-        for (let col = 0; col <= boardToCheck[row].length - word.length; col++) {
-          const horizontalWord = boardToCheck[row].slice(col, col + word.length).join('').toLowerCase()
-          if (horizontalWord === word.toLowerCase()) {
-            newCompletedWords.add(word)
-            break
-          }
-        }
-      }
-      
-      // Check vertical words
-      for (let col = 0; col < boardToCheck[0].length; col++) {
-        for (let row = 0; row <= boardToCheck.length - word.length; row++) {
-          const verticalWord = []
-          for (let i = 0; i < word.length; i++) {
-            verticalWord.push(boardToCheck[row + i][col])
-          }
-          if (verticalWord.join('').toLowerCase() === word.toLowerCase()) {
-            newCompletedWords.add(word)
-            break
-          }
-        }
-      }
-    }
-    
-    setCompletedWords(newCompletedWords)
-    
-    // Check if level is completed
-    if (newCompletedWords.size === targetWords.length && !levelTransitioning) {
-      console.log(`Level ${currentLevel} completed! Starting fireworks...`)
-      setLevelTransitioning(true)
-      setShowFireworks(true)
-      
-      // Create fireworks that launch from bottom and explode
-      const newFireworks = []
-      for (let i = 0; i < 6; i++) {
-        const launchX = 20 + Math.random() * 60 // Launch position across screen
-        const explodeY = 15 + Math.random() * 25 // Explosion height in upper area
-        newFireworks.push({
-          id: i,
-          launchX: launchX,
-          launchY: 95, // Start near bottom of screen
-          explodeX: launchX + (Math.random() - 0.5) * 15, // Slight drift during flight
-          explodeY: explodeY,
-          color: ['#FFD700', '#FF4757', '#5352ed', '#00d2d3', '#ff6348', '#7bed9f'][i],
-          delay: i * 800 + Math.random() * 300 // Staggered launch timing
-        })
-      }
-      setFireworks(newFireworks)
-      
-      // Show fireworks for 5 seconds, then show level complete modal
-      setTimeout(() => {
-        setShowFireworks(false)
-        setFireworks([])
-        setShowLevelCompleteModal(true)
-      }, 5000)
-    }
-  }, [board, currentLevel, completedWords, WORD_SETS, generateBoard, levelTransitioning])
+
 
   // Handle next level button
   const handleNextLevel = useCallback(() => {
     setShowLevelCompleteModal(false)
     if (currentLevel < 20) {
-      console.log(`Advancing from level ${currentLevel} to level ${currentLevel + 1}`)
       setCurrentLevel(currentLevel + 1)
       setHintCount(3)
       setCompletedWords(new Set())
@@ -1680,21 +1842,185 @@ function App() {
   //   }
   // }, [animating, animation, checkWordCompletion, tileStep])
 
+  // Handle drag start
+  const handleMiniDragStart = useCallback((r, c, e) => {
+    e.stopPropagation()
+    if (miniGameCompleted) return
+    
+    // Check if tile can move (adjacent to empty)
+    const dr = Math.abs(r - miniEmptyPos.r)
+    const dc = Math.abs(c - miniEmptyPos.c)
+    
+    if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
+      const clientX = e.clientX || e.touches?.[0]?.clientX
+      const clientY = e.clientY || e.touches?.[0]?.clientY
+      
+      setDragState({
+        isDragging: true,
+        draggedTile: { r, c },
+        dragOffset: { x: 0, y: 0 },
+        startPos: { x: clientX, y: clientY }
+      })
+    }
+  }, [miniEmptyPos, miniGameCompleted])
+
+  // Handle drag move
+  const handleMiniDragMove = useCallback((e) => {
+    if (!dragState.isDragging || !dragState.draggedTile) return
+    
+    const clientX = e.clientX || e.touches?.[0]?.clientX
+    const clientY = e.clientY || e.touches?.[0]?.clientY
+    
+    if (clientX !== undefined && clientY !== undefined) {
+      const deltaX = clientX - dragState.startPos.x
+      const deltaY = clientY - dragState.startPos.y
+      
+      // Constrain movement to valid directions and within bounds
+      const { r, c } = dragState.draggedTile
+      const emptyR = miniEmptyPos.r
+      const emptyC = miniEmptyPos.c
+      
+      let constrainedX = 0
+      let constrainedY = 0
+      
+      // Calculate tile size and gap (approximately 50px based on CSS, with small gap)
+      const tileSize = 50
+      const gapSize = 2 // Small gap between tiles
+      const maxDragDistance = tileSize - (gapSize * 2) // Leave small buffer so tiles barely touch
+      
+      // Only allow movement toward the empty space, but not past it
+      if (r === emptyR) {
+        // Same row - allow horizontal movement
+        if (c > emptyC) {
+          // Tile is to the right of empty, allow left movement but stop before overlapping adjacent tile
+          const maxLeftMovement = -maxDragDistance
+          constrainedX = Math.max(maxLeftMovement, Math.min(0, deltaX))
+        } else {
+          // Tile is to the left of empty, allow right movement but stop before overlapping adjacent tile
+          const maxRightMovement = maxDragDistance
+          constrainedX = Math.min(maxRightMovement, Math.max(0, deltaX))
+        }
+      } else if (c === emptyC) {
+        // Same column - allow vertical movement
+        if (r > emptyR) {
+          // Tile is below empty, allow up movement but stop before overlapping adjacent tile
+          const maxUpMovement = -maxDragDistance
+          constrainedY = Math.max(maxUpMovement, Math.min(0, deltaY))
+        } else {
+          // Tile is above empty, allow down movement but stop before overlapping adjacent tile
+          const maxDownMovement = maxDragDistance
+          constrainedY = Math.min(maxDownMovement, Math.max(0, deltaY))
+        }
+      }
+      
+      setDragState(prev => ({
+        ...prev,
+        dragOffset: { x: constrainedX, y: constrainedY }
+      }))
+    }
+  }, [dragState, miniEmptyPos])
+
+  // Handle drag end
+  const handleMiniDragEnd = useCallback((e) => {
+    if (!dragState.isDragging || !dragState.draggedTile) return
+    
+    const { r, c } = dragState.draggedTile
+    const { x, y } = dragState.dragOffset
+    
+    // Calculate required distance to complete move (half the allowed drag distance)
+    const tileSize = 50
+    const gapSize = 2
+    const maxDragDistance = tileSize - (gapSize * 2)
+    const threshold = maxDragDistance * 0.5 // 50% of the allowed drag distance
+    const shouldMove = Math.abs(x) > threshold || Math.abs(y) > threshold
+    
+    if (shouldMove) {
+      
+      // Move the tile
+      setMiniBoard(prevBoard => {
+        const newBoard = prevBoard.map(row => [...row])
+        const movingLetter = prevBoard[r][c]
+        newBoard[miniEmptyPos.r][miniEmptyPos.c] = movingLetter
+        newBoard[r][c] = ''
+        return newBoard
+      })
+      
+      // Update empty position
+      setMiniEmptyPos({ r, c })
+      
+      // Check completion after a short delay
+      setTimeout(() => {
+        setMiniBoard(currentBoard => {
+          const playRow = currentBoard[2]
+          const playString = playRow.join('')
+          
+          if (playString === 'PLAY' && !miniGameCompleted) {
+            setMiniGameCompleted(true)
+            
+            setTimeout(() => {
+              setMiniGameCompleted(false)
+              setMiniBoard([
+                ['R', 'T', 'K', 'M', 'N'],
+                ['B', 'F', 'H', 'S', 'C'],
+                ['P', 'L', 'A', '', 'Y'],
+                ['D', 'W', 'Z', 'V', 'Q'],
+                ['J', 'G', 'X', 'U', 'I']
+              ])
+              setMiniEmptyPos({ r: 2, c: 3 })
+              setCurrentView('original')
+              setCurrentLevel(1)
+              setMoveCount(0)
+              setCompletedWords(new Set())
+              setHintCount(3)
+              setLevelTransitioning(false)
+              setBoard([])
+              setEmptyPos({ r: 6, c: 6 })
+            }, 2000)
+          }
+          
+          return currentBoard
+        })
+      }, 50)
+    }
+    
+    // Reset drag state
+    setDragState({
+      isDragging: false,
+      draggedTile: null,
+      dragOffset: { x: 0, y: 0 },
+      startPos: { x: 0, y: 0 }
+    })
+  }, [dragState, miniEmptyPos, miniGameCompleted])
+
+  // Add global mouse/touch move and end handlers
+  useEffect(() => {
+    if (dragState.isDragging) {
+      const handleGlobalMove = (e) => handleMiniDragMove(e)
+      const handleGlobalEnd = (e) => handleMiniDragEnd(e)
+      
+      document.addEventListener('mousemove', handleGlobalMove)
+      document.addEventListener('mouseup', handleGlobalEnd)
+      document.addEventListener('touchmove', handleGlobalMove, { passive: false })
+      document.addEventListener('touchend', handleGlobalEnd)
+      
+      return () => {
+        document.removeEventListener('mousemove', handleGlobalMove)
+        document.removeEventListener('mouseup', handleGlobalEnd)
+        document.removeEventListener('touchmove', handleGlobalMove)
+        document.removeEventListener('touchend', handleGlobalEnd)
+      }
+    }
+  }, [dragState.isDragging, handleMiniDragMove, handleMiniDragEnd])
+
   // Start original game
   const startOriginalGame = useCallback(() => {
-    console.log('Starting original game...')
-    console.log('Current WORD_SETS:', WORD_SETS)
-    console.log('Current board:', board)
     setCurrentView('original')
-    console.log('Set currentView to original')
     
     // Try to generate the main board first
     if (WORD_SETS && WORD_SETS.length > 0) {
       generateBoard()
-      console.log('Called generateBoard')
     } else {
       // Fallback to simple board if WORD_SETS not ready
-      console.log('WORD_SETS not ready, using fallback board')
       generateFallbackBoard()
     }
   }, [generateBoard, generateFallbackBoard, WORD_SETS, board])
@@ -1886,7 +2212,7 @@ function App() {
             <span style={{
               animation: 'titleEntrance 1s ease-out forwards'
             }}>
-              WordSlid
+              Crosslid
             </span>
             <span style={{
               animation: 'letterSlideIn 1.2s ease-out 0.3s forwards',
@@ -1897,13 +2223,17 @@ function App() {
             </span>
           </h1>
           
-          <p className="subtitle" style={{
-            fontSize: 'clamp(16px, 4vw, 20px)',
+          <p style={{
+            fontSize: 'clamp(14px, 3.5vw, 18px)',
             textAlign: 'center',
-            margin: '20px 0',
-            color: '#F5DEB3'
+            margin: '10px 0 30px 0',
+            color: '#F5DEB3',
+            fontStyle: 'italic',
+            textShadow: '1px 1px 2px rgba(0,0,0,0.6)',
+            animation: 'titleEntrance 1.5s ease-out 0.8s forwards',
+            opacity: 0
           }}>
-            Choose your game mode
+            A word solving puzzle game!
           </p>
           
           {/* Debug Modal State */}
@@ -1916,75 +2246,132 @@ function App() {
             alignItems: 'center',
             margin: '20px 0'
           }}>
-            <button 
-              className="menu-button" 
-              onClick={startOriginalGame}
+            {/* Mini Gameboard Play Button */}
+            <div
               style={{
-                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
-                color: '#654321',
-                border: '3px solid #8B4513',
-                padding: 'clamp(16px, 4vw, 20px) clamp(30px, 8vw, 50px)',
-                fontSize: 'clamp(18px, 5vw, 22px)',
-                fontWeight: 'bold',
-                borderRadius: '12px',
                 cursor: 'pointer',
-                minHeight: '60px',
-                minWidth: '200px',
-                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
-                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                touchAction: 'manipulation',
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+                padding: '20px',
+                background: 'linear-gradient(135deg, #8B4513 0%, #A0522D 50%, #8B4513 100%)',
+                border: '4px solid #654321',
+                borderRadius: '15px',
+                boxShadow: '0 12px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.1)',
+                transition: 'all 0.3s ease',
                 position: 'relative',
-                overflow: 'hidden'
+                backgroundImage: `
+                  repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 60px,
+                    #3D2318 60px,
+                    #3D2318 65px
+                  ),
+                  repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 3px,
+                    #4A2C1A 3px,
+                    #4A2C1A 6px
+                  )
+                `
               }}
               onMouseEnter={(e) => {
-                e.target.style.transform = 'translateY(-3px) scale(1.02)'
-                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+                e.target.style.transform = 'translateY(-2px) scale(1.02)'
+                e.target.style.boxShadow = '0 16px 32px rgba(0, 0, 0, 0.5), inset 0 2px 0 rgba(255, 255, 255, 0.15)'
               }}
               onMouseLeave={(e) => {
                 e.target.style.transform = 'translateY(0) scale(1)'
-                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+                e.target.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.1)'
               }}
             >
-              🎮 Original Game
-            </button>
+              {/* 5x5 Mini Gameboard */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(5, 1fr)',
+                gap: '3px',
+                width: 'clamp(200px, 25vw, 300px)',
+                aspectRatio: '1',
+                background: 'rgba(47, 27, 20, 0.3)',
+                padding: '8px',
+                borderRadius: '8px',
+                position: 'relative'
+              }}>
+                {miniBoard.map((row, r) => 
+                  row.map((letter, c) => {
+                    const isEmpty = letter === ''
+                    const isPlayTile = (r === 2 && ['P', 'L', 'A', 'Y'].includes(letter)) // Middle row PLAY tiles
+                    const isCompleted = miniGameCompleted && r === 2 // All middle row tiles when completed
+                    const isAdjacent = !miniGameCompleted && !isEmpty && (
+                      (Math.abs(r - miniEmptyPos.r) === 1 && c === miniEmptyPos.c) ||
+                      (Math.abs(c - miniEmptyPos.c) === 1 && r === miniEmptyPos.r)
+                    )
+                    
+                    return (
+                      <div
+                        key={`${r}-${c}`}
+                        className={`mini-tile ${
+                          isEmpty 
+                            ? 'empty-cell' 
+                            : isCompleted 
+                              ? 'completed-tile' 
+                              : isPlayTile 
+                                ? 'play-tile' 
+                                : 'background-tile'
+                        }`}
+                        onMouseDown={(e) => handleMiniDragStart(r, c, e)}
+                        onTouchStart={(e) => handleMiniDragStart(r, c, e)}
+                        style={{
+                          cursor: isAdjacent ? 'grab' : 'default',
+                          position: 'relative',
+                          background: isEmpty ? 'transparent' : undefined,
+                          border: isEmpty ? '2px dashed #F5DEB3' : undefined,
+                          opacity: isEmpty ? 0.6 : undefined,
+                          animation: (isPlayTile && letter === 'Y' && !miniGameCompleted && !dragState.isDragging) 
+                            ? 'miniTileSlideHint 3s ease-in-out infinite' 
+                            : 'none',
+                          transform: (dragState.draggedTile?.r === r && dragState.draggedTile?.c === c) 
+                            ? `translate(${dragState.dragOffset.x}px, ${dragState.dragOffset.y}px)` 
+                            : 'none',
+                          zIndex: (dragState.draggedTile?.r === r && dragState.draggedTile?.c === c) ? 10 : 1,
+                          transition: dragState.isDragging ? 'none' : 'transform 0.2s ease',
+                          userSelect: 'none',
+                          touchAction: 'none'
+                        }}
+                      >
+                        {letter}
+                        {/* Show arrow hint only on Y tile when it can move left */}
+                        {letter === 'Y' && r === 2 && c === 4 && miniEmptyPos.r === 2 && miniEmptyPos.c === 3 && !miniGameCompleted && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '50%',
+                            right: '-15px',
+                            transform: 'translateY(-50%)',
+                            color: '#32CD32',
+                            fontSize: '12px',
+                            animation: 'arrowSlideHint 3s ease-in-out infinite'
+                          }}>←</div>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+
+              
+              {/* Play Label */}
+              <div style={{
+                textAlign: 'center',
+                marginTop: '15px',
+                fontSize: 'clamp(16px, 4vw, 20px)',
+                fontWeight: 'bold',
+                color: miniGameCompleted ? '#32CD32' : '#F5DEB3',
+                textShadow: '2px 2px 4px rgba(0, 0, 0, 0.8)',
+                fontFamily: 'Georgia, serif',
+                transition: 'color 0.5s ease'
+              }}>
+              {miniGameCompleted ? 'Let\'s play!' : 'Slide the Y to play!'}
+              </div>
+            </div>
             
-            <button 
-              className="menu-button" 
-              onClick={startTetrisGame}
-              style={{
-                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
-                color: '#654321',
-                border: '3px solid #8B4513',
-                padding: 'clamp(16px, 4vw, 20px) clamp(30px, 8vw, 50px)',
-                fontSize: 'clamp(18px, 5vw, 22px)',
-                fontWeight: 'bold',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                minHeight: '60px',
-                minWidth: '200px',
-                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
-                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                touchAction: 'manipulation',
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.transform = 'translateY(-3px) scale(1.02)'
-                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = 'translateY(0) scale(1)'
-                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
-              }}
-            >
-              🔄 Tetris Style
-            </button>
             
           </div>
           
@@ -1992,54 +2379,11 @@ function App() {
           <AuthModal 
             isOpen={showAuthModal} 
             onClose={() => {
-              console.log('🔍 AuthModal onClose called')
               setShowAuthModal(false)
             }}
             initialMode="login"
           />
 
-          {/* Sign-in button near bottom (raised 300px) */}
-          <div style={{
-            position: 'absolute',
-            bottom: 300,
-            left: 0,
-            right: 0,
-            textAlign: 'center'
-          }}>
-            <button
-              onClick={() => setShowAuthModal(true)}
-              style={{
-                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
-                color: '#654321',
-                border: '3px solid #8B4513',
-                padding: 'clamp(16px, 4vw, 20px) clamp(30px, 8vw, 50px)',
-                fontSize: 'clamp(18px, 5vw, 22px)',
-                fontWeight: 'bold',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                minHeight: '60px',
-                minWidth: '200px',
-                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
-                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                touchAction: 'manipulation',
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.transform = 'translateY(-3px) scale(1.02)'
-                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = 'translateY(0) scale(1)'
-                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
-              }}
-            >
-              👤 Sign in / Sign up
-            </button>
-          </div>
         </div>
       )}
 
@@ -2186,10 +2530,42 @@ function App() {
             <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
               Moves: <span style={{color: '#F5DEB3'}}>{moveCount}</span>
             </p>
-            {isAuthenticated && user?.username && (
+            {isAuthenticated && user?.username ? (
               <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
                 User: <span style={{ color: '#FFD700' }}>{user.username}</span>
               </p>
+            ) : (
+              <div style={{margin: '8px 0', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                    color: '#654321',
+                    border: '2px solid #8B4513',
+                    padding: '6px 12px',
+                    fontSize: 'clamp(12px, 3vw, 14px)',
+                    fontWeight: 'bold',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    minHeight: '28px',
+                    minWidth: '80px',
+                    boxShadow: '0 4px 8px rgba(139, 69, 19, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                    transition: 'all 0.3s ease',
+                    fontFamily: 'Georgia, serif',
+                    textShadow: '0 1px 1px rgba(255, 255, 255, 0.4)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.transform = 'translateY(-1px) scale(1.05)'
+                    e.target.style.boxShadow = '0 6px 12px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.transform = 'translateY(0) scale(1)'
+                    e.target.style.boxShadow = '0 4px 8px rgba(139, 69, 19, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+                  }}
+                >
+                  👤 Sign In
+                </button>
+              </div>
             )}
             
             {/* Game controls */}
@@ -2293,6 +2669,45 @@ function App() {
               >
                 🏆 Leaderboard
               </button>
+
+              {/* Temporary Logout Button for Testing */}
+              {isAuthenticated && (
+                <button 
+                  onClick={() => {
+                    localStorage.removeItem('token');
+                    window.location.reload();
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, #DC3545, #C82333)',
+                    color: '#FFFFFF',
+                    padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
+                    borderRadius: '10px',
+                    fontSize: 'clamp(13px, 3.5vw, 15px)',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    minHeight: '36px',
+                    minWidth: '100px',
+                    boxShadow: '0 4px 12px rgba(220, 53, 69, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                    transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                    touchAction: 'manipulation',
+                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    border: '2px solid #A71E2A'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.transform = 'translateY(-1px) scale(1.02)'
+                    e.target.style.boxShadow = '0 6px 16px rgba(220, 53, 69, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.transform = 'translateY(0) scale(1)'
+                    e.target.style.boxShadow = '0 4px 12px rgba(220, 53, 69, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+                  }}
+                >
+                  🚪 Logout (Temp)
+                </button>
+              )}
+              
               {/* Username moved to header box under Moves */}
             </div>
             
@@ -2422,7 +2837,6 @@ function App() {
                   transform: 'translateZ(0)',
                   backfaceVisibility: 'hidden',
                   // Ensure absolute positioning stability
-                  position: 'relative',
                   left: 0,
                   top: 0
                 }}>
@@ -2717,18 +3131,34 @@ function App() {
             }}>
               {fireworks.map((firework) => (
                 <div key={firework.id}>
-                  {/* Rocket launching up */}
+                  {/* Rocket already in motion from below screen */}
                   <div
                     style={{
                       position: 'absolute',
                       left: `${firework.launchX}%`,
-                      top: `${firework.launchY}%`,
-                      width: '3px',
-                      height: '8px',
+                      top: '100%', // Start from below screen
+                      width: '8px',
+                      height: '20px',
                       backgroundColor: firework.color,
+                      borderRadius: '4px',
+                      animation: `rocketLaunchFromBelow 2s ease-out ${firework.delay}ms forwards`,
+                      boxShadow: `0 0 20px ${firework.color}, 0 0 40px ${firework.color}`,
+                      transformOrigin: 'bottom center',
+                      background: `linear-gradient(to top, ${firework.color}, ${firework.color}80)`
+                    }}
+                  />
+                  
+                  {/* Rocket trail already in motion */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: `${firework.launchX}%`,
+                      top: '100%',
+                      width: '4px',
+                      height: '40px',
+                      background: `linear-gradient(to top, ${firework.color}60, transparent)`,
                       borderRadius: '2px',
-                      animation: `rocketLaunch 1.2s ease-out ${firework.delay}ms forwards`,
-                      boxShadow: `0 0 8px ${firework.color}`,
+                      animation: `rocketTrailFromBelow 2s ease-out ${firework.delay}ms forwards`,
                       transformOrigin: 'bottom center'
                     }}
                   />
@@ -2739,21 +3169,22 @@ function App() {
                       position: 'absolute',
                       left: `${firework.explodeX}%`,
                       top: `${firework.explodeY}%`,
-                      width: '6px',
-                      height: '6px',
+                      width: '12px',
+                      height: '12px',
                       backgroundColor: firework.color,
                       borderRadius: '50%',
                       animation: `explosionCenter 2s ease-out ${firework.delay + 1200}ms forwards`,
-                      boxShadow: `0 0 30px ${firework.color}`,
+                      boxShadow: `0 0 50px ${firework.color}, 0 0 80px ${firework.color}`,
                       opacity: 0
                     }}
                   />
                   
-                  {/* Explosion sparks */}
-                  {Array.from({length: 16}, (_, sparkIndex) => {
-                    const angle = (sparkIndex * 22.5) * (Math.PI / 180) // 16 sparks, 22.5° apart
-                    const distance = 30 + Math.random() * 40
-                    const sparkSize = 2 + Math.random() * 2
+                  {/* Explosion sparks - EXTRAVAGANT PARTICLE COUNT */}
+                  {Array.from({length: firework.particleCount || 30}, (_, sparkIndex) => {
+                    const totalParticles = firework.particleCount || 30
+                    const angle = (sparkIndex * (360 / totalParticles)) * (Math.PI / 180) + Math.random() * 0.4 // Full circle coverage with more randomness
+                    const distance = (20 + Math.random() * 160) * (firework.size || 1) // Even larger explosion radius
+                    const sparkSize = (0.3 + Math.random() * 5) * (firework.size || 1) // Huge variety from tiny to large
                     return (
                       <div
                         key={`${firework.id}-spark-${sparkIndex}`}
@@ -2764,11 +3195,21 @@ function App() {
                           width: `${sparkSize}px`,
                           height: `${sparkSize}px`,
                           backgroundColor: firework.color,
-                          borderRadius: '50%',
-                          animation: `explosionSpark 2.5s ease-out ${firework.delay + 1200 + sparkIndex * 50}ms forwards`,
-                          transform: `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px)`,
-                          boxShadow: `0 0 6px ${firework.color}`,
-                          opacity: 0
+                          borderRadius: sparkIndex % 6 === 0 ? '0%' : sparkIndex % 6 === 1 ? '50%' : sparkIndex % 6 === 2 ? '20%' : sparkIndex % 6 === 3 ? '80%' : sparkIndex % 6 === 4 ? '5px' : '2px', // More particle shape variety
+                          animation: `explosionSpark${sparkIndex % 5} ${2.5 + Math.random() * 3}s ease-out ${firework.delay + 1200 + sparkIndex * 8}ms forwards`,
+                          transform: `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px) rotate(${sparkIndex * 72}deg)`,
+                          boxShadow: `
+                            0 0 ${15 + Math.random() * 25}px ${firework.color}, 
+                            0 0 ${8 + Math.random() * 15}px ${firework.color},
+                            0 0 ${4 + Math.random() * 10}px white,
+                            0 0 ${2 + Math.random() * 6}px rgba(255,255,255,0.8)
+                          `,
+                          opacity: 0,
+                          filter: `brightness(${1.6 + Math.random() * 1.0}) saturate(${1.4 + Math.random() * 0.8}) contrast(${1.1 + Math.random() * 0.3})`, // Even more vibrant
+                          background: sparkIndex % 4 === 0 ? `radial-gradient(circle, ${firework.color}, transparent)` : 
+                                     sparkIndex % 4 === 1 ? `linear-gradient(45deg, ${firework.color}, transparent)` :
+                                     sparkIndex % 4 === 2 ? `conic-gradient(from 0deg, ${firework.color}, transparent, ${firework.color})` :
+                                     firework.color // Multiple gradient types
                         }}
                       />
                     )
@@ -2777,17 +3218,40 @@ function App() {
               ))}
               <style>
                 {`
-                  @keyframes rocketLaunch {
+                  @keyframes rocketLaunchFromBelow {
                     0% {
                       transform: translateY(0) scale(1);
                       opacity: 1;
                     }
-                    90% {
-                      transform: translateY(-75vh) scale(0.7);
-                      opacity: 0.8;
+                    20% {
+                      transform: translateY(-20vh) scale(1.1);
+                      opacity: 1;
+                    }
+                    80% {
+                      transform: translateY(-80vh) scale(0.8);
+                      opacity: 0.9;
                     }
                     100% {
-                      transform: translateY(-75vh) scale(0);
+                      transform: translateY(-80vh) scale(0);
+                      opacity: 0;
+                    }
+                  }
+                  
+                  @keyframes rocketTrailFromBelow {
+                    0% {
+                      transform: translateY(0) scaleY(1);
+                      opacity: 0.8;
+                    }
+                    20% {
+                      transform: translateY(-20vh) scaleY(1.2);
+                      opacity: 0.9;
+                    }
+                    80% {
+                      transform: translateY(-80vh) scaleY(0.3);
+                      opacity: 0.6;
+                    }
+                    100% {
+                      transform: translateY(-80vh) scaleY(0);
                       opacity: 0;
                     }
                   }
@@ -2811,19 +3275,129 @@ function App() {
                     }
                   }
                   
-                  @keyframes explosionSpark {
+                  @keyframes explosionSpark0 {
+                    0% {
+                      transform: translate(0, 0) scale(1) rotate(0deg);
+                      opacity: 0;
+                    }
+                    5% {
+                      opacity: 1;
+                      transform: translate(0, 0) scale(1.2) rotate(45deg);
+                    }
+                    20% {
+                      opacity: 1;
+                      transform: translate(0, 5px) scale(1) rotate(90deg);
+                    }
+                    60% {
+                      opacity: 0.6;
+                      transform: translate(0, 40px) scale(0.6) rotate(180deg);
+                    }
+                    100% {
+                      transform: translate(0, 80px) scale(0.1) rotate(360deg);
+                      opacity: 0;
+                    }
+                  }
+                  
+                  @keyframes explosionSpark1 {
                     0% {
                       transform: translate(0, 0) scale(1);
                       opacity: 0;
                     }
-                    10% {
+                    8% {
                       opacity: 1;
+                      transform: translate(0, 0) scale(1.3);
                     }
-                    50% {
-                      opacity: 0.8;
+                    25% {
+                      opacity: 1;
+                      transform: translate(0, 8px) scale(1.1);
+                    }
+                    70% {
+                      opacity: 0.4;
+                      transform: translate(0, 50px) scale(0.4);
                     }
                     100% {
-                      transform: translate(0, 30px) scale(0.2);
+                      transform: translate(0, 100px) scale(0);
+                      opacity: 0;
+                    }
+                  }
+                  
+                  @keyframes explosionSpark2 {
+                    0% {
+                      transform: translate(0, 0) scale(1) rotate(0deg);
+                      opacity: 0;
+                    }
+                    3% {
+                      opacity: 1;
+                      transform: translate(0, 0) scale(1.4) rotate(30deg);
+                    }
+                    15% {
+                      opacity: 1;
+                      transform: translate(0, 3px) scale(1.2) rotate(60deg);
+                    }
+                    50% {
+                      opacity: 0.7;
+                      transform: translate(0, 25px) scale(0.8) rotate(120deg);
+                    }
+                    100% {
+                      transform: translate(0, 60px) scale(0.2) rotate(180deg);
+                      opacity: 0;
+                    }
+                  }
+                  
+                  @keyframes explosionSpark3 {
+                    0% {
+                      transform: translate(0, 0) scale(1) rotate(0deg);
+                      opacity: 0;
+                    }
+                    2% {
+                      opacity: 1;
+                      transform: translate(0, 0) scale(1.6) rotate(45deg);
+                    }
+                    12% {
+                      opacity: 1;
+                      transform: translate(0, 2px) scale(1.3) rotate(90deg);
+                    }
+                    40% {
+                      opacity: 0.8;
+                      transform: translate(0, 20px) scale(1) rotate(180deg);
+                    }
+                    80% {
+                      opacity: 0.3;
+                      transform: translate(0, 70px) scale(0.5) rotate(270deg);
+                    }
+                    100% {
+                      transform: translate(0, 120px) scale(0.1) rotate(360deg);
+                      opacity: 0;
+                    }
+                  }
+                  
+                  @keyframes explosionSpark4 {
+                    0% {
+                      transform: translate(0, 0) scale(1) rotate(0deg);
+                      opacity: 0;
+                    }
+                    1% {
+                      opacity: 1;
+                      transform: translate(0, 0) scale(1.8) rotate(60deg);
+                    }
+                    8% {
+                      opacity: 1;
+                      transform: translate(0, 1px) scale(1.5) rotate(120deg);
+                    }
+                    25% {
+                      opacity: 0.9;
+                      transform: translate(0, 15px) scale(1.2) rotate(200deg);
+                    }
+                    60% {
+                      opacity: 0.5;
+                      transform: translate(0, 50px) scale(0.8) rotate(300deg);
+                    }
+                    90% {
+                      opacity: 0.2;
+                      transform: translate(0, 90px) scale(0.3) rotate(420deg);
+                    }
+                    100% {
+                      transform: translate(0, 140px) scale(0.05) rotate(480deg);
                       opacity: 0;
                     }
                   }
@@ -2862,7 +3436,7 @@ function App() {
                   margin: '0 0 12px 0',
                   textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
                 }}>
-                  🎉 Level {currentLevel} Complete!
+                  Level {currentLevel} Complete!
                 </h1>
                 <p style={{
                   color: '#654321',
@@ -2902,6 +3476,16 @@ function App() {
               </div>
             </div>
           )}
+
+          {/* Auth Modal */}
+          <AuthModal 
+            isOpen={showAuthModal} 
+            onClose={() => {
+              // AuthModal onClose called from original game view
+              setShowAuthModal(false)
+            }}
+            initialMode="login"
+          />
         </div>
       )}
 
@@ -3193,7 +3777,6 @@ function App() {
                   transform: 'translateZ(0)',
                   backfaceVisibility: 'hidden',
                   // Ensure absolute positioning stability
-                  position: 'relative',
                   left: 0,
                   top: 0
                 }}>
@@ -3419,6 +4002,47 @@ function App() {
         </div>
       )}
 
+      {/* PWA Install Button */}
+      {showInstallButton && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 10000,
+          animation: 'fadeIn 0.5s ease-in'
+        }}>
+          <button
+            onClick={handleInstallClick}
+            style={{
+              background: 'linear-gradient(135deg, #4CAF50, #45a049)',
+              color: 'white',
+              border: '2px solid rgba(255, 255, 255, 0.2)',
+              padding: '12px 24px',
+              borderRadius: '25px',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 4px 15px rgba(76, 175, 80, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.3s ease',
+              backdropFilter: 'blur(10px)'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.transform = 'scale(1.05)'
+              e.target.style.boxShadow = '0 6px 20px rgba(76, 175, 80, 0.4)'
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.transform = 'scale(1)'
+              e.target.style.boxShadow = '0 4px 15px rgba(76, 175, 80, 0.3)'
+            }}
+          >
+            📱 Install Crosslide
+          </button>
+        </div>
+      )}
       
     </div>
   )

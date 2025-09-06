@@ -1,0 +1,4 @@
+{
+  "action": "clear_all_users",
+  "sql": "DELETE FROM user_stats; DELETE FROM users; SELECT 'All users cleared successfully!' as result;"
+}

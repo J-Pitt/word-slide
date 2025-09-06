@@ -1053,6 +1053,128 @@ h1 {
     user-select: none;
 }
 
+/* Mini Gameboard Play Button Styles */
+.mini-tile {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: clamp(12px, 2.5vw, 16px);
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  font-family: 'Georgia', serif;
+}
+
+.background-tile {
+  background: linear-gradient(135deg, #D2B48C 0%, #C4A484 100%);
+  color: #8B4513;
+  opacity: 0.7;
+  box-shadow: 
+    2px 2px 4px rgba(0,0,0,0.2),
+    inset 1px 1px 0 rgba(255,255,255,0.3),
+    inset -1px -1px 0 rgba(139,69,19,0.2);
+  border: 1px solid #A0522D;
+}
+
+.play-tile {
+  background: linear-gradient(135deg, #F5DEB3 0%, #DEB887 100%);
+  color: #654321;
+  font-weight: 900;
+  box-shadow: 
+    3px 3px 6px rgba(0,0,0,0.3),
+    inset 2px 2px 0 rgba(255,255,255,0.4),
+    inset -1px -1px 0 rgba(139,69,19,0.3);
+  border: 2px solid #8B4513;
+  border-top: 2px solid #F8F0E3;
+  border-left: 2px solid #F8F0E3;
+  transform: scale(1.05);
+  z-index: 2;
+}
+
+.completed-tile {
+  background: linear-gradient(135deg, #90EE90 0%, #32CD32 100%) !important;
+  color: #006400 !important;
+  font-weight: 900;
+  box-shadow: 
+    3px 3px 6px rgba(0,0,0,0.3),
+    inset 2px 2px 0 rgba(255,255,255,0.4),
+    inset -1px -1px 0 rgba(0,100,0,0.3) !important;
+  border: 2px solid #228B22 !important;
+  border-top: 2px solid #98FB98 !important;
+  border-left: 2px solid #98FB98 !important;
+  transform: scale(1.05);
+  z-index: 2;
+  animation: completionGlow 0.5s ease-out;
+}
+
+.empty-cell {
+  background: transparent !important;
+  border: 2px dashed #F5DEB3 !important;
+  opacity: 0.6 !important;
+}
+
+/* Animations for mini gameboard */
+@keyframes miniTileSlideHint {
+  0%, 70%, 100% {
+    transform: translateX(0);
+  }
+  15%, 55% {
+    transform: translateX(-8px);
+  }
+}
+
+@keyframes arrowSlideHint {
+  0%, 70%, 100% {
+    opacity: 0.6;
+    transform: translateY(-50%) translateX(0);
+  }
+  15%, 55% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(-8px);
+  }
+}
+
+@keyframes completionGlow {
+  0% {
+    box-shadow: 
+      3px 3px 6px rgba(0,0,0,0.3),
+      inset 2px 2px 0 rgba(255,255,255,0.4),
+      inset -1px -1px 0 rgba(0,100,0,0.3);
+  }
+  50% {
+    box-shadow: 
+      0 0 20px rgba(50,205,50,0.8),
+      3px 3px 6px rgba(0,0,0,0.3),
+      inset 2px 2px 0 rgba(255,255,255,0.4),
+      inset -1px -1px 0 rgba(0,100,0,0.3);
+  }
+  100% {
+    box-shadow: 
+      3px 3px 6px rgba(0,0,0,0.3),
+      inset 2px 2px 0 rgba(255,255,255,0.4),
+      inset -1px -1px 0 rgba(0,100,0,0.3);
+  }
+}
+
+@keyframes fireworksPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  40% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.5);
+  }
+}
+
 /* Game buttons container */
 .game-buttons {
     display: flex;
@@ -1359,4 +1481,16 @@ h1 {
     /* backface-visibility: hidden; */ /* Disabled to prevent ghosting */
     /* transform-style: preserve-3d; */ /* Disabled to prevent ghosting */
     /* Allow transforms for dragging - ghosting was fixed in JS */
+}
+
+/* PWA Install Button Animation */
+@keyframes fadeIn {
+    0% {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
 }

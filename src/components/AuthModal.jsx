@@ -15,16 +15,11 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
   const [resultMessage, setResultMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const { login, register } = useAuth();
-
-  console.log('🔍 AuthModal rendering with isOpen:', isOpen);
+  const { login, register } = useAuth() || {};
 
   if (!isOpen) {
-    console.log('🔍 AuthModal not open, returning null');
     return null;
   }
-
-  console.log('🔍 AuthModal is open, rendering modal');
 
   const handleInputChange = (e) => {
     setFormData({
@@ -54,6 +49,12 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
         
         if (formData.password.length < 6) {
           setError('Password must be at least 6 characters long');
+          setLoading(false);
+          return;
+        }
+
+        if (formData.username.trim().length < 3) {
+          setError('Username must be at least 3 characters long');
           setLoading(false);
           return;
         }
@@ -108,15 +109,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
       backdropFilter: 'blur(5px)'
     }}>
       <div className="auth-modal" onClick={(e) => e.stopPropagation()} style={{
-        background: 'linear-gradient(135deg, #8B4513 0%, #A0522D 50%, #8B4513 100%)',
-        border: '3px solid #654321',
-        borderRadius: '15px',
-        padding: '30px',
-        width: '90%',
-        maxWidth: '400px',
-        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.05)',
         position: 'relative',
-        overflow: 'hidden',
         zIndex: 10001
       }}>
         <div className="auth-modal-header">
@@ -136,7 +129,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
               value={formData.username}
               onChange={handleInputChange}
               required
-              placeholder="Enter your username"
+              placeholder="Enter username (min 3 characters)"
             />
           </div>
 
@@ -149,7 +142,7 @@ const AuthModal = ({ isOpen, onClose, initialMode = 'login' }) => {
               value={formData.password}
               onChange={handleInputChange}
               required
-              placeholder="Enter your password"
+              placeholder="Enter password (min 6 characters)"
             />
           </div>
 

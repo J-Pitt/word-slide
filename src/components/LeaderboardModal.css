@@ -16,9 +16,9 @@
   background: linear-gradient(135deg, #8B4513 0%, #A0522D 50%, #8B4513 100%);
   border: 3px solid #654321;
   border-radius: 15px;
-  padding: 30px;
+  padding: 12px;
   width: 95%;
-  max-width: 800px;
+  max-width: 380px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 
@@ -93,6 +93,32 @@
   text-align: center;
   font-weight: bold;
   border: 2px solid #DC3545;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.retry-button {
+  background: #8B4513;
+  border: 2px solid #654321;
+  color: #F5DEB3;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.retry-button:hover:not(:disabled) {
+  background: #A0522D;
+  transform: translateY(-1px);
+}
+
+.retry-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .leaderboard-loading {
@@ -160,9 +186,9 @@
 
 .table-header {
   display: grid;
-  grid-template-columns: 80px 2fr 1fr 1fr 1fr;
-  gap: 15px;
-  padding: 15px;
+  grid-template-columns: 22px 100px 35px 35px;
+  gap: 2px;
+  padding: 3px;
   background: linear-gradient(135deg, #654321 0%, #8B4513 100%);
   border-radius: 8px 8px 0 0;
   font-weight: bold;
@@ -170,6 +196,12 @@
   text-align: center;
   border: 2px solid #654321;
   border-bottom: none;
+  font-size: 11px;
+}
+
+/* Ensure all columns are visible by default */
+.rank-col, .player-col, .words-col, .moves-col {
+  display: block;
 }
 
 .table-body {
@@ -181,14 +213,16 @@
 
 .table-row {
   display: grid;
-  grid-template-columns: 80px 2fr 1fr 1fr 1fr;
-  gap: 15px;
-  padding: 12px 15px;
+  grid-template-columns: 22px 100px 35px 35px;
+  gap: 2px;
+  padding: 3px;
   background: linear-gradient(135deg, #3D2318 0%, #2F1B14 100%);
   border-bottom: 1px solid #654321;
   transition: all 0.3s ease;
   text-align: center;
   align-items: center;
+  font-size: 10px;
+  min-height: 28px;
 }
 
 .table-row:last-child {
@@ -216,19 +250,34 @@
 }
 
 .rank-icon {
-  font-size: 20px;
+  font-size: 12px;
   font-weight: bold;
+}
+
+.rank-icon.top-rank {
+  color: #FFD700;
 }
 
 .player-col {
   font-weight: bold;
   color: #F5DEB3;
   text-align: left;
+  padding-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-size: 11px;
 }
 
 .words-col, .moves-col, .games-col {
   color: #F5DEB3;
   font-weight: bold;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
 }
 
 /* No Data State */
@@ -258,9 +307,11 @@
 /* Responsive Design */
 @media (max-width: 768px) {
   .leaderboard-modal {
-    padding: 20px;
-    margin: 15px;
+    padding: 15px;
+    margin: 10px;
     max-height: 95vh;
+    width: 95%;
+    max-width: 360px;
   }
   
   .leaderboard-header h2 {
@@ -273,13 +324,41 @@
   
   .table-header,
   .table-row {
-    grid-template-columns: 60px 1.5fr 1fr 1fr;
-    gap: 10px;
-    padding: 10px;
+    grid-template-columns: 35px 110px 70px 70px;
+    gap: 3px;
+    padding: 3px;
+    font-size: 10px;
   }
   
-  .games-col {
-    display: none;
+  /* Make all column headers consistent on tablet */
+  .table-header .rank-col,
+  .table-header .player-col,
+  .table-header .words-col,
+  .table-header .moves-col {
+    font-size: 10px;
+    font-weight: bold;
+    color: #F5DEB3;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* Make all cell text consistent on tablet */
+  .table-row .rank-col,
+  .table-row .player-col,
+  .table-row .words-col,
+  .table-row .moves-col {
+    font-size: 10px;
+    font-weight: bold;
+    color: #F5DEB3;
+  }
+  
+  /* Player column specific adjustments on tablet */
+  .table-row .player-col {
+    text-align: left;
+    padding-left: 4px;
+    justify-content: flex-start;
   }
   
   .stat-item {
@@ -293,24 +372,84 @@
   .stat-value {
     font-size: 16px;
   }
+  
+  .retry-button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
 }
 
 @media (max-width: 480px) {
   .leaderboard-modal {
-    padding: 15px;
-    margin: 10px;
+    padding: 8px;
+    margin: 5px;
+    width: 95%;
+    max-width: 340px;
   }
   
   .table-header,
   .table-row {
-    grid-template-columns: 50px 1fr 1fr;
-    gap: 8px;
-    padding: 8px;
-    font-size: 14px;
+    grid-template-columns: 1fr 1fr 1fr 1fr !important;
+    gap: 6px !important;
+    padding: 8px !important;
+    font-size: 10px !important;
   }
   
-  .moves-col {
-    display: none;
+  /* All column headers - centered and consistent */
+  .table-header .rank-col,
+  .table-header .player-col,
+  .table-header .words-col,
+  .table-header .moves-col {
+    font-size: 10px !important;
+    font-weight: bold;
+    color: #F5DEB3;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    display: flex !important;
+    align-items: center;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+  
+  /* Rank column - centered */
+  .table-row .rank-col {
+    font-size: 10px !important;
+    font-weight: bold;
+    color: #F5DEB3;
+    display: flex !important;
+    align-items: center;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+  
+  /* Player column - left aligned but positioned under header */
+  .table-row .player-col {
+    font-size: 10px !important;
+    font-weight: bold;
+    color: #F5DEB3;
+    display: flex !important;
+    align-items: center;
+    justify-content: center !important;
+    text-align: center !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  /* Words and Moves columns - centered */
+  .table-row .words-col,
+  .table-row .moves-col {
+    font-size: 10px !important;
+    font-weight: bold;
+    color: #F5DEB3;
+    display: flex !important;
+    align-items: center;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+  
+  /* Ensure all columns are visible */
+  .rank-col, .player-col, .words-col, .moves-col {
+    display: flex !important;
   }
   
   .personal-stats h3 {
@@ -319,5 +458,15 @@
   
   .leaderboard-table h3 {
     font-size: 20px;
+  }
+  
+  .retry-button {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  
+  .leaderboard-error {
+    padding: 8px;
+    gap: 8px;
   }
 }

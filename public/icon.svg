@@ -1,0 +1,36 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#4CAF50" rx="80"/>
+  
+  <!-- Game board representation -->
+  <rect x="80" y="80" width="352" height="352" fill="#2E7D32" rx="20"/>
+  
+  <!-- Letter tiles -->
+  <rect x="120" y="120" width="60" height="60" fill="#FFFFFF" rx="8"/>
+  <rect x="200" y="120" width="60" height="60" fill="#FFFFFF" rx="8"/>
+  <rect x="280" y="120" width="60" height="60" fill="#FFFFFF" rx="8"/>
+  
+  <rect x="120" y="200" width="60" height="60" fill="#FFFFFF" rx="8"/>
+  <rect x="200" y="200" width="60" height="60" fill="#FFFFFF" rx="8"/>
+  <rect x="280" y="200" width="60" height="60" fill="#FFFFFF" rx="8"/>
+  
+  <rect x="120" y="280" width="60" height="60" fill="#FFFFFF" rx="8"/>
+  <rect x="200" y="280" width="60" height="60" fill="#FFFFFF" rx="8"/>
+  <rect x="280" y="280" width="60" height="60" fill="#FFFFFF" rx="8"/>
+  
+  <!-- Letters -->
+  <text x="150" y="160" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#333" text-anchor="middle">C</text>
+  <text x="230" y="160" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#333" text-anchor="middle">R</text>
+  <text x="310" y="160" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#333" text-anchor="middle">O</text>
+  
+  <text x="150" y="240" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#333" text-anchor="middle">S</text>
+  <text x="230" y="240" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#333" text-anchor="middle">S</text>
+  <text x="310" y="240" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#333" text-anchor="middle">S</text>
+  
+  <text x="150" y="320" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#333" text-anchor="middle">L</text>
+  <text x="230" y="320" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#333" text-anchor="middle">I</text>
+  <text x="310" y="320" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#333" text-anchor="middle">D</text>
+  
+  <!-- Arrow indicating sliding -->
+  <path d="M360 200 L400 230 L360 260 L360 240 L380 240 L380 220 L360 220 Z" fill="#FFEB3B"/>
+</svg>

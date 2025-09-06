@@ -6,5 +6,15 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true
+  },
+  // Ensure PWA assets are served correctly
+  publicDir: 'public',
+  build: {
+    // Include service worker and manifest in build
+    rollupOptions: {
+      input: {
+        main: 'index.html'
+      }
+    }
   }
 }) 

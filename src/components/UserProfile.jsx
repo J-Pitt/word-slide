@@ -8,19 +8,13 @@ const UserProfile = () => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [authError, setAuthError] = useState(null);
 
-  console.log('🔍 UserProfile component rendering...');
 
-  // Wrap useAuth in try-catch to prevent crashes
-  let auth = null;
-  try {
-    auth = useAuth();
-    console.log('🔍 Auth context loaded:', auth);
-  } catch (error) {
-    console.error('🔍 AuthContext error:', error);
-    setAuthError(error.message);
-  }
-
-  const { user, isAuthenticated, logout } = auth || {};
+  // Get auth context (must be called at top level)
+  const { user, isAuthenticated, logout } = useAuth() || {};
+  
+  useEffect(() => {
+    console.log('🔍 Auth context loaded:', { user, isAuthenticated });
+  }, [user, isAuthenticated]);
   
   console.log('🔍 UserProfile state:', { user, isAuthenticated, authError });
 
@@ -184,7 +178,6 @@ const UserProfile = () => {
                 opacity: '1 !important',
                 zIndex: '10000 !important',
                 // Ensure it's above everything
-                position: 'relative',
                 transform: 'translateZ(0)'
               }}
               onMouseEnter={(e) => {
