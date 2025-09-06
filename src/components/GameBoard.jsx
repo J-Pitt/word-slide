@@ -269,7 +269,6 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
       onClick={handleClick}
       onTouchStart={handleTouch}
       style={{
-        border: '3px solid #654321',
         borderRadius: '8px',
         boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.2)',
         touchAction: 'none',

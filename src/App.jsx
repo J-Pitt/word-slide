@@ -18,9 +18,11 @@ function App() {
   const [moveCount, setMoveCount] = useState(0)
   const [currentLevel, setCurrentLevel] = useState(1)
   const [completedWords, setCompletedWords] = useState(new Set())
-  const [showFireworks, setShowFireworks] = useState(false)
   const [hintCount, setHintCount] = useState(3)
   const [levelTransitioning, setLevelTransitioning] = useState(false)
+  const [showFireworks, setShowFireworks] = useState(false)
+  const [showLevelCompleteModal, setShowLevelCompleteModal] = useState(false)
+  const [fireworks, setFireworks] = useState([])
   const [showRules, setShowRules] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
@@ -46,6 +48,21 @@ function App() {
     setEmptyPos({ r: 6, c: 6 })
     // Board will regenerate via existing effect when board is empty
   }, [])
+
+  // Advance to next level
+  const goToNextLevel = useCallback(() => {
+    const maxLevels = 20 // Same as in the level complete modal
+    if (currentLevel < maxLevels) {
+      setCurrentLevel(prev => prev + 1)
+      setMoveCount(0)
+      setCompletedWords(new Set())
+      setHintCount(3)
+      setLevelTransitioning(false)
+      setBoard([])
+      setEmptyPos({ r: 6, c: 6 })
+      // Board will regenerate via existing effect when board is empty
+    }
+  }, [currentLevel])
   const [fallingSpeed, setFallingSpeed] = useState(1000) // milliseconds
   
   // Animation state for tile sliding (matching original JS logic)
@@ -1278,25 +1295,51 @@ function App() {
     
     // Check if level is completed
     if (newCompletedWords.size === targetWords.length && !levelTransitioning) {
-      console.log(`Level ${currentLevel} completed! Transitioning to next level...`)
+      console.log(`Level ${currentLevel} completed! Starting fireworks...`)
       setLevelTransitioning(true)
       setShowFireworks(true)
+      
+      // Create fireworks that launch from bottom and explode
+      const newFireworks = []
+      for (let i = 0; i < 6; i++) {
+        const launchX = 20 + Math.random() * 60 // Launch position across screen
+        const explodeY = 15 + Math.random() * 25 // Explosion height in upper area
+        newFireworks.push({
+          id: i,
+          launchX: launchX,
+          launchY: 95, // Start near bottom of screen
+          explodeX: launchX + (Math.random() - 0.5) * 15, // Slight drift during flight
+          explodeY: explodeY,
+          color: ['#FFD700', '#FF4757', '#5352ed', '#00d2d3', '#ff6348', '#7bed9f'][i],
+          delay: i * 800 + Math.random() * 300 // Staggered launch timing
+        })
+      }
+      setFireworks(newFireworks)
+      
+      // Show fireworks for 5 seconds, then show level complete modal
       setTimeout(() => {
         setShowFireworks(false)
-        if (currentLevel < 20) {
-          console.log(`Advancing from level ${currentLevel} to level ${currentLevel + 1}`)
-          setCurrentLevel(currentLevel + 1) // Use currentLevel directly instead of prev callback
-          setHintCount(3)
-          setCompletedWords(new Set())
-          setBoard([]) // Clear board to trigger regeneration via useEffect
-        } else {
-          // Game completed!
-          setCurrentView('menu')
-        }
-        setLevelTransitioning(false)
-      }, 3000)
+        setFireworks([])
+        setShowLevelCompleteModal(true)
+      }, 5000)
     }
   }, [board, currentLevel, completedWords, WORD_SETS, generateBoard, levelTransitioning])
+
+  // Handle next level button
+  const handleNextLevel = useCallback(() => {
+    setShowLevelCompleteModal(false)
+    if (currentLevel < 20) {
+      console.log(`Advancing from level ${currentLevel} to level ${currentLevel + 1}`)
+      setCurrentLevel(currentLevel + 1)
+      setHintCount(3)
+      setCompletedWords(new Set())
+      setBoard([]) // Clear board to trigger regeneration via useEffect
+    } else {
+      // Game completed!
+      setCurrentView('menu')
+    }
+    setLevelTransitioning(false)
+  }, [currentLevel])
 
   // Touch and mouse gesture handling for mobile and desktop
   const [touchStart, setTouchStart] = useState(null)
@@ -1307,6 +1350,16 @@ function App() {
 
   const handleTouchStart = useCallback((e, r, c) => {
     if (!board[r][c]) return // Don't select empty tiles
+    
+    // Only allow dragging tiles that are directly adjacent to the empty cell
+    const isAdjacent = (
+      (emptyPos.r === r && emptyPos.c === c + 1) || // Empty is to the right
+      (emptyPos.r === r && emptyPos.c === c - 1) || // Empty is to the left  
+      (emptyPos.c === c && emptyPos.r === r + 1) || // Empty is below
+      (emptyPos.c === c && emptyPos.r === r - 1)    // Empty is above
+    )
+    
+    if (!isAdjacent) return // Don't allow dragging non-adjacent tiles
     
     // Add visual feedback for touch
     const tileElement = e.currentTarget
@@ -1333,6 +1386,16 @@ function App() {
 
   const handleMouseDown = useCallback((e, r, c) => {
     if (!board[r][c]) return // Don't select empty tiles
+    
+    // Only allow dragging tiles that are directly adjacent to the empty cell
+    const isAdjacent = (
+      (emptyPos.r === r && emptyPos.c === c + 1) || // Empty is to the right
+      (emptyPos.r === r && emptyPos.c === c - 1) || // Empty is to the left  
+      (emptyPos.c === c && emptyPos.r === r + 1) || // Empty is below
+      (emptyPos.c === c && emptyPos.r === r - 1)    // Empty is above
+    )
+    
+    if (!isAdjacent) return // Don't allow dragging non-adjacent tiles
     
     e.preventDefault()
     
@@ -1362,50 +1425,76 @@ function App() {
     if (!touchStart || !selectedTile || !isDragging) return
     const currentX = e.touches[0].clientX
     const currentY = e.touches[0].clientY
-    const step = tileStep || (41 + 1)
-    let dx = 0, dy = 0
-    if (dragAllowedDir === 'right' || dragAllowedDir === 'left') {
-      const raw = currentX - touchStart.x
-      const dir = dragAllowedDir === 'right' ? 1 : -1
-      dx = Math.max(0, Math.min(step, dir * raw)) * dir
-      dy = 0
-    } else if (dragAllowedDir === 'down' || dragAllowedDir === 'up') {
-      const raw = currentY - touchStart.y
-      const dir = dragAllowedDir === 'down' ? 1 : -1
-      dy = Math.max(0, Math.min(step, dir * raw)) * dir
-      dx = 0
-    }
+    
+    // Calculate raw movement from start position
+    const rawDx = currentX - touchStart.x
+    const rawDy = currentY - touchStart.y
+    
+    // Apply movement with clamping to empty cell boundary
     const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
     if (tileEl) {
-      tileEl.style.transition = 'none'
-      tileEl.style.transform = `translate(${dx}px, ${dy}px)` // Smooth sliding with mouse/finger
+      tileEl.style.transition = 'none' // No transition for real-time following
+      
+      const step = tileStep || (41 + 1)
+      const maxDistance = step * 1.1 // Allow 10% overshoot for natural feel
+      
+      // Clamp movement to empty cell boundary with slight overshoot
+      if (dragAllowedDir === 'right' && rawDx > 0) {
+        const clampedDx = Math.min(rawDx, maxDistance)
+        tileEl.style.transform = `translate(${clampedDx}px, 0px)`
+      } else if (dragAllowedDir === 'left' && rawDx < 0) {
+        const clampedDx = Math.max(rawDx, -maxDistance)
+        tileEl.style.transform = `translate(${clampedDx}px, 0px)`
+      } else if (dragAllowedDir === 'down' && rawDy > 0) {
+        const clampedDy = Math.min(rawDy, maxDistance)
+        tileEl.style.transform = `translate(0px, ${clampedDy}px)`
+      } else if (dragAllowedDir === 'up' && rawDy < 0) {
+        const clampedDy = Math.max(rawDy, -maxDistance)
+        tileEl.style.transform = `translate(0px, ${clampedDy}px)`
+      } else {
+        // Reset if dragging in wrong direction
+        tileEl.style.transform = `translate(0px, 0px)`
+      }
     }
     setTouchEnd({ x: currentX, y: currentY })
-  }, [touchStart, selectedTile, isDragging, dragAllowedDir, tileStep])
+  }, [touchStart, selectedTile, isDragging, dragAllowedDir])
 
   const handleMouseMove = useCallback((e) => {
     if (!touchStart || !selectedTile || !isDragging) return
     e.preventDefault()
-    const step = tileStep || (41 + 1)
-    let dx = 0, dy = 0
-    if (dragAllowedDir === 'right' || dragAllowedDir === 'left') {
-      const raw = e.clientX - touchStart.x
-      const dir = dragAllowedDir === 'right' ? 1 : -1
-      dx = Math.max(0, Math.min(step, dir * raw)) * dir
-      dy = 0
-    } else if (dragAllowedDir === 'down' || dragAllowedDir === 'up') {
-      const raw = e.clientY - touchStart.y
-      const dir = dragAllowedDir === 'down' ? 1 : -1
-      dy = Math.max(0, Math.min(step, dir * raw)) * dir
-      dx = 0
-    }
+    
+    // Calculate raw movement from start position
+    const rawDx = e.clientX - touchStart.x
+    const rawDy = e.clientY - touchStart.y
+    
+    // Apply movement with clamping to empty cell boundary
     const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
     if (tileEl) {
-      tileEl.style.transition = 'none'
-      tileEl.style.transform = `translate(${dx}px, ${dy}px)` // Smooth sliding with mouse/finger
+      tileEl.style.transition = 'none' // No transition for real-time following
+      
+      const step = tileStep || (41 + 1)
+      const maxDistance = step * 1.1 // Allow 10% overshoot for natural feel
+      
+      // Clamp movement to empty cell boundary with slight overshoot
+      if (dragAllowedDir === 'right' && rawDx > 0) {
+        const clampedDx = Math.min(rawDx, maxDistance)
+        tileEl.style.transform = `translate(${clampedDx}px, 0px)`
+      } else if (dragAllowedDir === 'left' && rawDx < 0) {
+        const clampedDx = Math.max(rawDx, -maxDistance)
+        tileEl.style.transform = `translate(${clampedDx}px, 0px)`
+      } else if (dragAllowedDir === 'down' && rawDy > 0) {
+        const clampedDy = Math.min(rawDy, maxDistance)
+        tileEl.style.transform = `translate(0px, ${clampedDy}px)`
+      } else if (dragAllowedDir === 'up' && rawDy < 0) {
+        const clampedDy = Math.max(rawDy, -maxDistance)
+        tileEl.style.transform = `translate(0px, ${clampedDy}px)`
+      } else {
+        // Reset if dragging in wrong direction
+        tileEl.style.transform = `translate(0px, 0px)`
+      }
     }
     setTouchEnd({ x: e.clientX, y: e.clientY })
-  }, [touchStart, selectedTile, isDragging, dragAllowedDir, tileStep])
+  }, [touchStart, selectedTile, isDragging, dragAllowedDir])
 
   const handleTouchEnd = useCallback((e) => {
     if (!touchStart || !touchEnd || !selectedTile) {
@@ -1416,146 +1505,116 @@ function App() {
       setDragAllowedDir(null)
       return
     }
-    
+
     const deltaX = touchEnd.x - touchStart.x
     const deltaY = touchEnd.y - touchStart.y
-    const minSwipeDistance = 30 // Minimum distance to trigger a move
     const step = tileStep || (41 + 1)
-    const threshold = step / 2
+    const threshold = step * 0.3
+
+    // Check if we should trigger a move based on drag distance and direction
+    let moveTriggered = false
+    if (dragAllowedDir === 'right' && deltaX > threshold) moveTriggered = true
+    else if (dragAllowedDir === 'left' && -deltaX > threshold) moveTriggered = true
+    else if (dragAllowedDir === 'down' && deltaY > threshold) moveTriggered = true
+    else if (dragAllowedDir === 'up' && -deltaY > threshold) moveTriggered = true
+
+    const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
     
-    // Determine swipe direction and move tile
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
-      // Horizontal swipe
-      if (deltaX > 0) {
-        // Swipe right - move tile to the right (if empty space is to the right)
-        if (emptyPos.r === selectedTile.r && emptyPos.c === selectedTile.c + 1) {
-          directMove(selectedTile.r, selectedTile.c)
-        }
-      } else {
-        // Swipe left - move tile to the left (if empty space is to the left)
-        if (emptyPos.r === selectedTile.r && emptyPos.c === selectedTile.c - 1) {
-          directMove(selectedTile.r, selectedTile.c)
-        }
-      }
-    } else if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > minSwipeDistance) {
-      // Vertical swipe
-      if (deltaY > 0) {
-        // Swipe down - move tile down (if empty space is below)
-        if (emptyPos.c === selectedTile.c && emptyPos.r === selectedTile.r + 1) {
-          directMove(selectedTile.r, selectedTile.c)
-        }
-      } else {
-        // Swipe up - move tile up (if empty space is above)
-        if (emptyPos.c === selectedTile.c && emptyPos.r === selectedTile.r - 1) {
-          directMove(selectedTile.r, selectedTile.c)
-        }
-      }
-    }
-    
-    // If dragged far enough toward empty, trigger move immediately
-    let moved = false
-    if (dragAllowedDir === 'right' && deltaX > threshold) moved = true
-    if (dragAllowedDir === 'left' && -deltaX > threshold) moved = true
-    if (dragAllowedDir === 'down' && deltaY > threshold) moved = true
-    if (dragAllowedDir === 'up' && -deltaY > threshold) moved = true
-    if (moved) {
-      const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
+    if (moveTriggered) {
+      // Calculate final position (where tile should end up - empty cell)
+      let finalX = 0, finalY = 0
+      if (dragAllowedDir === 'right') finalX = step
+      else if (dragAllowedDir === 'left') finalX = -step
+      else if (dragAllowedDir === 'down') finalY = step
+      else if (dragAllowedDir === 'up') finalY = -step
+      
       if (tileEl) {
-        tileEl.style.transition = 'transform 0.15s ease-out' // Smooth snap back to position
-        tileEl.style.transform = 'translate(0px, 0px)' // Reset to original position
+        // Continue smoothly from current position to final position
+        tileEl.style.transition = 'transform 0.2s cubic-bezier(0.23, 1, 0.32, 1)'
+        tileEl.style.transform = `translate(${finalX}px, ${finalY}px)`
       }
 
-      // Directly commit the move without animation overlay
-      directMove(selectedTile.r, selectedTile.c)
-    } else if (selectedTile) {
-      const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
+      // Complete the move after animation
+      setTimeout(() => {
+        directMove(selectedTile.r, selectedTile.c)
+        if (tileEl) {
+          tileEl.style.transition = 'none'
+          tileEl.style.transform = 'translate(0px, 0px)'
+        }
+      }, 200)
+    } else {
+      // Snap back to original position
       if (tileEl) {
-        // tileEl.style.transition = 'transform 120ms ease-out' // Disabled to prevent ghosting
-        tileEl.style.transform = 'translate3d(0px, 0px, 2px)' // Single 3D transform to prevent ghosting
+        tileEl.style.transition = 'transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1)'
+        tileEl.style.transform = 'translate(0px, 0px)'
       }
-      setTimeout(() => resetTileVisualState(selectedTile.r, selectedTile.c), 130)
     }
+
     setTouchStart(null)
     setTouchEnd(null)
     setSelectedTile(null)
     setIsDragging(false)
     setDragAllowedDir(null)
-  }, [touchStart, touchEnd, selectedTile, board, directMove, emptyPos, dragAllowedDir, tileStep, resetTileVisualState])
+  }, [touchStart, touchEnd, selectedTile, dragAllowedDir, tileStep, directMove])
 
   const handleMouseUp = useCallback((e) => {
-    if (!touchStart || !touchEnd || !selectedTile) {
+    if (!touchStart || !selectedTile) {
       setTouchStart(null)
-      setTouchEnd(null)
       setSelectedTile(null)
       setIsDragging(false)
       setDragAllowedDir(null)
       return
     }
-    
-    const deltaX = touchEnd.x - touchStart.x
-    const deltaY = touchEnd.y - touchStart.y
-    const minSwipeDistance = 30 // Minimum distance to trigger a move
+
+    const deltaX = e.clientX - touchStart.x
+    const deltaY = e.clientY - touchStart.y
     const step = tileStep || (41 + 1)
-    const threshold = step / 2
+    const threshold = step * 0.3
+
+    // Check if we should trigger a move based on drag distance and direction
+    let moveTriggered = false
+    if (dragAllowedDir === 'right' && deltaX > threshold) moveTriggered = true
+    else if (dragAllowedDir === 'left' && -deltaX > threshold) moveTriggered = true
+    else if (dragAllowedDir === 'down' && deltaY > threshold) moveTriggered = true
+    else if (dragAllowedDir === 'up' && -deltaY > threshold) moveTriggered = true
+
+    const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
     
-    // Determine swipe direction and move tile
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
-      // Horizontal swipe
-      if (deltaX > 0) {
-        // Swipe right - move tile to the right (if empty space is to the right)
-        if (emptyPos.r === selectedTile.r && emptyPos.c === selectedTile.c + 1) {
-          directMove(selectedTile.r, selectedTile.c)
-        }
-      } else {
-        // Swipe left - move tile to the left (if empty space is to the left)
-        if (emptyPos.r === selectedTile.r && emptyPos.c === selectedTile.c - 1) {
-          directMove(selectedTile.r, selectedTile.c)
-        }
-      }
-    } else if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > minSwipeDistance) {
-      // Vertical swipe
-      if (deltaY > 0) {
-        // Swipe down - move tile down (if empty space is below)
-        if (emptyPos.c === selectedTile.c && emptyPos.r === selectedTile.r + 1) {
-          directMove(selectedTile.r, selectedTile.c)
-        }
-      } else {
-        // Swipe up - move tile up (if empty space is above)
-        if (emptyPos.c === selectedTile.c && emptyPos.r === selectedTile.r - 1) {
-          directMove(selectedTile.r, selectedTile.c)
-        }
-      }
-    }
-    
-    // If dragged far enough toward empty, trigger move immediately
-    let moved = false
-    if (dragAllowedDir === 'right' && deltaX > threshold) moved = true
-    if (dragAllowedDir === 'left' && -deltaX > threshold) moved = true
-    if (dragAllowedDir === 'down' && deltaY > threshold) moved = true
-    if (dragAllowedDir === 'up' && -deltaY > threshold) moved = true
-    if (moved) {
-      const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
+    if (moveTriggered) {
+      // Calculate final position (where tile should end up - empty cell)
+      let finalX = 0, finalY = 0
+      if (dragAllowedDir === 'right') finalX = step
+      else if (dragAllowedDir === 'left') finalX = -step
+      else if (dragAllowedDir === 'down') finalY = step
+      else if (dragAllowedDir === 'up') finalY = -step
+      
       if (tileEl) {
-        tileEl.style.transition = 'transform 0.15s ease-out' // Smooth snap back to position
-        tileEl.style.transform = 'translate(0px, 0px)' // Reset to original position
+        // Continue smoothly from current position to final position
+        tileEl.style.transition = 'transform 0.2s cubic-bezier(0.23, 1, 0.32, 1)'
+        tileEl.style.transform = `translate(${finalX}px, ${finalY}px)`
       }
 
-      // Directly commit the move without animation overlay
-      directMove(selectedTile.r, selectedTile.c)
-    } else if (selectedTile) {
-      const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
+      // Complete the move after animation
+      setTimeout(() => {
+        directMove(selectedTile.r, selectedTile.c)
+        if (tileEl) {
+          tileEl.style.transition = 'none'
+          tileEl.style.transform = 'translate(0px, 0px)'
+        }
+      }, 200)
+    } else {
+      // Snap back to original position
       if (tileEl) {
-        // tileEl.style.transition = 'transform 120ms ease-out' // Disabled to prevent ghosting
-        tileEl.style.transform = 'translate3d(0px, 0px, 2px)' // Single 3D transform to prevent ghosting
+        tileEl.style.transition = 'transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1)'
+        tileEl.style.transform = 'translate(0px, 0px)'
       }
-      setTimeout(() => resetTileVisualState(selectedTile.r, selectedTile.c), 130)
     }
+
     setTouchStart(null)
-    setTouchEnd(null)
     setSelectedTile(null)
     setIsDragging(false)
     setDragAllowedDir(null)
-  }, [touchStart, touchEnd, selectedTile, board, directMove, emptyPos, dragAllowedDir, tileStep, resetTileVisualState])
+  }, [touchStart, selectedTile, dragAllowedDir, tileStep, directMove])
 
   // Global mouse up handler for when mouse is released outside tiles
   useEffect(() => {
@@ -2034,9 +2093,7 @@ function App() {
             WordSlide - Level {currentLevel}
           </h1>
           
-          <div style={{
-            background: 'rgba(139, 69, 19, 0.1)',
-            border: '2px solid #8B4513',
+          <div id="target-words-info-panel" style={{
             borderRadius: '10px',
             padding: '15px',
             margin: '10px auto',
@@ -2044,30 +2101,82 @@ function App() {
             textAlign: 'center'
           }}>
             <div style={{
-              margin: '8px 0',
               display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               flexWrap: 'wrap',
-              gap: '8px',
-              justifyContent: 'center'
+              gap: '12px',
+              marginBottom: '10px'
             }}>
-              {WORD_SETS[currentLevel - 1]?.map((word) => (
-                <span
-                  key={word}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    fontSize: 'clamp(12px, 3vw, 14px)',
-                    fontWeight: 'bold',
-                    backgroundColor: completedWords.has(word) ? '#90EE90' : 'rgba(139, 69, 19, 0.3)',
-                    color: completedWords.has(word) ? '#006400' : '#F5DEB3',
-                    border: `2px solid ${completedWords.has(word) ? '#228B22' : '#8B4513'}`,
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  {word.toUpperCase()}
-                  {completedWords.has(word) && ' ✓'}
-                </span>
-              ))}
+              <span style={{
+                fontSize: 'clamp(14px, 3.5vw, 16px)',
+                fontWeight: 'bold',
+                color: '#F5DEB3',
+                marginRight: '8px'
+              }}>
+                Target Words:
+              </span>
+              <div id="target-words-list" style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '12px',
+                alignItems: 'center'
+              }}>
+                {WORD_SETS[currentLevel - 1]?.map((word) => (
+                  <div key={word} style={{
+                    display: 'flex',
+                    gap: '2px',
+                    alignItems: 'center'
+                  }}>
+                    {word.toUpperCase().split('').map((letter, letterIndex) => (
+                      <div
+                        key={`${word}-${letterIndex}`}
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          backgroundColor: completedWords.has(word) ? '#90EE90' : '#F5DEB3',
+                          color: completedWords.has(word) ? '#006400' : '#8B4513',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '14px',
+                          fontWeight: '900',
+                          borderRadius: '3px',
+                          // 3D block effect like game tiles
+                          boxShadow: completedWords.has(word) 
+                            ? '2px 2px 4px rgba(0,0,0,0.3), inset 1px 1px 0 rgba(255,255,255,0.3), inset -1px -1px 0 rgba(0,0,0,0.2)'
+                            : '2px 2px 4px rgba(0,0,0,0.3), inset 1px 1px 0 rgba(255,255,255,0.3), inset -1px -1px 0 rgba(139,69,19,0.3)',
+                          border: completedWords.has(word) 
+                            ? '1px solid #228B22'
+                            : '1px solid #CD853F',
+                          borderTop: completedWords.has(word)
+                            ? '2px solid #32CD32'
+                            : '2px solid #F8F0E3',
+                          borderLeft: completedWords.has(word)
+                            ? '2px solid #32CD32' 
+                            : '2px solid #F8F0E3',
+                          borderRight: completedWords.has(word)
+                            ? '1px solid #006400'
+                            : '1px solid #7A6B47',
+                          borderBottom: completedWords.has(word)
+                            ? '1px solid #006400'
+                            : '1px solid #7A6B47',
+                          transition: 'all 0.3s ease'
+                        }}
+                      >
+                        {letter}
+                      </div>
+                    ))}
+                    {completedWords.has(word) && (
+                      <span style={{
+                        color: '#90EE90',
+                        fontSize: '12px',
+                        marginLeft: '4px'
+                      }}>✓</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
             <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
               Completed: <span style={{color: '#F5DEB3'}}>
@@ -2084,7 +2193,7 @@ function App() {
             )}
             
             {/* Game controls */}
-            <div style={{
+            <div id="game-controls" style={{
               marginTop: '10px',
               display: 'flex',
               flexWrap: 'wrap',
@@ -2099,7 +2208,6 @@ function App() {
                     ? 'linear-gradient(135deg, #FFD700, #FFA500)' 
                     : 'linear-gradient(135deg, #666, #888)',
                   color: hintCount > 0 ? '#2F1B14' : '#CCC',
-                  border: `2px solid ${hintCount > 0 ? '#B8860B' : '#555'}`,
                   padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
                   borderRadius: '10px',
                   fontSize: 'clamp(13px, 3.5vw, 15px)',
@@ -2137,7 +2245,6 @@ function App() {
                 style={{
                   background: 'linear-gradient(135deg, #00CED1, #20B2AA)',
                   color: '#2F1B14',
-                  border: '2px solid #008B8B',
                   padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
                   borderRadius: '10px',
                   fontSize: 'clamp(13px, 3.5vw, 15px)',
@@ -2169,7 +2276,6 @@ function App() {
                 style={{
                   background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
                   color: '#654321',
-                  border: '2px solid #8B4513',
                   padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
                   borderRadius: '10px',
                   fontSize: 'clamp(13px, 3.5vw, 15px)',
@@ -2274,7 +2380,7 @@ function App() {
                 maxWidth: '90vw',
                 overflow: 'visible',
                 backgroundColor: '#654321', // Dark brown like wood paneling
-                padding: '0px', // Remove padding to align edges with tiles
+                padding: '0px', // No padding - blocks align perfectly with board edges
                 borderRadius: '12px',
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.1)',
                 border: '2px solid #8B4513',
@@ -2330,26 +2436,44 @@ function App() {
                     onTouchStart={(e) => handleTouchStart(e, r, c)}
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
-                      onClick={() => directMove(r, c)}
                     style={{
                         width: 'clamp(40px, 10vw, 55px)',
                         height: 'clamp(40px, 10vw, 55px)',
-                        margin: '1px', // Reduced gap between tiles
-                        marginLeft: c === 0 ? '0px' : '1px', // First tile touches left edge
-                        marginRight: c === row.length - 1 ? '0px' : '1px', // Last tile touches right edge
-                        marginTop: r === 0 ? '0px' : '1px', // First row touches top edge
-                        marginBottom: r === board.length - 1 ? '0px' : '1px', // Last row touches bottom edge
+                        margin: '1px',
+                        boxSizing: 'border-box',
+                        // Clean solid background for 3D blocks
                         backgroundColor: cell ? '#F5DEB3' : 'transparent',
-                        border: 'none', // Remove conflicting shorthand border
-                        borderRadius: cell ? '6px' : '0', // Smaller radius for connected appearance
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
+                        // 3D block appearance with enhanced shadows
+                        border: cell ? '1px solid #CD853F' : '1px solid transparent',
+                        borderTop: cell ? '3px solid #F8F0E3' : '3px solid transparent', // Brighter light highlight on top
+                        borderLeft: cell ? '3px solid #F8F0E3' : '3px solid transparent', // Brighter light highlight on left
+                        borderRight: cell ? '3px solid #7A6B47' : '3px solid transparent', // Darker shadow on right
+                        borderBottom: cell ? '3px solid #7A6B47' : '3px solid transparent', // Darker shadow on bottom
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                         fontSize: 'clamp(16px, 4vw, 22px)',
-                      fontWeight: 'bold',
+                        fontWeight: 'bold',
                         color: '#654321',
+                        textShadow: cell ? '0 2px 4px rgba(255, 255, 255, 0.9), 0 -1px 2px rgba(0, 0, 0, 0.3), 1px 1px 2px rgba(0, 0, 0, 0.1)' : 'none',
                         cursor: cell ? (isDragging ? 'grabbing' : 'grab') : 'default',
-                        boxShadow: cell ? '0 4px 8px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.2)' : 'none',
+                        // Enhanced 3D shadow effect with deeper shading
+                        boxShadow: cell ? `
+                          0 8px 16px rgba(139, 69, 19, 0.4),
+                          0 4px 8px rgba(0, 0, 0, 0.2),
+                          inset 0 3px 6px rgba(255, 255, 255, 0.6),
+                          inset 0 -3px 6px rgba(0, 0, 0, 0.2),
+                          inset 3px 0 6px rgba(255, 255, 255, 0.3),
+                          inset -3px 0 6px rgba(0, 0, 0, 0.15),
+                          inset 0 0 0 1px rgba(255, 255, 255, 0.2)
+                        ` : 'none',
+                        // Prevent size changes during transforms
+                        transformOrigin: 'center center',
+                        minWidth: 'clamp(40px, 10vw, 55px)',
+                        minHeight: 'clamp(40px, 10vw, 55px)',
+                        maxWidth: 'clamp(40px, 10vw, 55px)',
+                        maxHeight: 'clamp(40px, 10vw, 55px)',
                         // transition: 'all 0.1s ease', // Disabled to prevent ghosting
                       position: 'relative',
                       userSelect: 'none',
@@ -2358,12 +2482,7 @@ function App() {
                       touchAction: 'none',
                         // Make tiles appear as raised sections of the board
                         /* transform: cell ? 'translateZ(2px)' : 'none', */ // Disabled GPU acceleration to prevent ghosting
-                        // Connected surface effect - use specific border properties
-                        borderRight: c < row.length - 1 ? '1px solid #654321' : 'none',
-                        borderBottom: r < board.length - 1 ? '1px solid #654321' : 'none',
-                        // Add top and left borders for complete tile definition
-                        borderTop: cell ? '2px solid #8B4513' : 'none',
-                        borderLeft: cell ? '2px solid #8B4513' : 'none',
+                        // Removed individual border properties - using consistent border above
                       // Highlight completed words in green
                         ...(cell && isLetterInCompletedWord(r, c) && {
                         backgroundColor: '#90EE90',
@@ -2473,15 +2592,53 @@ function App() {
             </div>
           </div>
           
-          {/* Bottom action buttons: New Game + Main Menu */}
+          {/* Bottom action buttons: Next Level, New Game + Main Menu */}
           <div style={{
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
             gap: '12px',
             marginTop: '20px',
-            marginBottom: '20px'
+            marginBottom: '20px',
+            flexWrap: 'wrap'
           }}>
+            <button 
+              onClick={goToNextLevel}
+              disabled={currentLevel >= 20}
+              style={{
+                background: currentLevel < 20 
+                  ? 'linear-gradient(135deg, #32CD32, #228B22)' 
+                  : 'linear-gradient(135deg, #666, #888)',
+                color: currentLevel < 20 ? '#F5DEB3' : '#CCC',
+                padding: 'clamp(14px, 3.5vw, 18px) clamp(24px, 6vw, 36px)',
+                borderRadius: '12px',
+                fontSize: 'clamp(15px, 4.5vw, 17px)',
+                fontWeight: 'bold',
+                cursor: currentLevel < 20 ? 'pointer' : 'not-allowed',
+                minHeight: '50px',
+                minWidth: '140px',
+                boxShadow: currentLevel < 20 
+                  ? '0 8px 16px rgba(50, 205, 50, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+                  : '0 4px 8px rgba(0, 0, 0, 0.2)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                touchAction: 'manipulation',
+                textShadow: currentLevel < 20 ? '0 1px 2px rgba(0, 0, 0, 0.3)' : 'none'
+              }}
+              onMouseEnter={(e) => {
+                if (currentLevel < 20) {
+                  e.target.style.transform = 'translateY(-2px) scale(1.02)'
+                  e.target.style.boxShadow = '0 12px 20px rgba(50, 205, 50, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (currentLevel < 20) {
+                  e.target.style.transform = 'translateY(0) scale(1)'
+                  e.target.style.boxShadow = '0 8px 16px rgba(50, 205, 50, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+                }
+              }}
+            >
+              {currentLevel < 20 ? '🚀 Next Level' : '🏆 Max Level'}
+            </button>
             <button 
               onClick={resetToLevelOne}
               style={{
@@ -2545,6 +2702,206 @@ function App() {
               🏠 Main Menu
             </button>
           </div>
+          
+          {/* Fireworks Animation */}
+          {showFireworks && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              pointerEvents: 'none',
+              zIndex: 1000,
+              overflow: 'hidden'
+            }}>
+              {fireworks.map((firework) => (
+                <div key={firework.id}>
+                  {/* Rocket launching up */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: `${firework.launchX}%`,
+                      top: `${firework.launchY}%`,
+                      width: '3px',
+                      height: '8px',
+                      backgroundColor: firework.color,
+                      borderRadius: '2px',
+                      animation: `rocketLaunch 1.2s ease-out ${firework.delay}ms forwards`,
+                      boxShadow: `0 0 8px ${firework.color}`,
+                      transformOrigin: 'bottom center'
+                    }}
+                  />
+                  
+                  {/* Explosion at peak */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: `${firework.explodeX}%`,
+                      top: `${firework.explodeY}%`,
+                      width: '6px',
+                      height: '6px',
+                      backgroundColor: firework.color,
+                      borderRadius: '50%',
+                      animation: `explosionCenter 2s ease-out ${firework.delay + 1200}ms forwards`,
+                      boxShadow: `0 0 30px ${firework.color}`,
+                      opacity: 0
+                    }}
+                  />
+                  
+                  {/* Explosion sparks */}
+                  {Array.from({length: 16}, (_, sparkIndex) => {
+                    const angle = (sparkIndex * 22.5) * (Math.PI / 180) // 16 sparks, 22.5° apart
+                    const distance = 30 + Math.random() * 40
+                    const sparkSize = 2 + Math.random() * 2
+                    return (
+                      <div
+                        key={`${firework.id}-spark-${sparkIndex}`}
+                        style={{
+                          position: 'absolute',
+                          left: `${firework.explodeX}%`,
+                          top: `${firework.explodeY}%`,
+                          width: `${sparkSize}px`,
+                          height: `${sparkSize}px`,
+                          backgroundColor: firework.color,
+                          borderRadius: '50%',
+                          animation: `explosionSpark 2.5s ease-out ${firework.delay + 1200 + sparkIndex * 50}ms forwards`,
+                          transform: `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px)`,
+                          boxShadow: `0 0 6px ${firework.color}`,
+                          opacity: 0
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+              ))}
+              <style>
+                {`
+                  @keyframes rocketLaunch {
+                    0% {
+                      transform: translateY(0) scale(1);
+                      opacity: 1;
+                    }
+                    90% {
+                      transform: translateY(-75vh) scale(0.7);
+                      opacity: 0.8;
+                    }
+                    100% {
+                      transform: translateY(-75vh) scale(0);
+                      opacity: 0;
+                    }
+                  }
+                  
+                  @keyframes explosionCenter {
+                    0% {
+                      transform: scale(0);
+                      opacity: 0;
+                    }
+                    5% {
+                      transform: scale(1);
+                      opacity: 1;
+                    }
+                    15% {
+                      transform: scale(2);
+                      opacity: 1;
+                    }
+                    100% {
+                      transform: scale(4);
+                      opacity: 0;
+                    }
+                  }
+                  
+                  @keyframes explosionSpark {
+                    0% {
+                      transform: translate(0, 0) scale(1);
+                      opacity: 0;
+                    }
+                    10% {
+                      opacity: 1;
+                    }
+                    50% {
+                      opacity: 0.8;
+                    }
+                    100% {
+                      transform: translate(0, 30px) scale(0.2);
+                      opacity: 0;
+                    }
+                  }
+                `}
+              </style>
+            </div>
+          )}
+          
+          {/* Level Complete Modal */}
+          {showLevelCompleteModal && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1001
+            }}>
+              <div style={{
+                background: 'linear-gradient(135deg, #F5DEB3 0%, #DEB887 100%)',
+                border: '3px solid #8B4513',
+                borderRadius: '12px',
+                padding: '24px',
+                textAlign: 'center',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
+                maxWidth: '80vw',
+                minWidth: '280px'
+              }}>
+                <h1 style={{
+                  color: '#654321',
+                  fontSize: 'clamp(20px, 5vw, 24px)',
+                  margin: '0 0 12px 0',
+                  textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
+                }}>
+                  🎉 Level {currentLevel} Complete!
+                </h1>
+                <p style={{
+                  color: '#654321',
+                  fontSize: 'clamp(14px, 3.5vw, 16px)',
+                  margin: '0 0 20px 0'
+                }}>
+                  Completed in {moveCount} moves!
+                </p>
+                <button
+                  onClick={handleNextLevel}
+                  style={{
+                    background: 'linear-gradient(135deg, #FFD700, #FFA500)',
+                    color: '#2F1B14',
+                    border: '3px solid #B8860B',
+                    padding: '10px 20px',
+                    borderRadius: '8px',
+                    fontSize: 'clamp(14px, 3.5vw, 16px)',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    minHeight: '40px',
+                    minWidth: '120px',
+                    boxShadow: '0 8px 16px rgba(255, 215, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3)',
+                    transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                    textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.transform = 'translateY(-2px) scale(1.05)'
+                    e.target.style.boxShadow = '0 12px 24px rgba(255, 215, 0, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.transform = 'translateY(0) scale(1)'
+                    e.target.style.boxShadow = '0 8px 16px rgba(255, 215, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3)'
+                  }}
+                >
+                  {currentLevel < 20 ? '🚀 Next Level' : '🏆 Finish Game'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2794,7 +3151,7 @@ function App() {
                 maxWidth: '90vw',
                 overflow: 'visible',
                 backgroundColor: '#654321', // Dark brown like wood paneling
-                padding: '0px', // Remove padding to align edges with tiles
+                padding: '0px', // No padding - blocks align perfectly with board edges
                 borderRadius: '12px',
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.1)',
                 border: '2px solid #8B4513',

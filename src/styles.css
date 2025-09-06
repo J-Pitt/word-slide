@@ -1358,10 +1358,5 @@ h1 {
     /* will-change: transform, filter, box-shadow; */ /* Disabled to prevent ghosting */
     /* backface-visibility: hidden; */ /* Disabled to prevent ghosting */
     /* transform-style: preserve-3d; */ /* Disabled to prevent ghosting */
-    /* Disable all GPU acceleration to prevent compositing issues */
-    transform: none !important;
-    -webkit-transform: none !important;
-    -moz-transform: none !important;
-    -ms-transform: none !important;
-    -o-transform: none !important;
+    /* Allow transforms for dragging - ghosting was fixed in JS */
 }
