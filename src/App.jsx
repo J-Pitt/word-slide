@@ -2174,7 +2174,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
   }, [])
 
   return (
-    <div className="game-container" style={{
+    <div id="game-container" className="game-container" style={{
       width: '100vw',
       height: '100vh',
       overflow: 'hidden',
@@ -2183,7 +2183,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
       maxHeight: '100vh'
     }}>
       {currentView === 'menu' && (
-        <div className="main-menu" style={{
+        <div id="main-menu" className="main-menu" style={{
           zIndex: 1000, 
           position: 'relative',
           padding: '20px 10px',
@@ -2239,7 +2239,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
           {/* Debug Modal State */}
           {/* removed debug box */}
           
-          <div className="menu-buttons" style={{
+          <div id="menu-buttons" className="menu-buttons" style={{
             display: 'flex',
             flexDirection: 'column',
             gap: '15px',
@@ -2388,7 +2388,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
       )}
 
       {currentView === 'original' && (
-        <div style={{
+        <div id="original-game-view" style={{
           maxHeight: '100vh',
           overflow: 'auto',
           display: 'flex',
@@ -2790,9 +2790,11 @@ Note: Some browsers don't support PWA installation in development mode.`)
             
             {/* Board Container - Connected Surface */}
             <div 
+              id="board-container"
               ref={boardRef}
               style={{
-                maxWidth: '90vw',
+                width: 'min(90vw, 400px)',
+                aspectRatio: '1',
                 overflow: 'visible',
                 backgroundColor: '#654321', // Dark brown like wood paneling
                 padding: '0px', // No padding - blocks align perfectly with board edges
@@ -2824,15 +2826,14 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 <div key={r} style={{
                   display: 'flex',
                   justifyContent: 'center',
-                  maxWidth: '90vw',
+                  width: '100%',
+                  height: 'calc(100% / 7)',
                   position: 'relative',
                   zIndex: 1,
                   contain: 'layout',
                   isolation: 'isolate',
                   flexShrink: 0,
                   flexGrow: 0,
-                  width: 'fit-content',
-                  height: 'fit-content',
                   // Prevent any layout movement during animation
                   transform: 'translateZ(0)',
                   backfaceVisibility: 'hidden',
@@ -2851,8 +2852,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
                     style={{
-                        width: 'clamp(60px, 14vw, 80px)',
-                        height: 'clamp(40px, 10vw, 55px)',
+                        width: 'calc((100% - 14px - 6px) / 7)',
+                        height: 'calc((100% - 14px - 6px) / 7)',
                         margin: '1px',
                         boxSizing: 'border-box',
                         // Clean solid background for 3D blocks
@@ -3007,7 +3008,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
           </div>
           
           {/* Bottom action buttons: Next Level, New Game + Main Menu */}
-          <div style={{
+          <div id="game-action-buttons" style={{
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
@@ -3152,7 +3153,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
           
           {/* Fireworks Animation */}
           {showFireworks && (
-            <div style={{
+            <div id="fireworks-overlay" style={{
               position: 'fixed',
               top: 0,
               left: 0,
@@ -3441,7 +3442,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
           
           {/* Level Complete Modal */}
           {showLevelCompleteModal && (
-            <div style={{
+            <div id="level-complete-modal" style={{
               position: 'fixed',
               top: 0,
               left: 0,
@@ -3523,7 +3524,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
       )}
 
       {currentView === 'tetris' && (
-        <div style={{
+        <div id="tetris-game-view" style={{
           maxHeight: '100vh',
           overflow: 'auto',
           display: 'flex',
@@ -3764,8 +3765,10 @@ Note: Some browsers don't support PWA installation in development mode.`)
           }}>
             {/* Board Container - Connected Surface */}
             <div 
+              id="tetris-board-container"
               style={{
-                maxWidth: '90vw',
+                width: 'min(90vw, 400px)',
+                aspectRatio: '1',
                 overflow: 'visible',
                 backgroundColor: '#654321', // Dark brown like wood paneling
                 padding: '0px', // No padding - blocks align perfectly with board edges
@@ -3796,16 +3799,15 @@ Note: Some browsers don't support PWA installation in development mode.`)
               {tetrisBoard.map((row, r) => (
                 <div key={r} style={{
                   display: 'flex',
-          justifyContent: 'center',
-                  maxWidth: '90vw',
+                  justifyContent: 'center',
+                  width: '100%',
+                  height: 'calc(100% / 7)',
                   position: 'relative',
                   zIndex: 1,
                   contain: 'layout',
                   isolation: 'isolate',
                   flexShrink: 0,
                   flexGrow: 0,
-                  width: 'fit-content',
-                  height: 'fit-content',
                   // Prevent any layout movement during animation
                   transform: 'translateZ(0)',
                   backfaceVisibility: 'hidden',
@@ -3817,8 +3819,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     <div
                       key={`${r}-${c}`}
                       style={{
-                        width: 'clamp(60px, 14vw, 80px)',
-                        height: 'clamp(40px, 10vw, 55px)',
+                        width: 'calc((100% - 14px - 6px) / 7)',
+                        height: 'calc((100% - 14px - 6px) / 7)',
                         margin: '1px', // Reduced gap between tiles
                         marginLeft: c === 0 ? '0px' : '1px', // First tile touches left edge
                         marginRight: c === row.length - 1 ? '0px' : '1px', // Last tile touches right edge
@@ -3979,7 +3981,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
           
           {/* Game Over Message */}
           {tetrisGameOver && (
-            <div style={{
+            <div id="tetris-game-over-modal" style={{
               position: 'fixed',
               top: '50%',
               left: '50%',
