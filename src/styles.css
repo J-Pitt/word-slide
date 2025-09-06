@@ -354,6 +354,21 @@ canvas {
     height: auto;
 }
 
+/* Board container constraints */
+#board-container, #tetris-board-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+#board-container canvas, #tetris-board-container canvas {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+}
+
 h1 {
     color: #F5DEB3;
     font-size: 36px;
@@ -1126,12 +1141,12 @@ h1 {
 
 @keyframes arrowSlideHint {
   0%, 70%, 100% {
-    opacity: 0.6;
+    opacity: 0.8;
     transform: translateY(-50%) translateX(0);
   }
   15%, 55% {
     opacity: 1;
-    transform: translateY(-50%) translateX(-8px);
+    transform: translateY(-50%) translateX(-25px);
   }
 }
 

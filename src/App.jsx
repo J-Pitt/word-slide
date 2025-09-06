@@ -25,6 +25,7 @@ function App() {
   const [levelTransitioning, setLevelTransitioning] = useState(false)
   const [showFireworks, setShowFireworks] = useState(false)
   const [showLevelCompleteModal, setShowLevelCompleteModal] = useState(false)
+  const [showStartOverModal, setShowStartOverModal] = useState(false)
   const [fireworks, setFireworks] = useState([])
   const [showRules, setShowRules] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -104,6 +105,61 @@ function App() {
       console.error('Error updating database:', error)
     }
   }, [user, token])
+
+  // Reset user stats in database
+  const resetUserStats = useCallback(async () => {
+    if (!user || !token) {
+      console.log('No user or token, skipping stats reset')
+      return
+    }
+    
+    console.log('Resetting user stats:', { user, token })
+    
+    try {
+      const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
+      const response = await fetch(`${API_BASE}/game/stats`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          gameMode: 'original',
+          wordsSolved: 0,
+          totalMoves: 0
+        })
+      })
+      
+      if (!response.ok) {
+        console.error('Failed to reset database stats:', response.statusText, response.status)
+        throw new Error('Failed to reset stats')
+      } else {
+        console.log('Database stats reset successful')
+        return true
+      }
+    } catch (error) {
+      console.error('Error resetting database stats:', error)
+      return false
+    }
+  }, [user, token])
+
+  // Handle start over confirmation
+  const handleStartOverConfirm = useCallback(async () => {
+    setShowStartOverModal(false)
+    
+    // Reset stats in database
+    const success = await resetUserStats()
+    
+    if (success) {
+      // Reset game state
+      resetToLevelOne()
+    } else {
+      // If database reset failed, still reset the game but show an error
+      alert('Failed to reset stats in database, but game will restart locally.')
+      resetToLevelOne()
+    }
+  }, [resetUserStats, resetToLevelOne])
 
   // PWA install prompt handling
   useEffect(() => {
@@ -637,6 +693,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
     const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
     if (!targetWords || targetWords.length === 0) return false
     
+    
     for (const word of targetWords) {
       if (!completedWords.has(word)) continue
       
@@ -695,7 +752,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
     if (!targetWords || targetWords.length === 0) return
 
     // Check for completed words - proper position checking
-    const newCompletedWords = new Set()
+    const newCompletedWords = new Set(completedWords) // Start with existing completed words
+    
     
     for (const word of targetWords) {
       const wordLower = word.toLowerCase()
@@ -728,7 +786,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
     }
     
     // Update completed words immediately - this will trigger the existing isLetterInCompletedWord logic
-    if (newCompletedWords.size > 0) {
+    if (newCompletedWords.size !== completedWords.size) {
+      // Update state immediately without flushSync to avoid lifecycle warnings
       setCompletedWords(newCompletedWords)
       
       // Check if level is completed
@@ -814,7 +873,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
         }, 9000)
       }
     }
-  }, [currentLevel, currentView, levelTransitioning, moveCount, updateDatabaseStats])
+  }, [currentLevel, currentView, levelTransitioning, moveCount, updateDatabaseStats, completedWords])
 
 
   // Handle tile movement with frame-based sliding animation (matching original JS)
@@ -836,7 +895,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
     setBoard(newBoard)
     setEmptyPos({ r, c })
     setMoveCount(prev => prev + 1)
-  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync])
+  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync, completedWords])
 
   const tryMove = useCallback((r, c) => {
 
@@ -864,15 +923,15 @@ Note: Some browsers don't support PWA installation in development mode.`)
       setMoveCount(prev => prev + 1)
     } else {
     }
-  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync])
+  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync, completedWords])
 
   // Simple fallback board generation (doesn't depend on WORD_SETS)
   const generateFallbackBoard = useCallback(() => {
     const fallbackBoard = []
-    for (let r = 0; r < 7; r++) {
+    for (let r = 0; r < 6; r++) {
       fallbackBoard[r] = []
-      for (let c = 0; c < 7; c++) {
-        if (r === 6 && c === 6) {
+      for (let c = 0; c < 6; c++) {
+        if (r === 5 && c === 5) {
           fallbackBoard[r][c] = "" // Empty space
         } else {
           fallbackBoard[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26))
@@ -880,7 +939,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
       }
     }
     setBoard(fallbackBoard)
-    setEmptyPos({ r: 6, c: 6 })
+    setEmptyPos({ r: 5, c: 5 })
   }, [])
 
   // Check if a board is solvable by verifying target words can be reached
@@ -936,25 +995,25 @@ Note: Some browsers don't support PWA installation in development mode.`)
     if (currentLevel === 1) {
       try {
         const newBoard = []
-        for (let r = 0; r < 7; r++) {
+        for (let r = 0; r < 6; r++) {
           newBoard[r] = []
-          for (let c = 0; c < 7; c++) newBoard[r][c] = ""
+          for (let c = 0; c < 6; c++) newBoard[r][c] = ""
         }
         const firstWord = String(targetWords[0] || '').toUpperCase()
         if (firstWord && firstWord.length > 1) {
           const row = 0
-          const emptyCol = Math.min(firstWord.length - 1, 6)
+          const emptyCol = Math.min(firstWord.length - 1, 5)
           // Place all but last letter in order
-          for (let i = 0; i < Math.min(firstWord.length - 1, 7); i++) {
+          for (let i = 0; i < Math.min(firstWord.length - 1, 6); i++) {
             newBoard[row][i] = firstWord[i]
           }
           // Choose an adjacent spot for the final letter (prefer right, else below, else above, else left)
-          const finalLetter = firstWord[Math.min(firstWord.length - 1, 6)]
+          const finalLetter = firstWord[Math.min(firstWord.length - 1, 5)]
           let finalPos = null
           // Right of empty
-          if (emptyCol + 1 < 7) {
+          if (emptyCol + 1 < 6) {
             finalPos = { r: row, c: emptyCol + 1 }
-          } else if (row + 1 < 7) {
+          } else if (row + 1 < 6) {
             finalPos = { r: row + 1, c: emptyCol }
           } else if (row - 1 >= 0) {
             finalPos = { r: row - 1, c: emptyCol }
@@ -965,16 +1024,25 @@ Note: Some browsers don't support PWA installation in development mode.`)
             newBoard[finalPos.r][finalPos.c] = finalLetter
           }
           // Fill remaining cells with random letters
-          for (let r = 0; r < 7; r++) {
-            for (let c = 0; c < 7; c++) {
+          for (let r = 0; r < 6; r++) {
+            for (let c = 0; c < 6; c++) {
               if (r === row && c === emptyCol) continue // empty cell
               if (!newBoard[r][c]) {
                 newBoard[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26))
               }
             }
           }
+          // Reset all state for Level 1 in a single batch
           setBoard(newBoard)
           setEmptyPos({ r: row, c: emptyCol })
+          setCompletedWords(new Set())
+          setMoveCount(0)
+          setLevelTransitioning(false)
+          
+          // Check if the word is already completed in the generated board
+          setTimeout(() => {
+            checkWordCompletionSync(newBoard)
+          }, 0)
           return
         }
       } catch (e) {
@@ -990,18 +1058,18 @@ Note: Some browsers don't support PWA installation in development mode.`)
       const newBoard = []
       
       // Initialize empty board
-      for (let r = 0; r < 7; r++) {
+      for (let r = 0; r < 6; r++) {
         newBoard[r] = []
-        for (let c = 0; c < 7; c++) {
+        for (let c = 0; c < 6; c++) {
           newBoard[r][c] = ""
         }
       }
       
       // Step 1: Create a solved board first (target words in their final positions)
       const solvedBoard = []
-      for (let r = 0; r < 7; r++) {
+      for (let r = 0; r < 6; r++) {
         solvedBoard[r] = []
-        for (let c = 0; c < 7; c++) {
+        for (let c = 0; c < 6; c++) {
           solvedBoard[r][c] = ""
         }
       }
@@ -1022,8 +1090,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
         } else {
           // Place additional words in available spaces
           let placed = false
-          for (let r = 0; r < 7 && !placed; r++) {
-            for (let c = 0; c <= 7 - targetWord.length && !placed; c++) {
+          for (let r = 0; r < 6 && !placed; r++) {
+            for (let c = 0; c <= 6 - targetWord.length && !placed; c++) {
               // Check if we can place horizontally
               let canPlace = true
               for (let i = 0; i < targetWord.length; i++) {
@@ -1043,8 +1111,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
           
           // If horizontal placement failed, try vertical
           if (!placed) {
-            for (let r = 0; r <= 7 - targetWord.length && !placed; r++) {
-              for (let c = 0; c < 7 && !placed; c++) {
+            for (let r = 0; r <= 6 - targetWord.length && !placed; r++) {
+              for (let c = 0; c < 6 && !placed; c++) {
                 let canPlace = true
                 for (let i = 0; i < targetWord.length; i++) {
                   if (solvedBoard[r + i][c] !== "") {
@@ -1078,15 +1146,15 @@ Note: Some browsers don't support PWA installation in development mode.`)
         for (let i = 0; i < count; i++) allLetters.push(ch)
       }
       // Add solvedBoard letters (may include overlaps already present)
-      for (let r = 0; r < 7; r++) {
-        for (let c = 0; c < 7; c++) {
+      for (let r = 0; r < 6; r++) {
+        for (let c = 0; c < 6; c++) {
           if (solvedBoard[r][c] !== "") {
             allLetters.push(solvedBoard[r][c])
           }
         }
       }
       // Fill remaining slots with random letters
-      const remainingSlots = 7 * 7 - allLetters.length - 1 // -1 for empty space
+      const remainingSlots = 6 * 6 - allLetters.length - 1 // -1 for empty space
       for (let i = 0; i < remainingSlots; i++) {
         allLetters.push(String.fromCharCode(65 + Math.floor(Math.random() * 26)))
       }
@@ -1096,11 +1164,11 @@ Note: Some browsers don't support PWA installation in development mode.`)
       
       // Step 3: Create the scrambled board
       let letterIndex = 0
-      const emptyRow = Math.floor(Math.random() * 7)
-      const emptyCol = Math.floor(Math.random() * 7)
+      const emptyRow = Math.floor(Math.random() * 6)
+      const emptyCol = Math.floor(Math.random() * 6)
       
-      for (let r = 0; r < 7; r++) {
-        for (let c = 0; c < 7; c++) {
+      for (let r = 0; r < 6; r++) {
+        for (let c = 0; c < 6; c++) {
           if (r === emptyRow && c === emptyCol) {
             newBoard[r][c] = "" // Empty space
           } else {
@@ -1117,8 +1185,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
       let hasSolvedWords = false
       for (let targetWord of targetWords) {
         // Check horizontal positions
-        for (let r = 0; r < 7; r++) {
-          for (let c = 0; c <= 7 - targetWord.length; c++) {
+        for (let r = 0; r < 6; r++) {
+          for (let c = 0; c <= 6 - targetWord.length; c++) {
             let word = ""
             for (let i = 0; i < targetWord.length; i++) {
               if (newBoard[r] && newBoard[r][c + i]) {
@@ -1135,8 +1203,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
         
         // Check vertical positions
         if (!hasSolvedWords) {
-          for (let r = 0; r <= 7 - targetWord.length; r++) {
-            for (let c = 0; c < 7; c++) {
+          for (let r = 0; r <= 6 - targetWord.length; r++) {
+            for (let c = 0; c < 6; c++) {
               let word = ""
               for (let i = 0; i < targetWord.length; i++) {
                 if (newBoard[r + i] && newBoard[r + i][c]) {
@@ -2343,10 +2411,12 @@ Note: Some browsers don't support PWA installation in development mode.`)
                           <div style={{
                             position: 'absolute',
                             top: '50%',
-                            right: '-15px',
+                            right: '-35px',
                             transform: 'translateY(-50%)',
                             color: '#32CD32',
-                            fontSize: '12px',
+                            fontSize: '32px',
+                            fontWeight: 'bold',
+                            textShadow: '0 0 8px rgba(50, 205, 50, 1), 0 0 16px rgba(50, 205, 50, 0.6)',
                             animation: 'arrowSlideHint 3s ease-in-out infinite'
                           }}>←</div>
                         )}
@@ -2794,7 +2864,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
               ref={boardRef}
               style={{
                 width: 'min(90vw, 400px)',
-                aspectRatio: '1',
+                height: 'min(90vw, 400px)',
                 overflow: 'visible',
                 backgroundColor: '#654321', // Dark brown like wood paneling
                 padding: '0px', // No padding - blocks align perfectly with board edges
@@ -2802,6 +2872,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.1)',
                 border: '2px solid #8B4513',
                 position: 'relative', // For animation overlay positioning
+                display: 'flex',
+                flexDirection: 'column',
                 // Ensure board stability during animation
                 transform: 'translateZ(0)',
                 backfaceVisibility: 'hidden',
@@ -2827,7 +2899,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                   display: 'flex',
                   justifyContent: 'center',
                   width: '100%',
-                  height: 'calc(100% / 7)',
+                  height: 'calc(100% / 6)',
                   position: 'relative',
                   zIndex: 1,
                   contain: 'layout',
@@ -2852,9 +2924,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
                     style={{
-                        width: 'calc((100% - 14px - 6px) / 7)',
-                        height: 'calc((100% - 14px - 6px) / 7)',
-                        margin: '1px',
+                        width: 'calc((100% - 20px) / 6)',
+                        height: 'calc((100% - 40px) / 6)',
+                        margin: '2px 1px',
                         boxSizing: 'border-box',
                         // Clean solid background for 3D blocks
                         backgroundColor: cell ? '#F5DEB3' : 'transparent',
@@ -3007,7 +3079,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
             </div>
           </div>
           
-          {/* Bottom action buttons: Next Level, New Game + Main Menu */}
+          {/* Bottom action buttons: Next Level, Start Over + Main Menu */}
           <div id="game-action-buttons" style={{
             display: 'flex',
             justifyContent: 'center',
@@ -3055,7 +3127,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
               {currentLevel < 20 ? '🚀 Next Level' : '🏆 Max Level'}
             </button>
             <button 
-              onClick={resetToLevelOne}
+              onClick={() => setShowStartOverModal(true)}
               style={{
                 background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
                 color: '#654321',
@@ -3083,7 +3155,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
               }}
             >
-              New Game
+              Start Over
             </button>
             <button 
               onClick={() => setCurrentView('menu')}
@@ -3511,6 +3583,114 @@ Note: Some browsers don't support PWA installation in development mode.`)
             </div>
           )}
 
+          {/* Start Over Confirmation Modal */}
+          {showStartOverModal && (
+            <div id="start-over-modal" style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1001
+            }}>
+              <div style={{
+                background: 'linear-gradient(135deg, #F5DEB3 0%, #DEB887 100%)',
+                border: '3px solid #8B4513',
+                borderRadius: '12px',
+                padding: '24px',
+                textAlign: 'center',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
+                maxWidth: '80vw',
+                minWidth: '320px'
+              }}>
+                <h1 style={{
+                  color: '#654321',
+                  fontSize: 'clamp(18px, 4.5vw, 22px)',
+                  margin: '0 0 16px 0',
+                  textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
+                }}>
+                  ⚠️ Start Over?
+                </h1>
+                <p style={{
+                  color: '#654321',
+                  fontSize: 'clamp(14px, 3.5vw, 16px)',
+                  margin: '0 0 24px 0',
+                  lineHeight: '1.4'
+                }}>
+                  This will erase all stats and you will start over from level 1.<br/>
+                  Are you sure you want to continue?
+                </p>
+                <div style={{
+                  display: 'flex',
+                  gap: '12px',
+                  justifyContent: 'center',
+                  flexWrap: 'wrap'
+                }}>
+                  <button
+                    onClick={handleStartOverConfirm}
+                    style={{
+                      background: 'linear-gradient(135deg, #8B4513, #A0522D)',
+                      color: '#F5DEB3',
+                      border: '3px solid #654321',
+                      padding: '10px 20px',
+                      borderRadius: '8px',
+                      fontSize: 'clamp(14px, 3.5vw, 16px)',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      minHeight: '40px',
+                      minWidth: '100px',
+                      boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3)',
+                      transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                      textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.transform = 'translateY(-2px) scale(1.05)'
+                      e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'translateY(0) scale(1)'
+                      e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3)'
+                    }}
+                  >
+                    ✅ Yes
+                  </button>
+                  <button
+                    onClick={() => setShowStartOverModal(false)}
+                    style={{
+                      background: 'linear-gradient(135deg, #8B4513, #A0522D)',
+                      color: '#F5DEB3',
+                      border: '3px solid #654321',
+                      padding: '10px 20px',
+                      borderRadius: '8px',
+                      fontSize: 'clamp(14px, 3.5vw, 16px)',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      minHeight: '40px',
+                      minWidth: '100px',
+                      boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3)',
+                      transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                      textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.transform = 'translateY(-2px) scale(1.05)'
+                      e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.transform = 'translateY(0) scale(1)'
+                      e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3)'
+                    }}
+                  >
+                    ❌ No
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Auth Modal */}
           <AuthModal 
             isOpen={showAuthModal} 
@@ -3768,7 +3948,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
               id="tetris-board-container"
               style={{
                 width: 'min(90vw, 400px)',
-                aspectRatio: '1',
+                height: 'min(90vw, 400px)',
                 overflow: 'visible',
                 backgroundColor: '#654321', // Dark brown like wood paneling
                 padding: '0px', // No padding - blocks align perfectly with board edges
@@ -3776,6 +3956,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.1)',
                 border: '2px solid #8B4513',
                 position: 'relative', // For animation overlay positioning
+                display: 'flex',
+                flexDirection: 'column',
                 // Ensure board stability during animation
                 transform: 'translateZ(0)',
                 backfaceVisibility: 'hidden',
@@ -3801,7 +3983,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                   display: 'flex',
                   justifyContent: 'center',
                   width: '100%',
-                  height: 'calc(100% / 7)',
+                  height: 'calc(100% / 6)',
                   position: 'relative',
                   zIndex: 1,
                   contain: 'layout',
@@ -3819,9 +4001,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     <div
                       key={`${r}-${c}`}
                       style={{
-                        width: 'calc((100% - 14px - 6px) / 7)',
-                        height: 'calc((100% - 14px - 6px) / 7)',
-                        margin: '1px', // Reduced gap between tiles
+                        width: 'calc((100% - 20px) / 6)',
+                        height: 'calc((100% - 40px) / 6)',
+                        margin: '2px 1px', // More vertical spacing
                         marginLeft: c === 0 ? '0px' : '1px', // First tile touches left edge
                         marginRight: c === row.length - 1 ? '0px' : '1px', // Last tile touches right edge
                         marginTop: r === 0 ? '0px' : '1px', // First row touches top edge
