@@ -106,7 +106,7 @@ function App() {
     }
   }, [user, token])
 
-  // Reset user stats in database
+  // Reset user stats in database by fetching current stats and subtracting them
   const resetUserStats = useCallback(async () => {
     if (!user || !token) {
       console.log('No user or token, skipping stats reset')
@@ -117,6 +117,30 @@ function App() {
     
     try {
       const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
+      
+      // First, fetch current stats
+      const statsResponse = await fetch(`${API_BASE}/user/stats/${user.id}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!statsResponse.ok) {
+        console.error('Failed to fetch current stats:', statsResponse.statusText)
+        throw new Error('Failed to fetch current stats')
+      }
+      
+      const statsData = await statsResponse.json()
+      const originalStats = statsData.stats.find(s => s.gameMode === 'original')
+      
+      if (!originalStats) {
+        console.log('No original mode stats found, nothing to reset')
+        return true
+      }
+      
+      // Now subtract the current stats to effectively reset them
       const response = await fetch(`${API_BASE}/game/stats`, {
         method: 'POST',
         headers: {
@@ -126,8 +150,8 @@ function App() {
         body: JSON.stringify({
           userId: user.id,
           gameMode: 'original',
-          wordsSolved: 0,
-          totalMoves: 0
+          wordsSolved: -originalStats.wordsSolved,
+          totalMoves: -originalStats.totalMoves
         })
       })
       
@@ -2509,8 +2533,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
           
           <div id="target-words-info-panel" style={{
             borderRadius: '10px',
-            padding: '15px',
-            margin: '10px auto',
+            padding: '8px',
+            margin: '5px auto',
             maxWidth: '90vw',
             textAlign: 'center'
           }}>
@@ -2520,7 +2544,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
               justifyContent: 'center',
               flexWrap: 'wrap',
               gap: '12px',
-              marginBottom: '10px'
+              marginBottom: '5px'
             }}>
               <span style={{
                 fontSize: 'clamp(14px, 3.5vw, 16px)',
@@ -2592,20 +2616,20 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 ))}
               </div>
             </div>
-            <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
+            <p style={{margin: '4px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
               Completed: <span style={{color: '#F5DEB3'}}>
                 {completedWords.size}/{WORD_SETS[currentLevel - 1]?.length || 0}
               </span>
             </p>
-            <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
+            <p style={{margin: '4px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
               Moves: <span style={{color: '#F5DEB3'}}>{moveCount}</span>
             </p>
             {isAuthenticated && user?.username ? (
-              <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
+              <p style={{margin: '4px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
                 User: <span style={{ color: '#FFD700' }}>{user.username}</span>
               </p>
             ) : (
-              <div style={{margin: '8px 0', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+              <div style={{margin: '4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
                 <button
                   onClick={() => setShowAuthModal(true)}
                   style={{
@@ -2640,7 +2664,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
             
             {/* Game controls */}
             <div id="game-controls" style={{
-              marginTop: '10px',
+              marginTop: '5px',
               display: 'flex',
               flexWrap: 'wrap',
               gap: '8px',
@@ -2740,43 +2764,6 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 🏆 Leaderboard
               </button>
 
-              {/* Temporary Logout Button for Testing */}
-              {isAuthenticated && (
-                <button 
-                  onClick={() => {
-                    localStorage.removeItem('token');
-                    window.location.reload();
-                  }}
-                  style={{
-                    background: 'linear-gradient(135deg, #DC3545, #C82333)',
-                    color: '#FFFFFF',
-                    padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
-                    borderRadius: '10px',
-                    fontSize: 'clamp(13px, 3.5vw, 15px)',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    minHeight: '36px',
-                    minWidth: '100px',
-                    boxShadow: '0 4px 12px rgba(220, 53, 69, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
-                    transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                    touchAction: 'manipulation',
-                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    border: '2px solid #A71E2A'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.transform = 'translateY(-1px) scale(1.02)'
-                    e.target.style.boxShadow = '0 6px 16px rgba(220, 53, 69, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.transform = 'translateY(0) scale(1)'
-                    e.target.style.boxShadow = '0 4px 12px rgba(220, 53, 69, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
-                  }}
-                >
-                  🚪 Logout (Temp)
-                </button>
-              )}
               
               {/* Username moved to header box under Moves */}
             </div>
