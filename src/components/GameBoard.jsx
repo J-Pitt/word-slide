@@ -161,18 +161,7 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
             y + (cellSize - 4) / 2
           )
           ctx.restore()
-          
-          // Add subtle highlight to letter
-          ctx.fillStyle = "#F5DEB3"
-          ctx.shadowColor = "transparent"
-          ctx.shadowBlur = 0
-          ctx.shadowOffsetX = 0
-          ctx.shadowOffsetY = 0
-          ctx.fillText(
-            board[r][c],
-            x + (cellSize - 4) / 2 - 1,
-            y + (cellSize - 4) / 2 - 1
-          )
+
         }
       }
     }
@@ -232,14 +221,7 @@ const GameBoard = ({ board, emptyPos, animation, completedTiles, onTileClick }) 
       ctx.shadowOffsetY = 2
       ctx.fillText(animation.letter, x, y)
       ctx.restore()
-      
-      // Highlight
-      ctx.fillStyle = "#F5DEB3"
-      ctx.shadowColor = "transparent"
-      ctx.shadowBlur = 0
-      ctx.shadowOffsetX = 0
-      ctx.shadowOffsetY = 0
-      ctx.fillText(animation.letter, x - 1, y - 1)
+
     }
   }, [board, animation, completedWords, cellSize])
 

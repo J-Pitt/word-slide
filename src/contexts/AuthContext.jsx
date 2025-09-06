@@ -43,6 +43,18 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token]);
 
+  // Fetch helper with timeout to avoid UI hangs on slow/unreachable network
+  const fetchWithTimeout = async (url, options = {}, timeoutMs = 15000) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      return response;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
   const fetchUserProfile = async () => {
     if (!token) {
       setLoading(false);
@@ -94,15 +106,22 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (username, password) => {
     try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
+      const normalizedUsername = (username ?? '').trim();
+      const normalizedPassword = password ?? '';
+      const response = await fetchWithTimeout(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: normalizedUsername, password: normalizedPassword }),
       });
 
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (_) {
+        // Non-JSON response; leave data as empty object
+      }
 
       if (response.ok) {
         setToken(data.token);
@@ -113,25 +132,34 @@ export const AuthProvider = ({ children }) => {
         
         return { success: true };
       } else {
-        return { success: false, error: data.error };
+        const errorMessage = data?.error || `Login failed (${response.status})`;
+        return { success: false, error: errorMessage };
       }
     } catch (error) {
       console.error('Login error:', error);
-      return { success: false, error: 'Network error' };
+      const isAbort = error?.name === 'AbortError';
+      return { success: false, error: isAbort ? 'Request timed out. Try again.' : 'Network error' };
     }
   };
 
   const register = async (username, password) => {
     try {
-      const response = await fetch(`${API_BASE}/auth/register`, {
+      const normalizedUsername = (username ?? '').trim();
+      const normalizedPassword = password ?? '';
+      const response = await fetchWithTimeout(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: normalizedUsername, password: normalizedPassword }),
       });
 
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (_) {
+        // Non-JSON response; leave data as empty object
+      }
 
       if (response.ok) {
         setToken(data.token);
@@ -142,11 +170,13 @@ export const AuthProvider = ({ children }) => {
         
         return { success: true };
       } else {
-        return { success: false, error: data.error };
+        const errorMessage = data?.error || `Registration failed (${response.status})`;
+        return { success: false, error: errorMessage };
       }
     } catch (error) {
       console.error('Registration error:', error);
-      return { success: false, error: 'Network error' };
+      const isAbort = error?.name === 'AbortError';
+      return { success: false, error: isAbort ? 'Request timed out. Try again.' : 'Network error' };
     }
   };
 

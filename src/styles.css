@@ -1341,21 +1341,27 @@ h1 {
     }
 }
 
-/* Fast, responsive transitions for all interactive elements */
-.game-container * {
+/* Fast, responsive transitions for all interactive elements - disabled to prevent ghosting */
+/* .game-container * {
     transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-}
+} */
 
-/* Enhanced tile hover states */
-[data-tile]:hover {
+/* Enhanced tile hover states - GPU acceleration disabled to prevent ghosting */
+/* [data-tile]:hover {
     transform: scale(1.03);
     box-shadow: 0 4px 12px rgba(139, 69, 19, 0.4);
     filter: brightness(1.05);
-}
+} */
 
-/* Smooth tile movement */
+/* Smooth tile movement - GPU acceleration disabled to prevent ghosting */
 [data-tile] {
-    will-change: transform, filter, box-shadow;
-    backface-visibility: hidden;
-    transform-style: preserve-3d;
+    /* will-change: transform, filter, box-shadow; */ /* Disabled to prevent ghosting */
+    /* backface-visibility: hidden; */ /* Disabled to prevent ghosting */
+    /* transform-style: preserve-3d; */ /* Disabled to prevent ghosting */
+    /* Disable all GPU acceleration to prevent compositing issues */
+    transform: none !important;
+    -webkit-transform: none !important;
+    -moz-transform: none !important;
+    -ms-transform: none !important;
+    -o-transform: none !important;
 }

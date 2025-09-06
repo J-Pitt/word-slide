@@ -2,11 +2,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import LeaderboardModal from './components/LeaderboardModal'
 import UserProfile from './components/UserProfile'
 import AuthModal from './components/AuthModal'
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import './styles.css'
 
 function App() {
   console.log('App component rendering...')
+  
+  const { user, isAuthenticated } = useAuth?.() || {}
   
   const [currentView, setCurrentView] = useState('menu')
   
@@ -18,6 +20,7 @@ function App() {
   const [completedWords, setCompletedWords] = useState(new Set())
   const [showFireworks, setShowFireworks] = useState(false)
   const [hintCount, setHintCount] = useState(3)
+  const [levelTransitioning, setLevelTransitioning] = useState(false)
   const [showRules, setShowRules] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
@@ -30,6 +33,19 @@ function App() {
   const [tetrisGameOver, setTetrisGameOver] = useState(false)
   const [tetrisPaused, setTetrisPaused] = useState(false)
   const [fallingBlocks, setFallingBlocks] = useState([])
+  const [hintBlinkPositions, setHintBlinkPositions] = useState([])
+
+  // Reset original game to Level 1
+  const resetToLevelOne = useCallback(() => {
+    setCurrentLevel(1)
+    setMoveCount(0)
+    setCompletedWords(new Set())
+    setHintCount(3)
+    setLevelTransitioning(false)
+    setBoard([])
+    setEmptyPos({ r: 6, c: 6 })
+    // Board will regenerate via existing effect when board is empty
+  }, [])
   const [fallingSpeed, setFallingSpeed] = useState(1000) // milliseconds
   
   // Animation state for tile sliding (matching original JS logic)
@@ -519,58 +535,63 @@ function App() {
   const resetTileVisualState = useCallback((r, c) => {
     const tileElement = document.querySelector(`[data-tile="${r}-${c}"]`)
     if (tileElement) {
-      tileElement.style.transform = ''
+      tileElement.style.transform = 'translate(0px, 0px)' // Reset to original position
       tileElement.style.filter = ''
       tileElement.style.boxShadow = ''
+      tileElement.style.opacity = '1' // Ensure full opacity
+      tileElement.style.animation = 'none' // Disable any lingering animations
+      tileElement.style.transition = 'none' // Disable transitions
+      // Force style recalculation
+      tileElement.offsetHeight
     }
   }, [])
 
   // Handle tile movement with frame-based sliding animation (matching original JS)
+  // Direct move without animation overlay
+  const directMove = useCallback((r, c) => {
+    if (isLetterInCompletedWord(r, c)) {
+      return // Don't allow moving tiles from completed words
+    }
+
+    setBoard(prevBoard => {
+      const b = prevBoard.map(row => [...row])
+      b[emptyPos.r][emptyPos.c] = board[r][c]
+      b[r][c] = ''
+      setTimeout(() => checkWordCompletion(b), 0)
+      return b
+    })
+    setEmptyPos({ r, c })
+    setMoveCount(prev => prev + 1)
+  }, [emptyPos, board, isLetterInCompletedWord])
+
   const tryMove = useCallback((r, c) => {
-    console.log(`tryMove called for position (${r}, ${c}), current animating state:`, animating)
-    
+    console.log(`tryMove called for position (${r}, ${c})`)
+
     const dr = Math.abs(r - emptyPos.r)
     const dc = Math.abs(c - emptyPos.c)
-    
+
     if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
-      if (!animating) {
-        // Check if the tile being moved is part of a completed word
-        if (isLetterInCompletedWord(r, c)) {
-          console.log(`Tile is completed, cannot move`)
-          return // Don't allow moving tiles from completed words
-        }
-        
-        console.log(`Starting animation from (${r}, ${c}) to (${emptyPos.r}, ${emptyPos.c})`)
-        setAnimating(true)
-        // Compute DOM-based start/end pixels
-        try {
-          const fromEl = document.querySelector(`[data-tile="${r}-${c}"]`)
-          const surfaceEl = boardRef.current
-          const step = tileStep || (41 + 1)
-          if (fromEl && surfaceEl) {
-            const fromRect = fromEl.getBoundingClientRect()
-            const surfaceRect = surfaceEl.getBoundingClientRect()
-            const startX = Math.round(fromRect.left - surfaceRect.left)
-            const startY = Math.round(fromRect.top - surfaceRect.top)
-            const dC = emptyPos.c - c
-            const dR = emptyPos.r - r
-            const endX = startX + dC * step
-            const endY = startY + dR * step
-            setAnimation({ from: { r, c }, to: { r: emptyPos.r, c: emptyPos.c }, letter: board[r][c], startX, startY, endX, endY })
-          } else {
-            setAnimation({ from: { r, c }, to: { r: emptyPos.r, c: emptyPos.c }, letter: board[r][c] })
-          }
-        } catch {
-          setAnimation({ from: { r, c }, to: { r: emptyPos.r, c: emptyPos.c }, letter: board[r][c] })
-        }
-        setMoveCount(prev => prev + 1)
-      } else {
-        console.log(`Already animating, ignoring move`)
+      // Check if the tile being moved is part of a completed word
+      if (isLetterInCompletedWord(r, c)) {
+        console.log(`Tile is completed, cannot move`)
+        return // Don't allow moving tiles from completed words
       }
+
+      console.log(`Moving from (${r}, ${c}) to (${emptyPos.r}, ${emptyPos.c})`)
+      // Direct move without animation
+      setBoard(prevBoard => {
+        const b = prevBoard.map(row => [...row])
+        b[emptyPos.r][emptyPos.c] = board[r][c]
+        b[r][c] = ''
+        setTimeout(() => checkWordCompletion(b), 0)
+        return b
+      })
+      setEmptyPos({ r, c })
+      setMoveCount(prev => prev + 1)
     } else {
       console.log(`Invalid move - not adjacent to empty space`)
     }
-  }, [emptyPos, board, animating, isLetterInCompletedWord, tileStep])
+  }, [emptyPos, board, isLetterInCompletedWord])
 
   // Simple fallback board generation (doesn't depend on WORD_SETS)
   const generateFallbackBoard = useCallback(() => {
@@ -646,6 +667,57 @@ function App() {
       console.log('No target words available, using fallback board generation')
       generateFallbackBoard()
       return
+    }
+
+    // Special-case Level 1: make the first target word solvable in one slide for easier debugging
+    if (currentLevel === 1) {
+      try {
+        const newBoard = []
+        for (let r = 0; r < 7; r++) {
+          newBoard[r] = []
+          for (let c = 0; c < 7; c++) newBoard[r][c] = ""
+        }
+        const firstWord = String(targetWords[0] || '').toUpperCase()
+        if (firstWord && firstWord.length > 1) {
+          const row = 0
+          const emptyCol = Math.min(firstWord.length - 1, 6)
+          // Place all but last letter in order
+          for (let i = 0; i < Math.min(firstWord.length - 1, 7); i++) {
+            newBoard[row][i] = firstWord[i]
+          }
+          // Choose an adjacent spot for the final letter (prefer right, else below, else above, else left)
+          const finalLetter = firstWord[Math.min(firstWord.length - 1, 6)]
+          let finalPos = null
+          // Right of empty
+          if (emptyCol + 1 < 7) {
+            finalPos = { r: row, c: emptyCol + 1 }
+          } else if (row + 1 < 7) {
+            finalPos = { r: row + 1, c: emptyCol }
+          } else if (row - 1 >= 0) {
+            finalPos = { r: row - 1, c: emptyCol }
+          } else if (emptyCol - 1 >= 0) {
+            finalPos = { r: row, c: emptyCol - 1 }
+          }
+          if (finalPos) {
+            newBoard[finalPos.r][finalPos.c] = finalLetter
+          }
+          // Fill remaining cells with random letters
+          for (let r = 0; r < 7; r++) {
+            for (let c = 0; c < 7; c++) {
+              if (r === row && c === emptyCol) continue // empty cell
+              if (!newBoard[r][c]) {
+                newBoard[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26))
+              }
+            }
+          }
+          setBoard(newBoard)
+          setEmptyPos({ r: row, c: emptyCol })
+          console.log('Level 1 board set for one-slide solve.', { empty: { r: row, c: emptyCol }, word: firstWord })
+          return
+        }
+      } catch (e) {
+        console.warn('Level 1 one-slide setup failed, falling back to normal generation', e)
+      }
     }
     
     let attempts = 0
@@ -733,8 +805,19 @@ function App() {
         wordIndex++
       }
       
-      // Step 2: Fill remaining spaces with random letters
+      // Step 2: Construct letter pool that guarantees enough letters to solve all target words
       const allLetters = []
+      const requiredCounts = {}
+      for (const w of targetWords) {
+        for (const ch of w.toUpperCase()) {
+          requiredCounts[ch] = (requiredCounts[ch] || 0) + 1
+        }
+      }
+      // Start with the exact required letters for all words
+      for (const [ch, count] of Object.entries(requiredCounts)) {
+        for (let i = 0; i < count; i++) allLetters.push(ch)
+      }
+      // Add solvedBoard letters (may include overlaps already present)
       for (let r = 0; r < 7; r++) {
         for (let c = 0; c < 7; c++) {
           if (solvedBoard[r][c] !== "") {
@@ -742,8 +825,7 @@ function App() {
           }
         }
       }
-      
-      // Add random letters to fill the board
+      // Fill remaining slots with random letters
       const remainingSlots = 7 * 7 - allLetters.length - 1 // -1 for empty space
       for (let i = 0; i < remainingSlots; i++) {
         allLetters.push(String.fromCharCode(65 + Math.floor(Math.random() * 26)))
@@ -767,43 +849,8 @@ function App() {
         }
       }
       
-      // Step 4: Verify the board is solvable by checking if target words can be formed
+      // Step 4: Verify the board is solvable by checking letter availability (guaranteed by pool)
       let isSolvable = true
-      for (let targetWord of targetWords) {
-        let wordFound = false
-        
-        // Check if we can form this word by moving tiles
-        const wordLetters = targetWord.split('')
-        const letterCounts = {}
-        
-        // Count available letters
-        for (let letter of wordLetters) {
-          letterCounts[letter] = (letterCounts[letter] || 0) + 1
-        }
-        
-        // Count letters on the board
-        for (let r = 0; r < 7; r++) {
-          for (let c = 0; c < 7; c++) {
-            if (newBoard[r][c] !== "") {
-              const letter = newBoard[r][c]
-              if (letterCounts[letter]) {
-                letterCounts[letter]--
-              }
-            }
-          }
-        }
-        
-        // Check if all letters are available
-        for (let letter in letterCounts) {
-          if (letterCounts[letter] > 0) {
-            isSolvable = false
-            console.log(`Missing letter ${letter} for word ${targetWord}`)
-            break
-          }
-        }
-        
-        if (!isSolvable) break
-      }
       
       // Step 5: If solvable, ensure it's not already solved
       if (isSolvable) {
@@ -1150,6 +1197,14 @@ function App() {
     }
   }, [currentView, board.length, generateBoard, WORD_SETS, generateFallbackBoard])
 
+  // Generate board when level changes (but not on initial load)
+  useEffect(() => {
+    if (currentLevel > 1 && currentView === 'original') {
+      console.log(`Level changed to ${currentLevel}, generating new board`)
+      generateBoard()
+    }
+  }, [currentLevel, currentView, generateBoard])
+
   // Initialize Tetris board when Tetris view is selected
   useEffect(() => {
     if (currentView === 'tetris' && tetrisBoard.length === 0) {
@@ -1183,8 +1238,9 @@ function App() {
   }, [])
 
   // Check for word completion
-  const checkWordCompletion = useCallback(() => {
-    if (!board || board.length === 0 || !board[0]) return
+  const checkWordCompletion = useCallback((boardOverride) => {
+    const boardToCheck = boardOverride || board
+    if (!boardToCheck || boardToCheck.length === 0 || !boardToCheck[0]) return
     
     const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
     if (!targetWords || targetWords.length === 0) return
@@ -1193,9 +1249,9 @@ function App() {
     
     for (const word of targetWords) {
       // Check horizontal words
-      for (let row = 0; row < board.length; row++) {
-        for (let col = 0; col <= board[row].length - word.length; col++) {
-          const horizontalWord = board[row].slice(col, col + word.length).join('').toLowerCase()
+      for (let row = 0; row < boardToCheck.length; row++) {
+        for (let col = 0; col <= boardToCheck[row].length - word.length; col++) {
+          const horizontalWord = boardToCheck[row].slice(col, col + word.length).join('').toLowerCase()
           if (horizontalWord === word.toLowerCase()) {
             newCompletedWords.add(word)
             break
@@ -1204,11 +1260,11 @@ function App() {
       }
       
       // Check vertical words
-      for (let col = 0; col < board[0].length; col++) {
-        for (let row = 0; row <= board.length - word.length; row++) {
+      for (let col = 0; col < boardToCheck[0].length; col++) {
+        for (let row = 0; row <= boardToCheck.length - word.length; row++) {
           const verticalWord = []
           for (let i = 0; i < word.length; i++) {
-            verticalWord.push(board[row + i][col])
+            verticalWord.push(boardToCheck[row + i][col])
           }
           if (verticalWord.join('').toLowerCase() === word.toLowerCase()) {
             newCompletedWords.add(word)
@@ -1221,27 +1277,33 @@ function App() {
     setCompletedWords(newCompletedWords)
     
     // Check if level is completed
-    if (newCompletedWords.size === targetWords.length) {
+    if (newCompletedWords.size === targetWords.length && !levelTransitioning) {
+      console.log(`Level ${currentLevel} completed! Transitioning to next level...`)
+      setLevelTransitioning(true)
       setShowFireworks(true)
       setTimeout(() => {
         setShowFireworks(false)
         if (currentLevel < 20) {
-          setCurrentLevel(prev => prev + 1)
+          console.log(`Advancing from level ${currentLevel} to level ${currentLevel + 1}`)
+          setCurrentLevel(currentLevel + 1) // Use currentLevel directly instead of prev callback
+          setHintCount(3)
           setCompletedWords(new Set())
-          generateBoard()
+          setBoard([]) // Clear board to trigger regeneration via useEffect
         } else {
           // Game completed!
           setCurrentView('menu')
         }
+        setLevelTransitioning(false)
       }, 3000)
     }
-  }, [board, currentLevel, completedWords, WORD_SETS, generateBoard])
+  }, [board, currentLevel, completedWords, WORD_SETS, generateBoard, levelTransitioning])
 
   // Touch and mouse gesture handling for mobile and desktop
   const [touchStart, setTouchStart] = useState(null)
   const [touchEnd, setTouchEnd] = useState(null)
   const [selectedTile, setSelectedTile] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [dragAllowedDir, setDragAllowedDir] = useState(null) // 'left'|'right'|'up'|'down'|null
 
   const handleTouchStart = useCallback((e, r, c) => {
     if (!board[r][c]) return // Don't select empty tiles
@@ -1249,9 +1311,8 @@ function App() {
     // Add visual feedback for touch
     const tileElement = e.currentTarget
     if (tileElement) {
-      tileElement.style.transform = 'scale(1.1)'
-      tileElement.style.filter = 'brightness(1.2)'
-      tileElement.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.8)'
+      // Keep a subtle highlight without scaling to avoid layout shifts
+      tileElement.style.boxShadow = '0 0 16px rgba(255, 215, 0, 0.6)'
     }
     
     setTouchStart({
@@ -1261,7 +1322,14 @@ function App() {
       c: c
     })
     setSelectedTile({ r, c })
-  }, [board])
+    // Determine allowed drag direction (only if empty is adjacent)
+    if (emptyPos.r === r && emptyPos.c === c + 1) setDragAllowedDir('right')
+    else if (emptyPos.r === r && emptyPos.c === c - 1) setDragAllowedDir('left')
+    else if (emptyPos.c === c && emptyPos.r === r + 1) setDragAllowedDir('down')
+    else if (emptyPos.c === c && emptyPos.r === r - 1) setDragAllowedDir('up')
+    else setDragAllowedDir(null)
+    setIsDragging(true)
+  }, [board, emptyPos])
 
   const handleMouseDown = useCallback((e, r, c) => {
     if (!board[r][c]) return // Don't select empty tiles
@@ -1271,9 +1339,7 @@ function App() {
     // Add visual feedback for mouse interaction
     const tileElement = e.currentTarget
     if (tileElement) {
-      tileElement.style.transform = 'scale(1.1)'
-      tileElement.style.filter = 'brightness(1.2)'
-      tileElement.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.8)'
+      tileElement.style.boxShadow = '0 0 16px rgba(255, 215, 0, 0.6)'
     }
     
     setTouchStart({
@@ -1283,45 +1349,79 @@ function App() {
       c: c
     })
     setSelectedTile({ r, c })
+    // Determine allowed drag direction (only if empty is adjacent)
+    if (emptyPos.r === r && emptyPos.c === c + 1) setDragAllowedDir('right')
+    else if (emptyPos.r === r && emptyPos.c === c - 1) setDragAllowedDir('left')
+    else if (emptyPos.c === c && emptyPos.r === r + 1) setDragAllowedDir('down')
+    else if (emptyPos.c === c && emptyPos.r === r - 1) setDragAllowedDir('up')
+    else setDragAllowedDir(null)
     setIsDragging(true)
-  }, [board])
+  }, [board, emptyPos])
 
   const handleTouchMove = useCallback((e) => {
-    if (!touchStart || !selectedTile) return
-    
-    e.preventDefault() // Prevent scrolling while dragging
-    
+    if (!touchStart || !selectedTile || !isDragging) return
     const currentX = e.touches[0].clientX
     const currentY = e.touches[0].clientY
-    
-    setTouchEnd({
-      x: currentX,
-      y: currentY
-    })
-  }, [touchStart, selectedTile])
+    const step = tileStep || (41 + 1)
+    let dx = 0, dy = 0
+    if (dragAllowedDir === 'right' || dragAllowedDir === 'left') {
+      const raw = currentX - touchStart.x
+      const dir = dragAllowedDir === 'right' ? 1 : -1
+      dx = Math.max(0, Math.min(step, dir * raw)) * dir
+      dy = 0
+    } else if (dragAllowedDir === 'down' || dragAllowedDir === 'up') {
+      const raw = currentY - touchStart.y
+      const dir = dragAllowedDir === 'down' ? 1 : -1
+      dy = Math.max(0, Math.min(step, dir * raw)) * dir
+      dx = 0
+    }
+    const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
+    if (tileEl) {
+      tileEl.style.transition = 'none'
+      tileEl.style.transform = `translate(${dx}px, ${dy}px)` // Smooth sliding with mouse/finger
+    }
+    setTouchEnd({ x: currentX, y: currentY })
+  }, [touchStart, selectedTile, isDragging, dragAllowedDir, tileStep])
 
   const handleMouseMove = useCallback((e) => {
     if (!touchStart || !selectedTile || !isDragging) return
-    
     e.preventDefault()
-    
-    setTouchEnd({
-      x: e.clientX,
-      y: e.clientY
-    })
-  }, [touchStart, selectedTile, isDragging])
+    const step = tileStep || (41 + 1)
+    let dx = 0, dy = 0
+    if (dragAllowedDir === 'right' || dragAllowedDir === 'left') {
+      const raw = e.clientX - touchStart.x
+      const dir = dragAllowedDir === 'right' ? 1 : -1
+      dx = Math.max(0, Math.min(step, dir * raw)) * dir
+      dy = 0
+    } else if (dragAllowedDir === 'down' || dragAllowedDir === 'up') {
+      const raw = e.clientY - touchStart.y
+      const dir = dragAllowedDir === 'down' ? 1 : -1
+      dy = Math.max(0, Math.min(step, dir * raw)) * dir
+      dx = 0
+    }
+    const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
+    if (tileEl) {
+      tileEl.style.transition = 'none'
+      tileEl.style.transform = `translate(${dx}px, ${dy}px)` // Smooth sliding with mouse/finger
+    }
+    setTouchEnd({ x: e.clientX, y: e.clientY })
+  }, [touchStart, selectedTile, isDragging, dragAllowedDir, tileStep])
 
   const handleTouchEnd = useCallback((e) => {
     if (!touchStart || !touchEnd || !selectedTile) {
       setTouchStart(null)
       setTouchEnd(null)
       setSelectedTile(null)
+      setIsDragging(false)
+      setDragAllowedDir(null)
       return
     }
     
     const deltaX = touchEnd.x - touchStart.x
     const deltaY = touchEnd.y - touchStart.y
     const minSwipeDistance = 30 // Minimum distance to trigger a move
+    const step = tileStep || (41 + 1)
+    const threshold = step / 2
     
     // Determine swipe direction and move tile
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
@@ -1329,12 +1429,12 @@ function App() {
       if (deltaX > 0) {
         // Swipe right - move tile to the right (if empty space is to the right)
         if (emptyPos.r === selectedTile.r && emptyPos.c === selectedTile.c + 1) {
-          tryMove(selectedTile.r, selectedTile.c)
+          directMove(selectedTile.r, selectedTile.c)
         }
       } else {
         // Swipe left - move tile to the left (if empty space is to the left)
         if (emptyPos.r === selectedTile.r && emptyPos.c === selectedTile.c - 1) {
-          tryMove(selectedTile.r, selectedTile.c)
+          directMove(selectedTile.r, selectedTile.c)
         }
       }
     } else if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > minSwipeDistance) {
@@ -1342,24 +1442,45 @@ function App() {
       if (deltaY > 0) {
         // Swipe down - move tile down (if empty space is below)
         if (emptyPos.c === selectedTile.c && emptyPos.r === selectedTile.r + 1) {
-          tryMove(selectedTile.r, selectedTile.c)
+          directMove(selectedTile.r, selectedTile.c)
         }
       } else {
         // Swipe up - move tile up (if empty space is above)
         if (emptyPos.c === selectedTile.c && emptyPos.r === selectedTile.r - 1) {
-          tryMove(selectedTile.r, selectedTile.c)
+          directMove(selectedTile.r, selectedTile.c)
         }
       }
     }
     
-    // Reset touch state and visual feedback
-    if (selectedTile) {
-      resetTileVisualState(selectedTile.r, selectedTile.c)
+    // If dragged far enough toward empty, trigger move immediately
+    let moved = false
+    if (dragAllowedDir === 'right' && deltaX > threshold) moved = true
+    if (dragAllowedDir === 'left' && -deltaX > threshold) moved = true
+    if (dragAllowedDir === 'down' && deltaY > threshold) moved = true
+    if (dragAllowedDir === 'up' && -deltaY > threshold) moved = true
+    if (moved) {
+      const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
+      if (tileEl) {
+        tileEl.style.transition = 'transform 0.15s ease-out' // Smooth snap back to position
+        tileEl.style.transform = 'translate(0px, 0px)' // Reset to original position
+      }
+
+      // Directly commit the move without animation overlay
+      directMove(selectedTile.r, selectedTile.c)
+    } else if (selectedTile) {
+      const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
+      if (tileEl) {
+        // tileEl.style.transition = 'transform 120ms ease-out' // Disabled to prevent ghosting
+        tileEl.style.transform = 'translate3d(0px, 0px, 2px)' // Single 3D transform to prevent ghosting
+      }
+      setTimeout(() => resetTileVisualState(selectedTile.r, selectedTile.c), 130)
     }
     setTouchStart(null)
     setTouchEnd(null)
     setSelectedTile(null)
-  }, [touchStart, touchEnd, selectedTile, board, tryMove, emptyPos])
+    setIsDragging(false)
+    setDragAllowedDir(null)
+  }, [touchStart, touchEnd, selectedTile, board, directMove, emptyPos, dragAllowedDir, tileStep, resetTileVisualState])
 
   const handleMouseUp = useCallback((e) => {
     if (!touchStart || !touchEnd || !selectedTile) {
@@ -1367,12 +1488,15 @@ function App() {
       setTouchEnd(null)
       setSelectedTile(null)
       setIsDragging(false)
+      setDragAllowedDir(null)
       return
     }
     
     const deltaX = touchEnd.x - touchStart.x
     const deltaY = touchEnd.y - touchStart.y
     const minSwipeDistance = 30 // Minimum distance to trigger a move
+    const step = tileStep || (41 + 1)
+    const threshold = step / 2
     
     // Determine swipe direction and move tile
     if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
@@ -1380,12 +1504,12 @@ function App() {
       if (deltaX > 0) {
         // Swipe right - move tile to the right (if empty space is to the right)
         if (emptyPos.r === selectedTile.r && emptyPos.c === selectedTile.c + 1) {
-          tryMove(selectedTile.r, selectedTile.c)
+          directMove(selectedTile.r, selectedTile.c)
         }
       } else {
         // Swipe left - move tile to the left (if empty space is to the left)
         if (emptyPos.r === selectedTile.r && emptyPos.c === selectedTile.c - 1) {
-          tryMove(selectedTile.r, selectedTile.c)
+          directMove(selectedTile.r, selectedTile.c)
         }
       }
     } else if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > minSwipeDistance) {
@@ -1393,25 +1517,45 @@ function App() {
       if (deltaY > 0) {
         // Swipe down - move tile down (if empty space is below)
         if (emptyPos.c === selectedTile.c && emptyPos.r === selectedTile.r + 1) {
-          tryMove(selectedTile.r, selectedTile.c)
+          directMove(selectedTile.r, selectedTile.c)
         }
       } else {
         // Swipe up - move tile up (if empty space is above)
         if (emptyPos.c === selectedTile.c && emptyPos.r === selectedTile.r - 1) {
-          tryMove(selectedTile.r, selectedTile.c)
+          directMove(selectedTile.r, selectedTile.c)
         }
       }
     }
     
-    // Reset mouse state and visual feedback
-    if (selectedTile) {
-      resetTileVisualState(selectedTile.r, selectedTile.c)
+    // If dragged far enough toward empty, trigger move immediately
+    let moved = false
+    if (dragAllowedDir === 'right' && deltaX > threshold) moved = true
+    if (dragAllowedDir === 'left' && -deltaX > threshold) moved = true
+    if (dragAllowedDir === 'down' && deltaY > threshold) moved = true
+    if (dragAllowedDir === 'up' && -deltaY > threshold) moved = true
+    if (moved) {
+      const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
+      if (tileEl) {
+        tileEl.style.transition = 'transform 0.15s ease-out' // Smooth snap back to position
+        tileEl.style.transform = 'translate(0px, 0px)' // Reset to original position
+      }
+
+      // Directly commit the move without animation overlay
+      directMove(selectedTile.r, selectedTile.c)
+    } else if (selectedTile) {
+      const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
+      if (tileEl) {
+        // tileEl.style.transition = 'transform 120ms ease-out' // Disabled to prevent ghosting
+        tileEl.style.transform = 'translate3d(0px, 0px, 2px)' // Single 3D transform to prevent ghosting
+      }
+      setTimeout(() => resetTileVisualState(selectedTile.r, selectedTile.c), 130)
     }
     setTouchStart(null)
     setTouchEnd(null)
     setSelectedTile(null)
     setIsDragging(false)
-  }, [touchStart, touchEnd, selectedTile, board, tryMove, emptyPos])
+    setDragAllowedDir(null)
+  }, [touchStart, touchEnd, selectedTile, board, directMove, emptyPos, dragAllowedDir, tileStep, resetTileVisualState])
 
   // Global mouse up handler for when mouse is released outside tiles
   useEffect(() => {
@@ -1447,42 +1591,35 @@ function App() {
     }
   }, [currentView])
 
-  // Remove JS progress loop; CSS transform-based animation is used
-  useEffect(() => {
-    if (!animating || !animation) return
-    const overlay = document.querySelector('[data-animation-overlay]')
-    if (overlay) {
-      // Force a reflow then animate to destination
-      overlay.offsetHeight
-      const step = tileStep || (41 + 1)
-      overlay.style.transform = `translate(${step * animation.to.c}px, ${step * animation.to.r}px)`
-      const onEnd = () => {
-        // 1) Commit swap so destination letter renders underneath
-        setBoard(prevBoard => {
-          const b = prevBoard.map(row => [...row])
-          b[animation.to.r][animation.to.c] = animation.letter
-          b[animation.from.r][animation.from.c] = ''
-          return b
-        })
-        setEmptyPos({ r: animation.from.r, c: animation.from.c })
-
-        // 2) Force a micro-hold on the destination tile to avoid any transition flicker
-        setSwapHold({ r: animation.to.r, c: animation.to.c })
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            setAnimating(false)
-            setAnimation(null)
-            // release hold after next paint
-            setTimeout(() => setSwapHold(null), 0)
-          })
-        })
-
-        overlay.removeEventListener('transitionend', onEnd)
-        setTimeout(() => checkWordCompletion(), 100)
-      }
-      overlay.addEventListener('transitionend', onEnd, { once: true })
-    }
-  }, [animating, animation, checkWordCompletion, tileStep])
+  // Animation overlay completely disabled - using direct moves only
+  // useEffect(() => {
+  //   if (!animating || !animation) return
+  //   const overlay = document.querySelector('[data-animation-overlay]')
+  //   if (overlay) {
+  //     overlay.offsetHeight
+  //     const step = tileStep || (41 + 1)
+  //     overlay.style.transform = `translate(${step * animation.to.c}px, ${step * animation.to.r}px)`
+  //     const onEnd = () => {
+  //       setBoard(prevBoard => {
+  //         const b = prevBoard.map(row => [...row])
+  //         b[animation.to.r][animation.to.c] = animation.letter
+  //         b[animation.from.r][animation.from.c] = ''
+  //         return b
+  //       })
+  //       setEmptyPos({ r: animation.from.r, c: animation.from.c })
+  //       setSwapHold({ r: animation.to.r, c: animation.to.c })
+  //       requestAnimationFrame(() => {
+  //         requestAnimationFrame(() => {
+  //           setAnimating(false)
+  //           setAnimation(null)
+  //           setTimeout(() => setSwapHold(null), 0)
+  //         })
+  //       })
+  //       overlay.removeEventListener('transitionend', onEnd)
+  //     }
+  //     overlay.addEventListener('transitionend', onEnd, { once: true })
+  //   }
+  // }, [animating, animation, checkWordCompletion, tileStep])
 
   // Start original game
   const startOriginalGame = useCallback(() => {
@@ -1505,18 +1642,65 @@ function App() {
 
   // Show hint confirmation
   const showHintConfirmation = useCallback(() => {
-    if (hintCount > 0) {
-      setHintCount(prev => prev - 1)
-      // Highlight an uncompleted word
-      const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
-      const uncompletedWords = targetWords.filter(word => !completedWords.has(word))
-      if (uncompletedWords.length > 0) {
-        alert(`Hint: Look for the word "${uncompletedWords[0].toUpperCase()}"`)
-      }
-    } else {
-      alert('No hints remaining! Complete the level to earn more.')
+    if (hintCount <= 0) {
+      return
     }
-  }, [hintCount, currentLevel, completedWords, WORD_SETS])
+    setHintCount(prev => prev - 1)
+    const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
+    const uncompletedWords = (targetWords || []).filter(word => !completedWords.has(word))
+    const chosenWord = (uncompletedWords.length > 0 ? uncompletedWords : targetWords)?.[0]
+    if (!chosenWord || board.length === 0) return
+    const letters = chosenWord.toUpperCase().split('')
+    // For each letter (including duplicates), pick one matching tile on the board.
+    const lettersSet = new Set(letters)
+    const getNeighborsScore = (pos) => {
+      const dirs = [[1,0],[-1,0],[0,1],[0,-1]]
+      let score = 0
+      for (const [dr, dc] of dirs) {
+        const nr = pos.r + dr
+        const nc = pos.c + dc
+        if (nr >= 0 && nr < board.length && nc >= 0 && nc < board[nr].length) {
+          const neighbor = board[nr][nc]
+          if (neighbor && lettersSet.has(String(neighbor).toUpperCase())) {
+            score += 1
+          }
+        }
+      }
+      return score
+    }
+    const usedKeys = new Set()
+    const selectedPositions = []
+    for (const letter of letters) {
+      const candidates = []
+      for (let r = 0; r < board.length; r++) {
+        for (let c = 0; c < board[r].length; c++) {
+          const cell = board[r][c]
+          if (cell && String(cell).toUpperCase() === letter.toUpperCase()) {
+            const key = `${r}-${c}`
+            if (!usedKeys.has(key)) {
+              candidates.push({ r, c })
+            }
+          }
+        }
+      }
+      if (candidates.length === 0) continue
+      // Prefer candidates with more neighbors that are also part of the word
+      let bestPos = candidates[0]
+      let bestScore = -1
+      for (const pos of candidates) {
+        const score = getNeighborsScore(pos)
+        if (score > bestScore) {
+          bestScore = score
+          bestPos = pos
+        }
+      }
+      selectedPositions.push(bestPos)
+      usedKeys.add(`${bestPos.r}-${bestPos.c}`)
+    }
+    if (selectedPositions.length === 0) return
+    setHintBlinkPositions(selectedPositions)
+    setTimeout(() => setHintBlinkPositions([]), 3000)
+  }, [hintCount, currentLevel, completedWords, WORD_SETS, board])
 
   // Show rules modal
   const showRulesModal = useCallback(() => {
@@ -1589,6 +1773,12 @@ function App() {
           opacity: 1;
           transform: translateX(0);
         }
+      }
+
+      @keyframes hintBlink {
+        0% { filter: none; opacity: 1; }
+        50% { filter: brightness(1.25); opacity: 0.7; }
+        100% { filter: none; opacity: 1; }
       }
     `
     document.head.appendChild(style)
@@ -1669,40 +1859,6 @@ function App() {
           }}>
             <button 
               className="menu-button" 
-              onClick={() => setShowLeaderboard(true)}
-              style={{
-                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
-                color: '#654321',
-                border: '3px solid #8B4513',
-                padding: 'clamp(16px, 4vw, 20px) clamp(30px, 8vw, 50px)',
-                fontSize: 'clamp(18px, 5vw, 22px)',
-                fontWeight: 'bold',
-                borderRadius: '12px',
-                cursor: 'pointer',
-                minHeight: '60px',
-                minWidth: '200px',
-                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
-                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                touchAction: 'manipulation',
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.transform = 'translateY(-3px) scale(1.02)'
-                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = 'translateY(0) scale(1)'
-                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
-              }}
-            >
-              🏆 Leaderboard
-            </button>
-            <button 
-              className="menu-button" 
               onClick={startOriginalGame}
               style={{
                 background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
@@ -1771,15 +1927,28 @@ function App() {
               🔄 Tetris Style
             </button>
             
-            {/* Login Button - Added directly to menu-buttons */}
-            <button 
-              className="menu-button" 
-              onClick={() => {
-                console.log('🔍 Login button clicked!')
-                console.log('🔍 Current showAuthModal state:', showAuthModal)
-                setShowAuthModal(true)
-                console.log('🔍 Set showAuthModal to true')
-              }}
+          </div>
+          
+          {/* Auth Modal */}
+          <AuthModal 
+            isOpen={showAuthModal} 
+            onClose={() => {
+              console.log('🔍 AuthModal onClose called')
+              setShowAuthModal(false)
+            }}
+            initialMode="login"
+          />
+
+          {/* Sign-in button near bottom (raised 300px) */}
+          <div style={{
+            position: 'absolute',
+            bottom: 300,
+            left: 0,
+            right: 0,
+            textAlign: 'center'
+          }}>
+            <button
+              onClick={() => setShowAuthModal(true)}
               style={{
                 background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
                 color: '#654321',
@@ -1809,34 +1978,9 @@ function App() {
                 e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
               }}
             >
-              👤 Sign In
+              👤 Sign in / Sign up
             </button>
           </div>
-          
-          {/* Login/User Profile Section */}
-          <div className="auth-section" style={{
-            marginTop: '20px',
-            textAlign: 'center'
-          }}>
-            <UserProfile />
-          </div>
-          
-          {/* Auth Modal */}
-          <AuthModal 
-            isOpen={showAuthModal} 
-            onClose={() => {
-              console.log('🔍 AuthModal onClose called')
-              setShowAuthModal(false)
-            }}
-            initialMode="login"
-          />
-
-          {/* Leaderboard Modal */}
-          <LeaderboardModal
-            isOpen={showLeaderboard}
-            onClose={() => setShowLeaderboard(false)}
-            gameMode="original"
-          />
         </div>
       )}
 
@@ -1899,11 +2043,32 @@ function App() {
             maxWidth: '90vw',
             textAlign: 'center'
           }}>
-            <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
-              Target words: <strong style={{color: '#F5DEB3'}}>
-                {WORD_SETS[currentLevel - 1]?.join(', ').toUpperCase()}
-              </strong>
-            </p>
+            <div style={{
+              margin: '8px 0',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '8px',
+              justifyContent: 'center'
+            }}>
+              {WORD_SETS[currentLevel - 1]?.map((word) => (
+                <span
+                  key={word}
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: 'clamp(12px, 3vw, 14px)',
+                    fontWeight: 'bold',
+                    backgroundColor: completedWords.has(word) ? '#90EE90' : 'rgba(139, 69, 19, 0.3)',
+                    color: completedWords.has(word) ? '#006400' : '#F5DEB3',
+                    border: `2px solid ${completedWords.has(word) ? '#228B22' : '#8B4513'}`,
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {word.toUpperCase()}
+                  {completedWords.has(word) && ' ✓'}
+                </span>
+              ))}
+            </div>
             <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
               Completed: <span style={{color: '#F5DEB3'}}>
                 {completedWords.size}/{WORD_SETS[currentLevel - 1]?.length || 0}
@@ -1912,6 +2077,11 @@ function App() {
             <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
               Moves: <span style={{color: '#F5DEB3'}}>{moveCount}</span>
             </p>
+            {isAuthenticated && user?.username && (
+              <p style={{margin: '8px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
+                User: <span style={{ color: '#FFD700' }}>{user.username}</span>
+              </p>
+            )}
             
             {/* Game controls */}
             <div style={{
@@ -1993,6 +2163,31 @@ function App() {
               >
                 📖 Rules
               </button>
+
+              <button 
+                onClick={() => setShowLeaderboard(true)}
+                style={{
+                  background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                  color: '#654321',
+                  border: '2px solid #8B4513',
+                  padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
+                  borderRadius: '10px',
+                  fontSize: 'clamp(13px, 3.5vw, 15px)',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  minHeight: '36px',
+                  minWidth: '100px',
+                  boxShadow: '0 4px 12px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                  transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                  touchAction: 'manipulation',
+                  textShadow: '0 1px 2px rgba(255, 255, 255, 0.3)',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+              >
+                🏆 Leaderboard
+              </button>
+              {/* Username moved to header box under Moves */}
             </div>
             
             {/* Rules Modal */}
@@ -2022,19 +2217,19 @@ function App() {
                     }}>×</button>
                   </div>
 
-                  <div style={{ color: '#654321', lineHeight: 1.5 }}>
-                    <p><strong>Goal:</strong> Slide tiles to form the target words shown above the board.</p>
-                    <ul style={{ paddingLeft: 18 }}>
-                      <li>Only the tile adjacent to the empty cell can move.</li>
-                      <li>Tap/click a tile next to the empty space to slide it into the empty cell.</li>
-                      <li>Form all target words to complete the round.</li>
-                      <li>When a word is completed, its tiles turn green and lock in place.</li>
-                      <li>Moves are counted; try to solve with the fewest moves.</li>
+                  <div style={{ color: '#654321', lineHeight: 1.6, textAlign: 'left' }}>
+                    <p style={{ marginTop: 0 }}>🎯 <strong>Goal:</strong> Slide tiles to form the target words shown above the board.</p>
+                    <ul style={{ paddingLeft: 18, marginTop: 8 }}>
+                      <li>🧩 Only the tile adjacent to the empty cell can move.</li>
+                      <li>🖱️ Tap/click a tile next to the empty space to slide it into the empty cell.</li>
+                      <li>🏆 Form all target words to complete the round.</li>
+                      <li>✅ When a word is completed, its tiles turn green and lock in place.</li>
+                      <li>📉 Moves are counted; try to solve with the fewest moves.</li>
                     </ul>
-                    <p><strong>Tips:</strong></p>
-                    <ul style={{ paddingLeft: 18 }}>
-                      <li>Look for near-complete words and free up the needed letter.</li>
-                      <li>Use the empty space strategically to rotate letters into position.</li>
+                    <p style={{ marginTop: 12 }}>💡 <strong>Tips:</strong></p>
+                    <ul style={{ paddingLeft: 18, marginTop: 6 }}>
+                      <li>🔎 Look for near-complete words and free up the needed letter.</li>
+                      <li>🌀 Use the empty space strategically to rotate letters into position.</li>
                     </ul>
                   </div>
 
@@ -2049,34 +2244,15 @@ function App() {
               </div>
             )}
 
-            {/* Word completion status */}
-            <div style={{
-              marginTop: '10px',
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '8px',
-              justifyContent: 'center'
-            }}>
-              {WORD_SETS[currentLevel - 1]?.map((word, index) => (
-                <span
-                  key={word}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    fontSize: 'clamp(12px, 3vw, 14px)',
-                    fontWeight: 'bold',
-                    backgroundColor: completedWords.has(word) ? '#90EE90' : 'rgba(139, 69, 19, 0.3)',
-                    color: completedWords.has(word) ? '#006400' : '#F5DEB3',
-                    border: `2px solid ${completedWords.has(word) ? '#228B22' : '#8B4513'}`,
-                    transition: 'all 0.3s ease'
-                  }}
-                >
-                  {word.toUpperCase()}
-                  {completedWords.has(word) && ' ✓'}
-                </span>
-              ))}
-            </div>
+            {/* Word completion status removed per request */}
           </div>
+
+          {/* Leaderboard Modal for Original Mode */}
+          <LeaderboardModal
+            isOpen={showLeaderboard}
+            onClose={() => setShowLeaderboard(false)}
+            gameMode="original"
+          />
           
           {/* Game Board */}
           <div style={{
@@ -2090,24 +2266,6 @@ function App() {
             isolation: 'isolate',
             contain: 'layout'
           }}>
-            {/* Touch Instructions */}
-            <div style={{
-              textAlign: 'center',
-              marginBottom: '15px',
-              padding: '10px',
-              backgroundColor: 'rgba(139, 69, 19, 0.2)',
-              borderRadius: '8px',
-              border: '1px solid #8B4513',
-              maxWidth: '90vw'
-            }}>
-              <p style={{
-                margin: '0',
-                fontSize: 'clamp(12px, 3vw, 14px)',
-                color: '#F5DEB3'
-              }}>
-                🎮 <strong>Controls:</strong> Click tiles to move them into the empty space
-              </p>
-            </div>
             
             {/* Board Container - Connected Surface */}
             <div 
@@ -2172,7 +2330,7 @@ function App() {
                     onTouchStart={(e) => handleTouchStart(e, r, c)}
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
-                      onClick={() => tryMove(r, c)}
+                      onClick={() => directMove(r, c)}
                     style={{
                         width: 'clamp(40px, 10vw, 55px)',
                         height: 'clamp(40px, 10vw, 55px)',
@@ -2192,13 +2350,14 @@ function App() {
                         color: '#654321',
                         cursor: cell ? (isDragging ? 'grabbing' : 'grab') : 'default',
                         boxShadow: cell ? '0 4px 8px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.2)' : 'none',
-                        transition: 'all 0.1s ease',
+                        // transition: 'all 0.1s ease', // Disabled to prevent ghosting
                       position: 'relative',
                       userSelect: 'none',
                       WebkitUserSelect: 'none',
                       WebkitTapHighlightColor: 'transparent',
+                      touchAction: 'none',
                         // Make tiles appear as raised sections of the board
-                        transform: cell ? 'translateZ(2px)' : 'none',
+                        /* transform: cell ? 'translateZ(2px)' : 'none', */ // Disabled GPU acceleration to prevent ghosting
                         // Connected surface effect - use specific border properties
                         borderRight: c < row.length - 1 ? '1px solid #654321' : 'none',
                         borderBottom: r < board.length - 1 ? '1px solid #654321' : 'none',
@@ -2214,12 +2373,22 @@ function App() {
                           borderRight: c < row.length - 1 ? '1px solid #228B22' : 'none',
                           borderBottom: r < board.length - 1 ? '1px solid #228B22' : 'none',
                           boxShadow: '0 6px 12px rgba(34,139,34,0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2)',
-                          animation: 'completedWordPulse 1.5s ease-in-out infinite',
-                          transform: 'translateZ(4px) perspective(100px) rotateX(3deg)'
+                          // animation: 'completedWordPulse 1.5s ease-in-out infinite', // Disabled to prevent ghosting
+                          /* transform: 'translateZ(4px) perspective(100px) rotateX(3deg)' */ // Disabled GPU acceleration to prevent ghosting
+                        }),
+                        // Blink hint tiles for chosen word
+                        ...(hintBlinkPositions && hintBlinkPositions.some(p => p.r === r && p.c === c) && {
+                          backgroundColor: '#90EE90',
+                          color: '#006400',
+                          borderTop: '2px solid #228B22',
+                          borderLeft: '2px solid #228B22',
+                          borderRight: c < row.length - 1 ? '1px solid #228B22' : 'none',
+                          borderBottom: r < board.length - 1 ? '1px solid #228B22' : 'none',
+                          // animation: 'hintBlink 0.6s ease-in-out infinite' // Disabled to prevent ghosting
                         }),
                         // Highlight selected tile with enhanced 3D effects
                         ...(selectedTile && selectedTile.r === r && selectedTile.c === c && {
-                          transform: 'translateZ(6px) perspective(100px) rotateX(6deg) scale(1.1)',
+                          // transform: 'translateZ(6px) perspective(100px) rotateX(6deg) scale(1.1)', // Disabled GPU acceleration to prevent ghosting
                           zIndex: 10,
                           boxShadow: '0 0 25px rgba(255, 215, 0, 0.9), 0 8px 20px rgba(139, 69, 19, 0.7), inset 0 2px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.3)',
                           transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
@@ -2235,13 +2404,13 @@ function App() {
                       }}
                       onMouseEnter={(e) => {
                         if (cell) {
-                          e.target.style.transform = 'translateZ(4px) scale(1.05)'
+                          // e.target.style.transform = 'translate3d(0px, 0px, 4px) scale(1.05)' // Disabled GPU acceleration to prevent ghosting
                           e.target.style.boxShadow = '0 6px 12px rgba(139, 69, 19, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(0, 0, 0, 0.3)'
                         }
                       }}
                       onMouseLeave={(e) => {
                         if (cell) {
-                          e.target.style.transform = 'translateZ(2px) scale(1)'
+                          // e.target.style.transform = 'translate3d(0px, 0px, 2px) scale(1)' // Disabled GPU acceleration to prevent ghosting
                           e.target.style.boxShadow = '0 4px 8px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.2)'
                         }
                       }}
@@ -2252,9 +2421,9 @@ function App() {
               </div>
             ))}
           
-              {/* Animation Overlay - Positioned relative to the connected board surface */}
-          {animating && animation && (
-            <div
+              {/* Animation Overlay - Completely disabled to prevent ghosting */}
+          {/* Animation overlay completely disabled to prevent ghosting */}
+          {/* <div
               style={{
                 position: 'absolute',
                 top: 0,
@@ -2286,7 +2455,6 @@ function App() {
                       boxShadow: '0 6px 12px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.3)',
                       zIndex: 101,
                       pointerEvents: 'none',
-                      // Use transform-based slide for smooth animation with measured step
                       left: 0,
                       top: 0,
                       transform: tileStep
@@ -2294,7 +2462,6 @@ function App() {
                         : `translate(${(41 + 1) * animation.from.c}px, ${(41 + 1) * animation.from.r}px)`,
                       transition: 'transform 0.22s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
                       willChange: 'transform',
-                      // Ensure solid appearance
                       backdropFilter: 'none',
                       WebkitBackdropFilter: 'none'
                 }}
@@ -2302,16 +2469,50 @@ function App() {
                 {animation.letter.toUpperCase()}
               </div>
             </div>
-          )}
+          ) */}
             </div>
           </div>
           
-          {/* Main Menu Button */}
+          {/* Bottom action buttons: New Game + Main Menu */}
           <div style={{
-            textAlign: 'center', 
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '12px',
             marginTop: '20px',
             marginBottom: '20px'
           }}>
+            <button 
+              onClick={resetToLevelOne}
+              style={{
+                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                color: '#654321',
+                border: '3px solid #8B4513',
+                padding: 'clamp(14px, 3.5vw, 18px) clamp(24px, 6vw, 36px)',
+                borderRadius: '12px',
+                fontSize: 'clamp(15px, 4.5vw, 17px)',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                minHeight: '48px',
+                minWidth: '140px',
+                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                touchAction: 'manipulation',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-3px) scale(1.02)'
+                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0) scale(1)'
+                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+              }}
+            >
+              New Game
+            </button>
             <button 
               onClick={() => setCurrentView('menu')}
               style={{
@@ -2539,9 +2740,40 @@ function App() {
             >
                 ❓ How to Play
             </button>
+
+            <button
+              onClick={() => setShowLeaderboard(true)}
+              style={{
+                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                color: '#654321',
+                border: '3px solid #8B4513',
+                padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
+                borderRadius: '10px',
+                fontSize: 'clamp(13px, 3.5vw, 15px)',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                minHeight: '36px',
+                minWidth: '100px',
+                boxShadow: '0 4px 12px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                touchAction: 'manipulation',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.3)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+            >
+              🏆 Leaderboard
+            </button>
               
               
           </div>
+          
+          {/* Leaderboard Modal for Tetris Mode */}
+          <LeaderboardModal
+            isOpen={showLeaderboard}
+            onClose={() => setShowLeaderboard(false)}
+            gameMode="tetris"
+          />
         </div>
           
           {/* Tetris Board - Same layout as original game */}
@@ -2636,7 +2868,7 @@ function App() {
                         WebkitUserSelect: 'none',
                         WebkitTapHighlightColor: 'transparent',
                         // Make tiles appear as raised sections of the board
-                        transform: cell ? 'translateZ(2px)' : 'none',
+                        /* transform: cell ? 'translateZ(2px)' : 'none', */ // Disabled GPU acceleration to prevent ghosting
                         // Connected surface effect - use specific border properties
                         borderRight: c < row.length - 1 ? '1px solid #654321' : 'none',
                         borderBottom: r < tetrisBoard.length - 1 ? '1px solid #654321' : 'none',
