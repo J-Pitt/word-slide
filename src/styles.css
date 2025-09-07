@@ -1517,3 +1517,171 @@ h1 {
         transform: translateX(-50%) translateY(0);
     }
 }
+
+/* ===== MOBILE OPTIMIZATIONS ===== */
+
+/* CSS Custom Properties for responsive design */
+:root {
+    --tile-size: 40px;
+    --gap-size: 1px;
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-right: env(safe-area-inset-right, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-inset-left: env(safe-area-inset-left, 0px);
+}
+
+/* Mobile-first responsive design */
+@media (max-width: 768px) {
+    /* Ensure touch targets are at least 44px */
+    .touch-target {
+        min-width: 44px;
+        min-height: 44px;
+    }
+    
+    /* Prevent text selection on touch */
+    .no-select {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+    }
+    
+    /* Optimize game board for mobile */
+    .game-board {
+        padding: var(--safe-area-inset-top) var(--safe-area-inset-right) var(--safe-area-inset-bottom) var(--safe-area-inset-left);
+        max-width: 100vw;
+        max-height: 100vh;
+        overflow: hidden;
+    }
+    
+    /* Responsive tile sizing */
+    [data-tile] {
+        width: var(--tile-size);
+        height: var(--tile-size);
+        font-size: calc(var(--tile-size) * 0.4);
+        min-width: 44px;
+        min-height: 44px;
+    }
+    
+    /* Responsive game info */
+    .game-info {
+        padding: 8px;
+        font-size: 14px;
+    }
+    
+    /* Responsive buttons */
+    button {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 8px 16px;
+        font-size: 16px;
+    }
+    
+    /* Responsive modals */
+    .modal {
+        padding: var(--safe-area-inset-top) var(--safe-area-inset-right) var(--safe-area-inset-bottom) var(--safe-area-inset-left);
+        max-height: 100vh;
+        overflow-y: auto;
+    }
+}
+
+/* Landscape orientation optimizations */
+@media (orientation: landscape) and (max-height: 500px) {
+    .game-board {
+        flex-direction: row;
+        gap: 16px;
+    }
+    
+    .game-info {
+        flex-shrink: 0;
+        width: 200px;
+    }
+    
+    .word-indicators {
+        flex-direction: column;
+        max-height: 100vh;
+        overflow-y: auto;
+    }
+}
+
+/* High DPI display optimizations */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    [data-tile] {
+        /* Ensure crisp rendering on high DPI displays */
+        image-rendering: -webkit-optimize-contrast;
+        image-rendering: crisp-edges;
+    }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+    /* Remove hover effects on touch devices */
+    [data-tile]:hover {
+        transform: none;
+        box-shadow: none;
+        filter: none;
+    }
+    
+    /* Add touch feedback */
+    [data-tile]:active {
+        transform: scale(0.95);
+        transition: transform 0.1s ease;
+    }
+    
+    /* Optimize scrolling */
+    * {
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* Performance optimizations */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    /* Already using dark theme, but can add specific dark mode adjustments */
+    .modal {
+        background-color: rgba(0, 0, 0, 0.9);
+    }
+}
+
+/* Hardware acceleration for smooth animations */
+[data-tile] {
+    will-change: transform;
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+}
+
+/* Optimize for mobile browsers */
+@supports (-webkit-touch-callout: none) {
+    /* iOS Safari specific optimizations */
+    body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+    
+    input, button, select, textarea {
+        -webkit-appearance: none;
+        border-radius: 0;
+    }
+}
+
+/* PWA specific styles */
+@media (display-mode: standalone) {
+    /* Hide browser UI elements when in PWA mode */
+    body {
+        padding-top: var(--safe-area-inset-top);
+        padding-bottom: var(--safe-area-inset-bottom);
+    }
+    
+    .install-button {
+        display: none;
+    }
+}

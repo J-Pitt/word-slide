@@ -13,6 +13,11 @@ exports.handler = async (event) => {
     try {
         await client.connect();
         
+        // Enable CORS
+        const allowedOrigins = ['https://word-slide.com', 'http://localhost:3000', 'http://localhost:5173'];
+        const origin = event.headers?.origin || event.headers?.Origin;
+        const corsOrigin = allowedOrigins.includes(origin) ? origin : 'https://word-slide.com';
+        
         // Get query parameters
         const gameMode = event.queryStringParameters?.gameMode || 'original';
         const limit = parseInt(event.queryStringParameters?.limit) || 20;
@@ -51,7 +56,7 @@ exports.handler = async (event) => {
             statusCode: 200,
             headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Origin': corsOrigin,
                 'Access-Control-Allow-Headers': 'Content-Type',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
             },
@@ -70,7 +75,7 @@ exports.handler = async (event) => {
             statusCode: 500,
             headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Origin': corsOrigin,
                 'Access-Control-Allow-Headers': 'Content-Type',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
             },

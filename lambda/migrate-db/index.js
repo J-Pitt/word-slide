@@ -9,33 +9,89 @@ exports.handler = async (event) => {
         password: process.env.DB_PASSWORD,
         ssl: { rejectUnauthorized: false }
     });
+    
+    let gameClient = null;
 
     try {
         await client.connect();
         
         console.log('Connected to database, starting migration...');
         
-        // Check if email column exists
-        const checkEmailColumn = await client.query(`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = 'users' AND column_name = 'email'
-        `);
-        
-        if (checkEmailColumn.rows.length > 0) {
-            console.log('Email column exists, removing it...');
-            
-            // Remove email column and its index
-            await client.query('ALTER TABLE users DROP COLUMN IF EXISTS email CASCADE');
-            await client.query('DROP INDEX IF EXISTS idx_users_email');
-            
-            console.log('Email column and index removed successfully');
-        } else {
-            console.log('Email column does not exist, no migration needed');
+        // Create the wordslide_game database if it doesn't exist
+        try {
+            await client.query('CREATE DATABASE wordslide_game');
+            console.log('Database wordslide_game created');
+        } catch (error) {
+            if (error.code === '42P04') { // Database already exists
+                console.log('Database wordslide_game already exists');
+            } else {
+                throw error;
+            }
         }
         
+        // Connect to the wordslide_game database
+        await client.end();
+        const gameClient = new Client({
+            host: process.env.DB_HOST,
+            port: process.env.DB_PORT,
+            database: 'wordslide_game',
+            user: process.env.DB_USER,
+            password: process.env.DB_PASSWORD,
+            ssl: { rejectUnauthorized: false }
+        });
+        await gameClient.connect();
+        
+        // Create users table
+        await gameClient.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
+        // Create game_stats table
+        await gameClient.query(`
+            CREATE TABLE IF NOT EXISTS game_stats (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                game_mode VARCHAR(20) NOT NULL,
+                words_solved INTEGER DEFAULT 0,
+                total_moves INTEGER DEFAULT 0,
+                games_played INTEGER DEFAULT 0,
+                best_score INTEGER DEFAULT 0,
+                last_played TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
+        // Create game_sessions table
+        await gameClient.query(`
+            CREATE TABLE IF NOT EXISTS game_sessions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                game_mode VARCHAR(20) NOT NULL,
+                level INTEGER NOT NULL,
+                words_solved INTEGER DEFAULT 0,
+                moves_made INTEGER DEFAULT 0,
+                completed BOOLEAN DEFAULT false,
+                session_duration INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
+        // Create indexes
+        await gameClient.query('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)');
+        await gameClient.query('CREATE INDEX IF NOT EXISTS idx_game_stats_user_id ON game_stats(user_id)');
+        await gameClient.query('CREATE INDEX IF NOT EXISTS idx_game_stats_game_mode ON game_stats(game_mode)');
+        await gameClient.query('CREATE INDEX IF NOT EXISTS idx_game_sessions_user_id ON game_sessions(user_id)');
+        await gameClient.query('CREATE INDEX IF NOT EXISTS idx_game_sessions_game_mode ON game_sessions(game_mode)');
+        
+        console.log('Database schema created successfully');
+        
         // Check if the correct schema exists
-        const checkSchema = await client.query(`
+        const checkSchema = await gameClient.query(`
             SELECT column_name, data_type, is_nullable
             FROM information_schema.columns 
             WHERE table_name = 'users'
@@ -45,7 +101,7 @@ exports.handler = async (event) => {
         console.log('Current users table schema:', checkSchema.rows);
         
         // Verify the table structure
-        const tableInfo = await client.query(`
+        const tableInfo = await gameClient.query(`
             SELECT table_name, column_name, data_type, is_nullable
             FROM information_schema.columns 
             WHERE table_name IN ('users', 'game_stats', 'game_sessions')
@@ -58,7 +114,7 @@ exports.handler = async (event) => {
             statusCode: 200,
             headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Origin': 'https://word-slide.com',
                 'Access-Control-Allow-Headers': 'Content-Type',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
             },
@@ -76,7 +132,7 @@ exports.handler = async (event) => {
             statusCode: 500,
             headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Origin': 'https://word-slide.com',
                 'Access-Control-Allow-Headers': 'Content-Type',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
             },
@@ -87,6 +143,11 @@ exports.handler = async (event) => {
             })
         };
     } finally {
-        await client.end();
+        if (gameClient) {
+            await gameClient.end();
+        }
+        if (client) {
+            await client.end();
+        }
     }
 };

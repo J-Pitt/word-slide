@@ -3,6 +3,20 @@ import LeaderboardModal from './components/LeaderboardModal'
 import UserProfile from './components/UserProfile'
 import AuthModal from './components/AuthModal'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+// import { 
+//   mobileFeatures, 
+//   TouchOptimizer, 
+//   performanceUtils, 
+//   hapticUtils, 
+//   responsiveUtils, 
+//   memoryUtils, 
+//   compatibilityUtils 
+// } from './utils/mobileOptimizations'
+// import { 
+//   performanceMonitor, 
+//   webVitalsMonitor, 
+//   networkMonitor 
+// } from './utils/performanceMonitor'
 import './styles.css'
 
 function App() {
@@ -48,6 +62,22 @@ function App() {
     dragOffset: { x: 0, y: 0 },
     startPos: { x: 0, y: 0 }
   })
+
+  // Mobile optimization state
+  // const [mobileState, setMobileState] = useState({
+  //   isMobile: mobileFeatures.isMobile(),
+  //   hasTouch: mobileFeatures.hasTouch(),
+  //   hasHaptics: mobileFeatures.hasHaptics(),
+  //   pixelRatio: mobileFeatures.getPixelRatio(),
+  //   isLandscape: mobileFeatures.isLandscape(),
+  //   safeAreaInsets: mobileFeatures.getSafeAreaInsets()
+  // })
+  
+  // Mobile optimization refs and instances
+  // const touchOptimizerRef = useRef(new TouchOptimizer())
+  // const cleanupManagerRef = useRef(memoryUtils.createCleanupManager())
+  // const tileSizeRef = useRef(0)
+  // const gapSizeRef = useRef(0)
   
   // Tetris-style word game state
   const [tetrisBoard, setTetrisBoard] = useState([])
@@ -200,6 +230,76 @@ function App() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleAppInstalled)
       if (timer) clearTimeout(timer)
+    }
+  }, [])
+
+  // Mobile optimization initialization
+  useEffect(() => {
+    // Initialize compatibility features
+    // compatibilityUtils.addCSSFallbacks()
+    // compatibilityUtils.polyfillRequestIdleCallback()
+    
+    // Initialize performance monitoring
+    // performanceMonitor.startMonitoring()
+    // webVitalsMonitor.startMonitoring()
+    // networkMonitor.startMonitoring()
+    
+    // Calculate responsive tile sizes
+    const updateTileSizes = () => {
+      // const { width, height } = responsiveUtils.getViewportDimensions()
+      // const tileSize = responsiveUtils.calculateTileSize(width, height, 7, 7) // Assuming 7x7 board
+      // const gapSize = responsiveUtils.calculateGapSize(tileSize)
+      const width = window.innerWidth
+      const height = window.innerHeight
+      // Match the CSS calc() values: calc((100% - 20px) / 6) and calc((100% - 40px) / 6)
+      const tileWidth = (width - 20) / 6
+      const tileHeight = (height - 40) / 6
+      const tileSize = Math.min(tileWidth, tileHeight)
+      const gapSize = 2
+      
+      // // tileSizeRef.current = tileSize
+      // // gapSizeRef.current = gapSize
+      
+      // Update CSS custom properties
+      document.documentElement.style.setProperty('--tile-size', `${tileSize}px`)
+      document.documentElement.style.setProperty('--gap-size', `${gapSize}px`)
+      
+      // Calculate step size for drag animations
+      const step = tileSize + gapSize
+      if (step && step !== tileStep) setTileStep(step)
+    }
+    
+    // Initial calculation
+    updateTileSizes()
+    
+    // Handle orientation changes
+    // const cleanupOrientation = responsiveUtils.onOrientationChange(() => {
+    const cleanupOrientation = () => {
+      updateTileSizes()
+      // setMobileState(prev => ({
+      //   ...prev,
+      //   isLandscape: mobileFeatures.isLandscape(),
+      //   safeAreaInsets: mobileFeatures.getSafeAreaInsets()
+      // }))
+    }
+    
+    // Cleanup
+    return () => {
+      cleanupOrientation()
+      // cleanupManagerRef.current.cleanup()
+      
+      // Stop performance monitoring
+      // performanceMonitor.stopMonitoring()
+      
+      // Clear any pending timeouts or intervals
+      const timeouts = window.__wordslideTimeouts || []
+      timeouts.forEach(timeout => clearTimeout(timeout))
+      window.__wordslideTimeouts = []
+      
+      // Clear any pending animation frames
+      const animationFrames = window.__wordslideAnimationFrames || []
+      // animationFrames.forEach(frame => performanceUtils.cancelAnimationFrame(frame))
+      window.__wordslideAnimationFrames = []
     }
   }, [])
 
@@ -708,6 +808,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
             newCompletedWords.add(word)
             wordFound = true
             hasNewCompletions = true
+            
+            // Fireworks are now triggered immediately in the move functions
           }
         }
       }
@@ -723,6 +825,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
             newCompletedWords.add(word)
             wordFound = true
             hasNewCompletions = true
+            
+            // Fireworks are now triggered immediately in the move functions
           }
         }
       }
@@ -730,13 +834,204 @@ Note: Some browsers don't support PWA installation in development mode.`)
     
     // Update completed words immediately if there were new completions
     if (hasNewCompletions) {
-      // Update visual state IMMEDIATELY - this makes letters turn green instantly
+      // Update visual state IMMEDIATELY by directly manipulating DOM elements
+      // This makes letters turn green before React state update
+      const newCompletedWordsArray = Array.from(newCompletedWords)
+      const previousCompletedWordsArray = Array.from(completedWords)
+      
+      // Find newly completed words
+      const newlyCompleted = newCompletedWordsArray.filter(word => !completedWords.has(word))
+      
+      // Fireworks are now triggered immediately in the move functions
+      
+      // Apply green styling immediately to all tiles in newly completed words
+      // Use multiple timing strategies to ensure this works
+      const applyGreenStyling = () => {
+        newlyCompleted.forEach(word => {
+          const wordLower = word.toLowerCase()
+          
+          // Check horizontal words and apply styling immediately
+          for (let row = 0; row < boardToCheck.length; row++) {
+            for (let col = 0; col <= boardToCheck[row].length - word.length; col++) {
+              const horizontalWord = boardToCheck[row].slice(col, col + word.length).join('').toLowerCase()
+              if (horizontalWord === wordLower) {
+                // Apply green styling to all tiles in this horizontal word
+                for (let i = 0; i < word.length; i++) {
+                  const tileElement = document.querySelector(`[data-tile="${row}-${col + i}"]`)
+                  if (tileElement) {
+                    // Verify the tile has the correct letter before applying styling
+                    const tileText = tileElement.textContent?.trim()
+                    const expectedLetter = boardToCheck[row][col + i]
+                    if (tileText === expectedLetter) {
+                      // Batch style updates for better performance
+                      const styles = {
+                        'background-color': '#90EE90',
+                        'color': '#006400',
+                        'border-top': '2px solid #228B22',
+                        'border-left': '2px solid #228B22',
+                        'border-right': col + i < boardToCheck[row].length - 1 ? '1px solid #228B22' : 'none',
+                        'border-bottom': row < boardToCheck.length - 1 ? '1px solid #228B22' : 'none',
+                        'box-shadow': '0 6px 12px rgba(34,139,34,0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2)',
+                        'transition': 'none',
+                        'will-change': 'transform, background-color, box-shadow'
+                      }
+                      
+                      // Apply all styles at once
+                      Object.entries(styles).forEach(([property, value]) => {
+                        tileElement.style.setProperty(property, value, 'important')
+                      })
+                      
+                      // Force a reflow to ensure the styles are applied
+                      tileElement.offsetHeight
+                    }
+                  }
+                }
+                break
+              }
+            }
+          }
+          
+          // Check vertical words and apply styling immediately
+          for (let col = 0; col < boardToCheck[0].length; col++) {
+            for (let row = 0; row <= boardToCheck.length - word.length; row++) {
+              const verticalWord = []
+              for (let i = 0; i < word.length; i++) {
+                verticalWord.push(boardToCheck[row + i][col])
+              }
+              if (verticalWord.join('').toLowerCase() === wordLower) {
+                // Apply green styling to all tiles in this vertical word
+                for (let i = 0; i < word.length; i++) {
+                  const tileElement = document.querySelector(`[data-tile="${row + i}-${col}"]`)
+                  if (tileElement) {
+                    // Verify the tile has the correct letter before applying styling
+                    const tileText = tileElement.textContent?.trim()
+                    const expectedLetter = boardToCheck[row + i][col]
+                    if (tileText === expectedLetter) {
+                      // Batch style updates for better performance
+                      const styles = {
+                        'background-color': '#90EE90',
+                        'color': '#006400',
+                        'border-top': '2px solid #228B22',
+                        'border-left': '2px solid #228B22',
+                        'border-right': col < boardToCheck[0].length - 1 ? '1px solid #228B22' : 'none',
+                        'border-bottom': row + i < boardToCheck.length - 1 ? '1px solid #228B22' : 'none',
+                        'box-shadow': '0 6px 12px rgba(34,139,34,0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2)',
+                        'transition': 'none',
+                        'will-change': 'transform, background-color, box-shadow'
+                      }
+                      
+                      // Apply all styles at once
+                      Object.entries(styles).forEach(([property, value]) => {
+                        tileElement.style.setProperty(property, value, 'important')
+                      })
+                      
+                      // Force a reflow to ensure the styles are applied
+                      tileElement.offsetHeight
+                    }
+                  }
+                }
+                break
+              }
+            }
+          }
+        })
+      }
+      
+      // Apply immediately
+      applyGreenStyling()
+      
+      // Also apply after React's render cycle
+      requestAnimationFrame(applyGreenStyling)
+      
+      // And apply again after a short delay to ensure it sticks
+      setTimeout(applyGreenStyling, 0)
+      
+      // Additional fallback with longer delay to catch any late DOM updates
+      setTimeout(applyGreenStyling, 50)
+      
+      // Set up a MutationObserver to reapply styling if React overrides it
+      const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+            const target = mutation.target
+            if (target.hasAttribute('data-tile')) {
+              const [row, col] = target.getAttribute('data-tile').split('-').map(Number)
+              // Check if this tile should be green
+              if (isLetterInCompletedWord(row, col)) {
+                target.style.setProperty('background-color', '#90EE90', 'important')
+                target.style.setProperty('color', '#006400', 'important')
+                target.style.setProperty('border-top', '2px solid #228B22', 'important')
+                target.style.setProperty('border-left', '2px solid #228B22', 'important')
+                target.style.setProperty('transition', 'none', 'important')
+              }
+            }
+          }
+        })
+      })
+      
+      // Start observing the game board for style changes
+      const gameBoard = document.querySelector('[data-tile]')?.closest('div')
+      if (gameBoard) {
+        observer.observe(gameBoard, { 
+          attributes: true, 
+          attributeFilter: ['style'],
+          subtree: true 
+        })
+        
+        // Stop observing after 2 seconds to avoid performance issues
+        setTimeout(() => observer.disconnect(), 2000)
+      }
+      
+      // Also update the word completion indicators in the UI immediately
+      requestAnimationFrame(() => {
+        newlyCompleted.forEach(word => {
+          const wordIndicator = document.querySelector(`[data-word-indicator="${word}"]`)
+          if (wordIndicator) {
+            // Remove any existing checkmark first
+            const existingCheckmark = wordIndicator.querySelector('.word-checkmark')
+            if (existingCheckmark) {
+              existingCheckmark.remove()
+            }
+            
+            // Add a green checkmark instead of highlighting the word
+            const checkmark = document.createElement('span')
+            checkmark.innerHTML = '✓'
+            checkmark.style.setProperty('color', '#228B22', 'important')
+            checkmark.style.setProperty('font-weight', 'bold', 'important')
+            checkmark.style.setProperty('margin-left', '8px', 'important')
+            checkmark.style.setProperty('font-size', '16px', 'important')
+            checkmark.style.setProperty('transition', 'none', 'important')
+            checkmark.className = 'word-checkmark'
+            
+            // Add the new checkmark
+            wordIndicator.appendChild(checkmark)
+            
+            // Trigger fireworks immediately when checkmark is added (same timing as checkmark)
+            console.log('🎯 WORD COMPLETED - CHECKMARK ADDED! Calling fireworks...', word)
+            showDirectFireworks()
+          }
+        })
+      })
+      
+      // Now update React state
       setCompletedWords(newCompletedWords)
+      
+      // Fireworks are now triggered immediately when word completion is first detected
+      
+      // Add haptic feedback for word completion
+      if (newlyCompleted.length > 0) { // && mobileState.hasHaptics
+        // hapticUtils.success()
+      }
       
       // Check if level is completed
       if (newCompletedWords.size === targetWords.length && !levelTransitioning) {
         setLevelTransitioning(true)
         setShowFireworks(true)
+        
+        // Add haptic feedback for level completion
+        // if (mobileState.hasHaptics) {
+        //   hapticUtils.heavy()
+        // }
         
         // Update database stats after level completion
         updateDatabaseStats(currentLevel, moveCount, newCompletedWords.size)
@@ -806,16 +1101,136 @@ Note: Some browsers don't support PWA installation in development mode.`)
         }
         setFireworks(newFireworks)
         
-        // Show level complete modal after 9 seconds (more time for massive fireworks display)
+        // Show level complete modal after 2 seconds (1 second sooner than before)
         setTimeout(() => {
           setShowFireworks(false)
           setFireworks([])
           setShowLevelCompleteModal(true)
-        }, 9000)
+        }, 2000)
       }
     }
   }, [currentLevel, currentView, levelTransitioning, moveCount, updateDatabaseStats, completedWords])
 
+  // Create instant fireworks animation - dots shooting up from bottom then exploding
+  const showDirectFireworks = useCallback(() => {
+    console.log('🎆 FIREWORKS FUNCTION CALLED!')
+    
+    // Create fireworks container
+    const container = document.createElement('div')
+    container.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 9999;
+    `
+    
+    // Create multiple fireworks - dots shooting up from bottom
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#FF9F43', '#EE5A24', '#00D2D3', '#FF3838', '#2ED573', '#FFA502', '#FF6348', '#7BED9F', '#70A1FF', '#5352ED', '#FF4757', '#2F3542', '#FF6B9D']
+    const numFireworks = 25
+    
+    for (let i = 0; i < numFireworks; i++) {
+      const color = colors[Math.floor(Math.random() * colors.length)]
+      const startX = Math.random() * window.innerWidth
+      const startY = window.innerHeight - 20 // Start near bottom
+      const endY = Math.random() * window.innerHeight * 0.4 + window.innerHeight * 0.1 // Explode in upper area
+      const delay = Math.random() * 500 // Stagger the launches more
+      
+      // Create the shooting dot
+      const shootingDot = document.createElement('div')
+      shootingDot.style.cssText = `
+        position: absolute;
+        left: ${startX}px;
+        top: ${startY}px;
+        width: 3px;
+        height: 3px;
+        background: ${color};
+        border-radius: 50%;
+      `
+      
+      container.appendChild(shootingDot)
+      
+      // Animate the dot shooting up
+      shootingDot.animate([
+        { 
+          transform: 'translateY(0) scale(1)', 
+          opacity: 1
+        },
+        { 
+          transform: `translateY(${endY - startY}px) scale(1)`, 
+          opacity: 1
+        }
+      ], {
+        duration: 600 + Math.random() * 200,
+        delay: delay,
+        easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+      }).onfinish = () => {
+        // When the dot reaches the top, create the explosion
+        const explosionX = startX
+        const explosionY = endY
+        
+        // Create explosion particles
+        const numParticles = 30
+        for (let j = 0; j < numParticles; j++) {
+          const particle = document.createElement('div')
+          const angle = (j / numParticles) * Math.PI * 2
+          const distance = 40 + Math.random() * 80
+          const endX = Math.cos(angle) * distance
+          const endY = Math.sin(angle) * distance
+          
+          particle.style.cssText = `
+            position: absolute;
+            left: ${explosionX}px;
+            top: ${explosionY}px;
+            width: 2px;
+            height: 2px;
+            background: ${color};
+            border-radius: 50%;
+          `
+          
+          container.appendChild(particle)
+          
+          // Animate particle explosion
+          particle.animate([
+            { 
+              transform: 'translate(0, 0)', 
+              opacity: 1 
+            },
+            { 
+              transform: `translate(${endX}px, ${endY}px)`, 
+              opacity: 0 
+            }
+          ], {
+            duration: 1000 + Math.random() * 500,
+            easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+          }).onfinish = () => {
+            // Remove particle when animation completes
+            if (container.contains(particle)) {
+              container.removeChild(particle)
+            }
+          }
+        }
+        
+        // Remove the shooting dot
+        if (container.contains(shootingDot)) {
+          container.removeChild(shootingDot)
+        }
+      }
+    }
+    
+    document.body.appendChild(container)
+    console.log('🎆 Fireworks added to DOM')
+    
+    // Remove after all animations complete
+    setTimeout(() => {
+      if (document.body.contains(container)) {
+        document.body.removeChild(container)
+        console.log('🎆 Fireworks removed from DOM')
+      }
+    }, 3500)
+  }, [])
 
   // Handle tile movement with frame-based sliding animation (matching original JS)
   // Direct move without animation overlay
@@ -829,18 +1244,73 @@ Note: Some browsers don't support PWA installation in development mode.`)
     newBoard[emptyPos.r][emptyPos.c] = board[r][c]
     newBoard[r][c] = ''
     
-    // Check word completion FIRST with the new board state
-    // This ensures immediate visual feedback
-    checkWordCompletionSync(newBoard)
-    
-    // Update state immediately for instant visual feedback
+    // Update state first so DOM reflects the new positions
     setBoard(newBoard)
     setEmptyPos({ r, c })
     const newMoveCount = moveCount + 1
     setMoveCount(newMoveCount)
     
+    // Check for word completion immediately to trigger fireworks (before requestAnimationFrame delay)
+    const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
+    if (targetWords && targetWords.length > 0) {
+      const newCompletedWords = new Set(completedWords)
+      let hasNewCompletions = false
+      
+      for (const word of targetWords) {
+        if (completedWords.has(word)) continue
+        
+        const wordLower = word.toLowerCase()
+        let wordFound = false
+        
+        // Check horizontal words
+        for (let row = 0; row < newBoard.length && !wordFound; row++) {
+          for (let col = 0; col <= newBoard[row].length - word.length && !wordFound; col++) {
+            const horizontalWord = newBoard[row].slice(col, col + word.length).join('').toLowerCase()
+            if (horizontalWord === wordLower) {
+              newCompletedWords.add(word)
+              wordFound = true
+              hasNewCompletions = true
+              
+              // Trigger fireworks immediately when word completion is detected
+              if (newCompletedWords.size < targetWords.length) {
+                console.log('🎯 HORIZONTAL WORD COMPLETED! Calling fireworks...', word)
+                showDirectFireworks()
+              }
+            }
+          }
+        }
+        
+        // Check vertical words
+        for (let col = 0; col < newBoard[0].length && !wordFound; col++) {
+          for (let row = 0; row <= newBoard.length - word.length && !wordFound; row++) {
+            const verticalWord = []
+            for (let i = 0; i < word.length; i++) {
+              verticalWord.push(newBoard[row + i][col])
+            }
+            if (verticalWord.join('').toLowerCase() === wordLower) {
+              newCompletedWords.add(word)
+              wordFound = true
+              hasNewCompletions = true
+              
+              // Trigger fireworks immediately when word completion is detected
+              if (newCompletedWords.size < targetWords.length) {
+                console.log('🎯 VERTICAL WORD COMPLETED! Calling fireworks...', word)
+                showDirectFireworks()
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Check word completion AFTER state update so DOM elements are in correct positions
+    // Use requestAnimationFrame to ensure DOM has updated
+    requestAnimationFrame(() => {
+      checkWordCompletionSync(newBoard)
+    })
+    
     // No database updates during moves - only at end of level
-  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync, completedWords, moveCount, currentLevel])
+  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync, completedWords, moveCount, currentLevel, showDirectFireworks])
 
   const tryMove = useCallback((r, c) => {
 
@@ -859,20 +1329,73 @@ Note: Some browsers don't support PWA installation in development mode.`)
       newBoard[emptyPos.r][emptyPos.c] = board[r][c]
       newBoard[r][c] = ''
       
-      // Check word completion FIRST with the new board state
-      // This ensures immediate visual feedback
-      checkWordCompletionSync(newBoard)
-      
-      // Update state immediately for instant visual feedback
+      // Update state first so DOM reflects the new positions
       setBoard(newBoard)
       setEmptyPos({ r, c })
       const newMoveCount = moveCount + 1
       setMoveCount(newMoveCount)
       
+      // Check for word completion immediately to trigger fireworks (before requestAnimationFrame delay)
+      const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
+      if (targetWords && targetWords.length > 0) {
+        const newCompletedWords = new Set(completedWords)
+        let hasNewCompletions = false
+        
+        for (const word of targetWords) {
+          if (completedWords.has(word)) continue
+          
+          const wordLower = word.toLowerCase()
+          let wordFound = false
+          
+          // Check horizontal words
+          for (let row = 0; row < newBoard.length && !wordFound; row++) {
+            for (let col = 0; col <= newBoard[row].length - word.length && !wordFound; col++) {
+              const horizontalWord = newBoard[row].slice(col, col + word.length).join('').toLowerCase()
+              if (horizontalWord === wordLower) {
+                newCompletedWords.add(word)
+                wordFound = true
+                hasNewCompletions = true
+                
+                // Trigger fireworks immediately when word completion is detected
+                if (newCompletedWords.size < targetWords.length) {
+                  showDirectFireworks()
+                }
+              }
+            }
+          }
+          
+          // Check vertical words
+          for (let col = 0; col < newBoard[0].length && !wordFound; col++) {
+            for (let row = 0; row <= newBoard.length - word.length && !wordFound; row++) {
+              const verticalWord = []
+              for (let i = 0; i < word.length; i++) {
+                verticalWord.push(newBoard[row + i][col])
+              }
+              if (verticalWord.join('').toLowerCase() === wordLower) {
+                newCompletedWords.add(word)
+                wordFound = true
+                hasNewCompletions = true
+                
+                // Trigger fireworks immediately when word completion is detected
+                if (newCompletedWords.size < targetWords.length) {
+                  showDirectFireworks()
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Check word completion AFTER state update so DOM elements are in correct positions
+      // Use requestAnimationFrame to ensure DOM has updated
+      requestAnimationFrame(() => {
+        checkWordCompletionSync(newBoard)
+      })
+      
       // No database updates during moves - only at end of level
     } else {
     }
-  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync, completedWords, moveCount, currentLevel])
+  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync, completedWords, moveCount, currentLevel, showDirectFireworks])
 
   // Simple fallback board generation (doesn't depend on WORD_SETS)
   const generateFallbackBoard = useCallback(() => {
@@ -1540,6 +2063,11 @@ Note: Some browsers don't support PWA installation in development mode.`)
     
     if (!isAdjacent) return // Don't allow dragging non-adjacent tiles
     
+    // Add haptic feedback for mobile
+    // if (mobileState.hasHaptics) {
+    //   hapticUtils.light()
+    // }
+    
     // Add visual feedback for touch
     const tileElement = e.currentTarget
     if (tileElement) {
@@ -1547,6 +2075,11 @@ Note: Some browsers don't support PWA installation in development mode.`)
       tileElement.style.boxShadow = '0 0 16px rgba(255, 215, 0, 0.6)'
     }
     
+    // Record performance metrics
+    // performanceMonitor.recordTouchStart()
+    
+    // Use optimized touch handler
+    // touchOptimizerRef.current.handleTouchStart(e, (optimizedEvent) => {
     setTouchStart({
       x: e.touches[0].clientX,
       y: e.touches[0].clientY,
@@ -1561,6 +2094,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
     else if (emptyPos.c === c && emptyPos.r === r - 1) setDragAllowedDir('up')
     else setDragAllowedDir(null)
     setIsDragging(true)
+    // })
   }, [board, emptyPos])
 
   const handleMouseDown = useCallback((e, r, c) => {
@@ -1602,6 +2136,12 @@ Note: Some browsers don't support PWA installation in development mode.`)
 
   const handleTouchMove = useCallback((e) => {
     if (!touchStart || !selectedTile || !isDragging) return
+    
+    // Use optimized touch move handler with throttling
+    // touchOptimizerRef.current.handleTouchMove(e, (optimizedEvent, velocity, isScrolling) => {
+      // Prevent scrolling interference
+      // if (isScrolling) return
+      
     const currentX = e.touches[0].clientX
     const currentY = e.touches[0].clientY
     
@@ -1614,28 +2154,30 @@ Note: Some browsers don't support PWA installation in development mode.`)
     if (tileEl) {
       tileEl.style.transition = 'none' // No transition for real-time following
       
-      const step = tileStep || (41 + 1)
-      const maxDistance = step * 1.1 // Allow 10% overshoot for natural feel
+        // Use responsive tile size
+        const step = 41 + 1 // tileSizeRef.current + gapSizeRef.current || (41 + 1)
+      const maxDistance = step // Allow tile to slide all the way to empty space
       
-      // Clamp movement to empty cell boundary with slight overshoot
+      // Allow smooth movement all the way to empty space
       if (dragAllowedDir === 'right' && rawDx > 0) {
-        const clampedDx = Math.min(rawDx, maxDistance)
-        tileEl.style.transform = `translate(${clampedDx}px, 0px)`
+        const clampedDx = Math.min(rawDx, maxDistance * 1.5) // Allow more overshoot for smooth feel
+          tileEl.style.transform = `translate3d(${clampedDx}px, 0px, 0px)` // Use 3D transform for hardware acceleration
       } else if (dragAllowedDir === 'left' && rawDx < 0) {
-        const clampedDx = Math.max(rawDx, -maxDistance)
-        tileEl.style.transform = `translate(${clampedDx}px, 0px)`
+        const clampedDx = Math.max(rawDx, -maxDistance * 1.5) // Allow more overshoot for smooth feel
+          tileEl.style.transform = `translate3d(${clampedDx}px, 0px, 0px)`
       } else if (dragAllowedDir === 'down' && rawDy > 0) {
-        const clampedDy = Math.min(rawDy, maxDistance)
-        tileEl.style.transform = `translate(0px, ${clampedDy}px)`
+        const clampedDy = Math.min(rawDy, maxDistance * 1.5) // Allow more overshoot for smooth feel
+          tileEl.style.transform = `translate3d(0px, ${clampedDy}px, 0px)`
       } else if (dragAllowedDir === 'up' && rawDy < 0) {
-        const clampedDy = Math.max(rawDy, -maxDistance)
-        tileEl.style.transform = `translate(0px, ${clampedDy}px)`
+        const clampedDy = Math.max(rawDy, -maxDistance * 1.5) // Allow more overshoot for smooth feel
+          tileEl.style.transform = `translate3d(0px, ${clampedDy}px, 0px)`
       } else {
         // Reset if dragging in wrong direction
-        tileEl.style.transform = `translate(0px, 0px)`
+          tileEl.style.transform = `translate3d(0px, 0px, 0px)`
       }
     }
     setTouchEnd({ x: currentX, y: currentY })
+    // })
   }, [touchStart, selectedTile, isDragging, dragAllowedDir])
 
   const handleMouseMove = useCallback((e) => {
@@ -1652,20 +2194,20 @@ Note: Some browsers don't support PWA installation in development mode.`)
       tileEl.style.transition = 'none' // No transition for real-time following
       
       const step = tileStep || (41 + 1)
-      const maxDistance = step * 1.1 // Allow 10% overshoot for natural feel
+      const maxDistance = step // Allow tile to slide all the way to empty space
       
-      // Clamp movement to empty cell boundary with slight overshoot
+      // Allow smooth movement all the way to empty space
       if (dragAllowedDir === 'right' && rawDx > 0) {
-        const clampedDx = Math.min(rawDx, maxDistance)
+        const clampedDx = Math.min(rawDx, maxDistance * 1.5) // Allow more overshoot for smooth feel
         tileEl.style.transform = `translate(${clampedDx}px, 0px)`
       } else if (dragAllowedDir === 'left' && rawDx < 0) {
-        const clampedDx = Math.max(rawDx, -maxDistance)
+        const clampedDx = Math.max(rawDx, -maxDistance * 1.5) // Allow more overshoot for smooth feel
         tileEl.style.transform = `translate(${clampedDx}px, 0px)`
       } else if (dragAllowedDir === 'down' && rawDy > 0) {
-        const clampedDy = Math.min(rawDy, maxDistance)
+        const clampedDy = Math.min(rawDy, maxDistance * 1.5) // Allow more overshoot for smooth feel
         tileEl.style.transform = `translate(0px, ${clampedDy}px)`
       } else if (dragAllowedDir === 'up' && rawDy < 0) {
-        const clampedDy = Math.max(rawDy, -maxDistance)
+        const clampedDy = Math.max(rawDy, -maxDistance * 1.5) // Allow more overshoot for smooth feel
         tileEl.style.transform = `translate(0px, ${clampedDy}px)`
       } else {
         // Reset if dragging in wrong direction
@@ -1685,6 +2227,11 @@ Note: Some browsers don't support PWA installation in development mode.`)
       return
     }
 
+    // Record performance metrics
+    // performanceMonitor.recordTouchEnd()
+    
+    // Use optimized touch end handler
+    // touchOptimizerRef.current.handleTouchEnd(e, (optimizedEvent, touchData) => {
     const deltaX = touchEnd.x - touchStart.x
     const deltaY = touchEnd.y - touchStart.y
     const step = tileStep || (41 + 1)
@@ -1700,6 +2247,11 @@ Note: Some browsers don't support PWA installation in development mode.`)
     const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
     
     if (moveTriggered) {
+        // Add haptic feedback for successful move
+        // if (mobileState.hasHaptics) {
+        //   hapticUtils.medium()
+        // }
+      
       // Calculate final position (where tile should end up - empty cell)
       let finalX = 0, finalY = 0
       if (dragAllowedDir === 'right') finalX = step
@@ -1718,7 +2270,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
         directMove(selectedTile.r, selectedTile.c)
         if (tileEl) {
           tileEl.style.transition = 'none'
-          tileEl.style.transform = 'translate(0px, 0px)'
+          tileEl.style.transform = 'translate3d(0px, 0px, 0px)'
         }
       }, 200)
     } else {
@@ -1734,6 +2286,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
     setSelectedTile(null)
     setIsDragging(false)
     setDragAllowedDir(null)
+    // })
   }, [touchStart, touchEnd, selectedTile, dragAllowedDir, tileStep, directMove])
 
   const handleMouseUp = useCallback((e) => {
@@ -1900,31 +2453,34 @@ Note: Some browsers don't support PWA installation in development mode.`)
       let constrainedX = 0
       let constrainedY = 0
       
-      // Calculate tile size and gap (approximately 50px based on CSS, with small gap)
-      const tileSize = 50
-      const gapSize = 2 // Small gap between tiles
-      const maxDragDistance = tileSize - (gapSize * 2) // Leave small buffer so tiles barely touch
+      // Calculate actual mini game tile size
+      const containerWidth = Math.min(400, Math.max(300, window.innerWidth * 0.35))
+      const padding = 8 * 2 // 8px padding on each side
+      const gaps = 3 * 4 // 3px gaps between 5 columns
+      const tileSize = (containerWidth - padding - gaps) / 5
+      const gapSize = 3
+      const maxDragDistance = tileSize + gapSize + 2 // Allow full tile movement to completely fill empty space
       
-      // Only allow movement toward the empty space, but not past it
+      // Only allow movement toward the empty space, allowing full movement to fill the empty slot
       if (r === emptyR) {
         // Same row - allow horizontal movement
         if (c > emptyC) {
-          // Tile is to the right of empty, allow left movement but stop before overlapping adjacent tile
+          // Tile is to the right of empty, allow left movement to completely fill empty space
           const maxLeftMovement = -maxDragDistance
           constrainedX = Math.max(maxLeftMovement, Math.min(0, deltaX))
         } else {
-          // Tile is to the left of empty, allow right movement but stop before overlapping adjacent tile
+          // Tile is to the left of empty, allow right movement to completely fill empty space
           const maxRightMovement = maxDragDistance
           constrainedX = Math.min(maxRightMovement, Math.max(0, deltaX))
         }
       } else if (c === emptyC) {
         // Same column - allow vertical movement
         if (r > emptyR) {
-          // Tile is below empty, allow up movement but stop before overlapping adjacent tile
+          // Tile is below empty, allow up movement to completely fill empty space
           const maxUpMovement = -maxDragDistance
           constrainedY = Math.max(maxUpMovement, Math.min(0, deltaY))
         } else {
-          // Tile is above empty, allow down movement but stop before overlapping adjacent tile
+          // Tile is above empty, allow down movement to completely fill empty space
           const maxDownMovement = maxDragDistance
           constrainedY = Math.min(maxDownMovement, Math.max(0, deltaY))
         }
@@ -1944,16 +2500,32 @@ Note: Some browsers don't support PWA installation in development mode.`)
     const { r, c } = dragState.draggedTile
     const { x, y } = dragState.dragOffset
     
-    // Calculate required distance to complete move (half the allowed drag distance)
-    const tileSize = 50
-    const gapSize = 2
-    const maxDragDistance = tileSize - (gapSize * 2)
-    const threshold = maxDragDistance * 0.5 // 50% of the allowed drag distance
-    const shouldMove = Math.abs(x) > threshold || Math.abs(y) > threshold
+    // Calculate actual mini game tile size
+    const containerWidth = Math.min(400, Math.max(300, window.innerWidth * 0.35))
+    const padding = 8 * 2 // 8px padding on each side
+    const gaps = 3 * 4 // 3px gaps between 5 columns
+    const tileSize = (containerWidth - padding - gaps) / 5
+    const gapSize = 3
+    const step = tileSize + gapSize + 2 // Add a few more pixels to slide all the way
+    const threshold = step * 0.3 // Same threshold as main game
     
-    if (shouldMove) {
-      
-      // Move the tile
+    // Check if we should trigger a move based on drag distance and direction
+    let moveTriggered = false
+    const emptyR = miniEmptyPos.r
+    const emptyC = miniEmptyPos.c
+    
+    if (r === emptyR) {
+      // Same row - check horizontal movement
+      if (c > emptyC && -x > threshold) moveTriggered = true // Moving left
+      else if (c < emptyC && x > threshold) moveTriggered = true // Moving right
+    } else if (c === emptyC) {
+      // Same column - check vertical movement
+      if (r > emptyR && -y > threshold) moveTriggered = true // Moving up
+      else if (r < emptyR && y > threshold) moveTriggered = true // Moving down
+    }
+    
+    if (moveTriggered) {
+      // Just update the board state immediately - let CSS transitions handle the smooth movement
       setMiniBoard(prevBoard => {
         const newBoard = prevBoard.map(row => [...row])
         const movingLetter = prevBoard[r][c]
@@ -1998,6 +2570,13 @@ Note: Some browsers don't support PWA installation in development mode.`)
           return currentBoard
         })
       }, 50)
+    } else {
+      // Snap back to original position (same as main game)
+      const tileEl = document.querySelector(`[data-mini-tile="${r}-${c}"]`)
+      if (tileEl) {
+        tileEl.style.transition = 'transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1)'
+        tileEl.style.transform = 'translate(0px, 0px)'
+      }
     }
     
     // Reset drag state
@@ -2118,6 +2697,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
   const earnHint = useCallback(() => {
     setHintCount(prev => prev + 1)
   }, [])
+
 
   // Fireworks component
   const Fireworks = () => (
@@ -2325,6 +2905,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     return (
                       <div
                         key={`${r}-${c}`}
+                        data-mini-tile={`${r}-${c}`}
                         className={`mini-tile ${
                           isEmpty 
                             ? 'empty-cell' 
@@ -2486,7 +3067,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 alignItems: 'center'
               }}>
                 {WORD_SETS[currentLevel - 1]?.map((word) => (
-                  <div key={word} style={{
+                  <div key={word} data-word-indicator={word} style={{
                     display: 'flex',
                     gap: '2px',
                     alignItems: 'center'
@@ -2497,8 +3078,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         style={{
                           width: '24px',
                           height: '24px',
-                          backgroundColor: completedWords.has(word) ? '#90EE90' : '#F5DEB3',
-                          color: completedWords.has(word) ? '#006400' : '#8B4513',
+                          backgroundColor: '#F5DEB3',
+                          color: '#8B4513',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -2506,37 +3087,18 @@ Note: Some browsers don't support PWA installation in development mode.`)
                           fontWeight: '900',
                           borderRadius: '3px',
                           // 3D block effect like game tiles
-                          boxShadow: completedWords.has(word) 
-                            ? '2px 2px 4px rgba(0,0,0,0.3), inset 1px 1px 0 rgba(255,255,255,0.3), inset -1px -1px 0 rgba(0,0,0,0.2)'
-                            : '2px 2px 4px rgba(0,0,0,0.3), inset 1px 1px 0 rgba(255,255,255,0.3), inset -1px -1px 0 rgba(139,69,19,0.3)',
-                          border: completedWords.has(word) 
-                            ? '1px solid #228B22'
-                            : '1px solid #CD853F',
-                          borderTop: completedWords.has(word)
-                            ? '2px solid #32CD32'
-                            : '2px solid #F8F0E3',
-                          borderLeft: completedWords.has(word)
-                            ? '2px solid #32CD32' 
-                            : '2px solid #F8F0E3',
-                          borderRight: completedWords.has(word)
-                            ? '1px solid #006400'
-                            : '1px solid #7A6B47',
-                          borderBottom: completedWords.has(word)
-                            ? '1px solid #006400'
-                            : '1px solid #7A6B47',
+                          boxShadow: '2px 2px 4px rgba(0,0,0,0.3), inset 1px 1px 0 rgba(255,255,255,0.3), inset -1px -1px 0 rgba(139,69,19,0.3)',
+                          border: '1px solid #CD853F',
+                          borderTop: '2px solid #F8F0E3',
+                          borderLeft: '2px solid #F8F0E3',
+                          borderRight: '1px solid #7A6B47',
+                          borderBottom: '1px solid #7A6B47',
                           transition: 'all 0.3s ease'
                         }}
                       >
                         {letter}
                       </div>
                     ))}
-                    {completedWords.has(word) && (
-                      <span style={{
-                        color: '#90EE90',
-                        fontSize: '12px',
-                        marginLeft: '4px'
-                      }}>✓</span>
-                    )}
                   </div>
                 ))}
               </div>
@@ -3135,8 +3697,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
             )}
           </div>
           
-          {/* Fireworks Animation */}
-          {showFireworks && (
+          {/* Fireworks Animation - DISABLED FOR TESTING */}
+          {false && showFireworks && (
             <div id="fireworks-overlay" style={{
               position: 'fixed',
               top: 0,
@@ -4202,13 +4764,11 @@ Note: Some browsers don't support PWA installation in development mode.`)
           )}
         </div>
       )}
-
-      
     </div>
   )
 }
 
-export default App
+export default App;
 
 // Wrap App with AuthProvider for components that need authentication
 function AppWithAuth() {
@@ -4219,4 +4779,4 @@ function AppWithAuth() {
 )
 }
 
-export { AppWithAuth }
+export { AppWithAuth };

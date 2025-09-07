@@ -28,8 +28,12 @@ const verifyToken = (authHeader) => {
 
 exports.handler = async (event) => {
   // Enable CORS
+  const allowedOrigins = ['https://word-slide.com', 'http://localhost:3000', 'http://localhost:5173'];
+  const origin = event.headers?.origin || event.headers?.Origin;
+  const corsOrigin = allowedOrigins.includes(origin) ? origin : 'https://word-slide.com';
+  
   const headers = {
-    'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGIN || '*',
+    'Access-Control-Allow-Origin': corsOrigin,
     'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
     'Access-Control-Allow-Methods': 'GET,OPTIONS',
     'Content-Type': 'application/json'

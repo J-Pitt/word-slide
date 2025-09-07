@@ -1,4 +1,4 @@
-const CACHE_NAME = `crosslide-${new Date().getTime()}`;
+const CACHE_NAME = `wordslide-${new Date().getTime()}`;
 const OFFLINE_URL = '/';
 const APP_VERSION = '1.0.0'; // Update this for major releases
 
@@ -9,7 +9,9 @@ const STATIC_CACHE_FILES = [
   '/src/main.jsx',
   '/src/App.jsx',
   '/src/styles.css',
-  '/manifest.json'
+  '/src/utils/mobileOptimizations.js',
+  '/manifest.json',
+  '/icon.svg'
 ];
 
 // Install event - cache static assets

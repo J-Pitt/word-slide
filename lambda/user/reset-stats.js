@@ -11,6 +11,11 @@ exports.handler = async (event) => {
     });
 
     try {
+        // Enable CORS
+        const allowedOrigins = ['https://word-slide.com', 'http://localhost:3000', 'http://localhost:5173'];
+        const origin = event.headers?.origin || event.headers?.Origin;
+        const corsOrigin = allowedOrigins.includes(origin) ? origin : 'https://word-slide.com';
+        
         // Parse the request body
         const body = JSON.parse(event.body);
         const { userId, gameMode } = body;
@@ -21,7 +26,7 @@ exports.handler = async (event) => {
                 statusCode: 400,
                 headers: {
                     'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Origin': corsOrigin,
                     'Access-Control-Allow-Headers': 'Content-Type',
                     'Access-Control-Allow-Methods': 'POST, OPTIONS'
                 },
@@ -32,21 +37,38 @@ exports.handler = async (event) => {
             };
         }
         
-        // Temporarily return success without database update due to connection issues
-        // TODO: Fix database connection and restore database operations
-        console.log('Reset stats requested for user:', userId, 'gameMode:', gameMode);
+        // Connect to database and reset stats
+        await client.connect();
+        console.log('Connected to database, resetting stats for user:', userId, 'gameMode:', gameMode);
+        
+        // Reset game_stats for the specific user and game mode
+        const resetStatsQuery = `
+            UPDATE game_stats 
+            SET words_solved = 0, total_moves = 0, games_played = 0, last_played = NOW()
+            WHERE user_id = $1 AND game_mode = $2
+        `;
+        await client.query(resetStatsQuery, [userId, gameMode]);
+        
+        // Also delete all game sessions for this user and game mode
+        const deleteSessionsQuery = `
+            DELETE FROM game_sessions 
+            WHERE user_id = $1 AND game_mode = $2
+        `;
+        await client.query(deleteSessionsQuery, [userId, gameMode]);
+        
+        console.log('Stats reset successfully for user:', userId, 'gameMode:', gameMode);
         
         return {
             statusCode: 200,
             headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Origin': corsOrigin,
                 'Access-Control-Allow-Headers': 'Content-Type',
                 'Access-Control-Allow-Methods': 'POST, OPTIONS'
             },
             body: JSON.stringify({
                 success: true,
-                message: 'User stats reset successfully (local only - database connection issue)',
+                message: 'User stats reset successfully',
                 stats: {
                     userId,
                     gameMode,
@@ -64,7 +86,7 @@ exports.handler = async (event) => {
             statusCode: 500,
             headers: {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Origin': corsOrigin,
                 'Access-Control-Allow-Headers': 'Content-Type',
                 'Access-Control-Allow-Methods': 'POST, OPTIONS'
             },
@@ -74,5 +96,7 @@ exports.handler = async (event) => {
                 details: error.message
             })
         };
+    } finally {
+        await client.end();
     }
 };
