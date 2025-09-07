@@ -109,11 +109,14 @@ function App() {
       return
     }
     
-    console.log('Updating database stats:', { level, moves, wordsCompleted, user, token })
+    console.log('🎯 Updating database stats:', { level, moves, wordsCompleted, user, token })
+    console.log('🎯 NODE_ENV:', process.env.NODE_ENV)
+    console.log('🎯 API_BASE will be:', process.env.NODE_ENV === 'development' ? '/api' : 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev')
     
     try {
-      // Use proxy in development to avoid CORS issues
-      const API_BASE = process.env.NODE_ENV === 'development' 
+      // Use proxy when running on localhost to avoid CORS issues
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      const API_BASE = isLocalhost 
         ? '/api'
         : 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
       const response = await fetch(`${API_BASE}/game/stats`, {
@@ -131,13 +134,17 @@ function App() {
       })
       
       if (!response.ok) {
-        console.error('Failed to update database:', response.statusText, response.status)
-        console.error('This might be a CORS issue - check server configuration')
+        console.error('❌ Failed to update database:', response.statusText, response.status)
+        console.error('❌ This might be a CORS issue - check server configuration')
+        const errorText = await response.text()
+        console.error('❌ Error response:', errorText)
       } else {
-        console.log('Database update successful')
+        const result = await response.json()
+        console.log('✅ Database update successful:', result)
       }
     } catch (error) {
-      console.error('Error updating database:', error)
+      console.error('❌ Error updating database:', error)
+      console.error('❌ Error details:', error.message, error.stack)
     }
   }, [user, token])
 
@@ -151,8 +158,9 @@ function App() {
     console.log('Resetting user stats using dedicated reset endpoint')
     
     try {
-      // Use proxy in development to avoid CORS issues
-      const API_BASE = process.env.NODE_ENV === 'development' 
+      // Use proxy when running on localhost to avoid CORS issues
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      const API_BASE = isLocalhost 
         ? '/api'
         : 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
       

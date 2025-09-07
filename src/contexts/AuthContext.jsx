@@ -17,8 +17,9 @@ export const AuthProvider = ({ children }) => {
 
   console.log('🔍 AuthProvider initializing with:', { user, token, loading });
 
-  // Use proxy in development to avoid CORS issues
-  const API_BASE = process.env.NODE_ENV === 'development' 
+  // Use proxy when running on localhost to avoid CORS issues
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  const API_BASE = isLocalhost 
     ? '/api'
     : 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev';
 
