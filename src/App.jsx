@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
 import LeaderboardModal from './components/LeaderboardModal'
 import UserProfile from './components/UserProfile'
 import AuthModal from './components/AuthModal'
@@ -26,6 +26,7 @@ function App() {
   const [showFireworks, setShowFireworks] = useState(false)
   const [showLevelCompleteModal, setShowLevelCompleteModal] = useState(false)
   const [showStartOverModal, setShowStartOverModal] = useState(false)
+  const [showResetSuccessModal, setShowResetSuccessModal] = useState(false)
   const [fireworks, setFireworks] = useState([])
   const [showRules, setShowRules] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -57,6 +58,7 @@ function App() {
   const [tetrisPaused, setTetrisPaused] = useState(false)
   const [fallingBlocks, setFallingBlocks] = useState([])
   const [hintBlinkPositions, setHintBlinkPositions] = useState([])
+
 
   // Reset original game to Level 1
   const resetToLevelOne = useCallback(() => {
@@ -106,42 +108,20 @@ function App() {
     }
   }, [user, token])
 
-  // Reset user stats in database by fetching current stats and subtracting them
+  // Reset user stats in database using the dedicated reset endpoint
   const resetUserStats = useCallback(async () => {
     if (!user || !token) {
       console.log('No user or token, skipping stats reset')
-      return
+      return true // Return true since local reset will still work
     }
     
-    console.log('Resetting user stats:', { user, token })
+    console.log('Resetting user stats using dedicated reset endpoint')
     
     try {
       const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
       
-      // First, fetch current stats
-      const statsResponse = await fetch(`${API_BASE}/user/stats/${user.id}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (!statsResponse.ok) {
-        console.error('Failed to fetch current stats:', statsResponse.statusText)
-        throw new Error('Failed to fetch current stats')
-      }
-      
-      const statsData = await statsResponse.json()
-      const originalStats = statsData.stats.find(s => s.gameMode === 'original')
-      
-      if (!originalStats) {
-        console.log('No original mode stats found, nothing to reset')
-        return true
-      }
-      
-      // Now subtract the current stats to effectively reset them
-      const response = await fetch(`${API_BASE}/game/stats`, {
+      // Use the new reset endpoint that directly sets values to 0
+      const resetResponse = await fetch(`${API_BASE}/user/reset-stats`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -149,22 +129,23 @@ function App() {
         },
         body: JSON.stringify({
           userId: user.id,
-          gameMode: 'original',
-          wordsSolved: -originalStats.wordsSolved,
-          totalMoves: -originalStats.totalMoves
+          gameMode: 'original'
         })
       })
       
-      if (!response.ok) {
-        console.error('Failed to reset database stats:', response.statusText, response.status)
-        throw new Error('Failed to reset stats')
-      } else {
-        console.log('Database stats reset successful')
+      if (resetResponse.ok) {
+        const result = await resetResponse.json()
+        console.log('Database stats reset successful:', result)
         return true
+      } else {
+        console.error('Failed to reset database stats:', resetResponse.statusText, resetResponse.status)
+        return true // Still return true since local reset will work
       }
+      
     } catch (error) {
       console.error('Error resetting database stats:', error)
-      return false
+      // Still return true since local reset will work
+      return true
     }
   }, [user, token])
 
@@ -178,6 +159,8 @@ function App() {
     if (success) {
       // Reset game state
       resetToLevelOne()
+      // Show success modal
+      setShowResetSuccessModal(true)
     } else {
       // If database reset failed, still reset the game but show an error
       alert('Failed to reset stats in database, but game will restart locally.')
@@ -225,11 +208,11 @@ function App() {
     
     if (!deferredPrompt) {
       // Show instructions if no prompt is available
-      alert(`To install Crosslide as an app:
+      alert(`To install WordSlide as an app:
 
 🖥️ Desktop (Chrome/Edge):
 • Look for install icon (⊞) in address bar
-• Or go to Settings → Install Crosslide
+• Or go to Settings → Install WordSlide
 
 📱 Mobile:
 • Chrome: Menu → Add to Home screen
@@ -515,18 +498,16 @@ Note: Some browsers don't support PWA installation in development mode.`)
     for (let level = 1; level <= 20; level++) {
       const levelWords = []
       
-      // Level 1: Just one 3-letter word
-      if (level === 1) {
+      // Levels 1-5: 1 three-letter word
+      if (level >= 1 && level <= 5) {
         let selectedWord
         let attempts = 0
         
-        // Try to find an unused 3-letter word
         do {
           selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
           attempts++
         } while ((usedWords.has(selectedWord) || selectedWord.length !== 3) && attempts < 100)
         
-        // If we can't find an unused 3-letter word, use any 3-letter word
         if (attempts >= 100) {
           const threeLetterWords = WORD_BANK.filter(word => word.length === 3)
           selectedWord = threeLetterWords[Math.floor(Math.random() * threeLetterWords.length)]
@@ -535,26 +516,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
         levelWords.push(selectedWord)
         usedWords.add(selectedWord)
       }
-      // Level 2: One 4-letter word
-      else if (level === 2) {
-        let selectedWord
-        let attempts = 0
-        
-        do {
-          selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
-          attempts++
-        } while ((usedWords.has(selectedWord) || selectedWord.length !== 4) && attempts < 100)
-        
-        if (attempts >= 100) {
-          const fourLetterWords = WORD_BANK.filter(word => word.length === 4)
-          selectedWord = fourLetterWords[Math.floor(Math.random() * fourLetterWords.length)]
-        }
-        
-        levelWords.push(selectedWord)
-        usedWords.add(selectedWord)
-      }
-      // Level 3: Two 3-letter words
-      else if (level === 3) {
+      // Levels 6-10: 2 three-letter words
+      else if (level >= 6 && level <= 10) {
         for (let i = 0; i < 2; i++) {
           let selectedWord
           let attempts = 0
@@ -573,27 +536,11 @@ Note: Some browsers don't support PWA installation in development mode.`)
           usedWords.add(selectedWord)
         }
       }
-      // Level 4: One 3-letter and one 4-letter word
-      else if (level === 4) {
-        // Add 3-letter word
+      // Levels 11-15: 1 four-letter word
+      else if (level >= 11 && level <= 15) {
         let selectedWord
         let attempts = 0
         
-        do {
-          selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
-          attempts++
-        } while ((usedWords.has(selectedWord) || selectedWord.length !== 3) && attempts < 100)
-        
-        if (attempts >= 100) {
-          const threeLetterWords = WORD_BANK.filter(word => word.length === 3)
-          selectedWord = threeLetterWords[Math.floor(Math.random() * threeLetterWords.length)]
-        }
-        
-        levelWords.push(selectedWord)
-        usedWords.add(selectedWord)
-        
-        // Add 4-letter word
-        attempts = 0
         do {
           selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
           attempts++
@@ -607,55 +554,20 @@ Note: Some browsers don't support PWA installation in development mode.`)
         levelWords.push(selectedWord)
         usedWords.add(selectedWord)
       }
-      // Level 5+: Mix of word lengths
-      else {
-        // Word count rules:
-        // Levels 1-3: keep existing logic (progressive)
-        // Levels 4-8: exactly 3 words
-        // Levels 9-15: 4 words (mix of 3 and 4 letters)
-        // Levels 16-20: 5 words (mix of 3 and 4 letters)
-        let wordCount
-        if (level <= 3) {
-          wordCount = Math.min(level, 3)
-        } else if (level <= 8) {
-          wordCount = 3
-        } else if (level <= 15) {
-          wordCount = 4
-        } else {
-          wordCount = 5
-        }
-        const wordLengths = []
-        
-        // Distribute word lengths based on level
-        if (level <= 8) {
-          // Levels 1-8: 3-letter words (challenge ramps via count rules above)
-          for (let i = 0; i < wordCount; i++) wordLengths.push(3)
-        } else {
-          // Levels 9+: mix of 3 and 4 letters
-          const mix = []
-          for (let i = 0; i < wordCount; i++) mix.push(i % 2 === 0 ? 3 : 4)
-          wordLengths.push(...mix)
-        }
-        
-        // Shuffle word lengths for variety
-        for (let i = wordLengths.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1))
-          ;[wordLengths[i], wordLengths[j]] = [wordLengths[j], wordLengths[i]]
-        }
-        
-        // Select words for each length
-        for (const length of wordLengths) {
+      // Levels 16-20: 2 four-letter words
+      else if (level >= 16 && level <= 20) {
+        for (let i = 0; i < 2; i++) {
           let selectedWord
           let attempts = 0
           
           do {
             selectedWord = WORD_BANK[Math.floor(Math.random() * WORD_BANK.length)]
             attempts++
-          } while ((usedWords.has(selectedWord) || selectedWord.length !== length) && attempts < 100)
+          } while ((usedWords.has(selectedWord) || selectedWord.length !== 4) && attempts < 100)
           
           if (attempts >= 100) {
-            const wordsOfLength = WORD_BANK.filter(word => word.length === length)
-            selectedWord = wordsOfLength[Math.floor(Math.random() * wordsOfLength.length)]
+            const fourLetterWords = WORD_BANK.filter(word => word.length === 4)
+            selectedWord = fourLetterWords[Math.floor(Math.random() * fourLetterWords.length)]
           }
           
           levelWords.push(selectedWord)
@@ -717,9 +629,11 @@ Note: Some browsers don't support PWA installation in development mode.`)
     const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
     if (!targetWords || targetWords.length === 0) return false
     
+    // Check completed words
+    const wordsToCheck = completedWords
     
     for (const word of targetWords) {
-      if (!completedWords.has(word)) continue
+      if (!wordsToCheck.has(word)) continue
       
       // Check horizontal words
       for (let row = 0; row < board.length; row++) {
@@ -768,18 +682,21 @@ Note: Some browsers don't support PWA installation in development mode.`)
   }, [])
 
   // Fast word completion check - runs synchronously during moves
-  const checkWordCompletionSync = useCallback((boardToCheck) => {
+  const checkWordCompletionSync = useCallback((boardToCheck = board) => {
     if (!boardToCheck || boardToCheck.length === 0 || !boardToCheck[0] || currentView !== 'original') return
     if (levelTransitioning) return
 
     const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
     if (!targetWords || targetWords.length === 0) return
 
-    // Check for completed words - proper position checking
-    const newCompletedWords = new Set(completedWords) // Start with existing completed words
-    
+    // Check for completed words and update immediately
+    const newCompletedWords = new Set(completedWords)
+    let hasNewCompletions = false
     
     for (const word of targetWords) {
+      // Skip if already completed
+      if (completedWords.has(word)) continue
+      
       const wordLower = word.toLowerCase()
       let wordFound = false
       
@@ -790,6 +707,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
           if (horizontalWord === wordLower) {
             newCompletedWords.add(word)
             wordFound = true
+            hasNewCompletions = true
           }
         }
       }
@@ -804,14 +722,15 @@ Note: Some browsers don't support PWA installation in development mode.`)
           if (verticalWord.join('').toLowerCase() === wordLower) {
             newCompletedWords.add(word)
             wordFound = true
+            hasNewCompletions = true
           }
         }
       }
     }
     
-    // Update completed words immediately - this will trigger the existing isLetterInCompletedWord logic
-    if (newCompletedWords.size !== completedWords.size) {
-      // Update state immediately without flushSync to avoid lifecycle warnings
+    // Update completed words immediately if there were new completions
+    if (hasNewCompletions) {
+      // Update visual state IMMEDIATELY - this makes letters turn green instantly
       setCompletedWords(newCompletedWords)
       
       // Check if level is completed
@@ -819,10 +738,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
         setLevelTransitioning(true)
         setShowFireworks(true)
         
-        // Update database stats after UI updates (non-blocking)
-        setTimeout(() => {
-          updateDatabaseStats(currentLevel, moveCount, newCompletedWords.size)
-        }, 100)
+        // Update database stats after level completion
+        updateDatabaseStats(currentLevel, moveCount, newCompletedWords.size)
         
         // Extravagant fireworks - particles launch from bottom and explode over board
         const colors = ['#FFD700', '#FF4757', '#5352ed', '#00d2d3', '#ff6348', '#FF69B4', '#32CD32', '#FF8C00', '#8A2BE2', '#00CED1']
@@ -912,14 +829,18 @@ Note: Some browsers don't support PWA installation in development mode.`)
     newBoard[emptyPos.r][emptyPos.c] = board[r][c]
     newBoard[r][c] = ''
     
-    // Check word completion immediately with the new board state
+    // Check word completion FIRST with the new board state
+    // This ensures immediate visual feedback
     checkWordCompletionSync(newBoard)
     
-    // Then update the state
+    // Update state immediately for instant visual feedback
     setBoard(newBoard)
     setEmptyPos({ r, c })
-    setMoveCount(prev => prev + 1)
-  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync, completedWords])
+    const newMoveCount = moveCount + 1
+    setMoveCount(newMoveCount)
+    
+    // No database updates during moves - only at end of level
+  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync, completedWords, moveCount, currentLevel])
 
   const tryMove = useCallback((r, c) => {
 
@@ -938,16 +859,20 @@ Note: Some browsers don't support PWA installation in development mode.`)
       newBoard[emptyPos.r][emptyPos.c] = board[r][c]
       newBoard[r][c] = ''
       
-      // Check word completion immediately with the new board state
+      // Check word completion FIRST with the new board state
+      // This ensures immediate visual feedback
       checkWordCompletionSync(newBoard)
       
-      // Then update the state
+      // Update state immediately for instant visual feedback
       setBoard(newBoard)
       setEmptyPos({ r, c })
-      setMoveCount(prev => prev + 1)
+      const newMoveCount = moveCount + 1
+      setMoveCount(newMoveCount)
+      
+      // No database updates during moves - only at end of level
     } else {
     }
-  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync, completedWords])
+  }, [emptyPos, board, isLetterInCompletedWord, checkWordCompletionSync, completedWords, moveCount, currentLevel])
 
   // Simple fallback board generation (doesn't depend on WORD_SETS)
   const generateFallbackBoard = useCallback(() => {
@@ -2304,7 +2229,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
             <span style={{
               animation: 'titleEntrance 1s ease-out forwards'
             }}>
-              Crosslid
+              WordSlid
             </span>
             <span style={{
               animation: 'letterSlideIn 1.2s ease-out 0.3s forwards',
@@ -3674,6 +3599,78 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     ❌ No
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reset Success Modal */}
+          {showResetSuccessModal && (
+            <div id="reset-success-modal" style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100vw',
+              height: '100vh',
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1001
+            }}>
+              <div style={{
+                background: 'linear-gradient(135deg, #F5DEB3 0%, #DEB887 100%)',
+                border: '3px solid #8B4513',
+                borderRadius: '12px',
+                padding: '24px',
+                textAlign: 'center',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.3)',
+                maxWidth: '80vw',
+                minWidth: '320px'
+              }}>
+                <h1 style={{
+                  color: '#654321',
+                  fontSize: 'clamp(18px, 4.5vw, 22px)',
+                  margin: '0 0 16px 0',
+                  textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
+                }}>
+                  ✅ Game Reset Successfully!
+                </h1>
+                <p style={{
+                  color: '#654321',
+                  fontSize: 'clamp(14px, 3.5vw, 16px)',
+                  margin: '0 0 24px 0',
+                  lineHeight: '1.4'
+                }}>
+                  Your progress has been cleared and you're starting fresh from Level 1.
+                </p>
+                <button
+                  onClick={() => setShowResetSuccessModal(false)}
+                  style={{
+                    background: 'linear-gradient(135deg, #8B4513, #A0522D)',
+                    color: '#F5DEB3',
+                    border: '3px solid #654321',
+                    padding: '10px 20px',
+                    borderRadius: '8px',
+                    fontSize: 'clamp(14px, 3.5vw, 16px)',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    minHeight: '40px',
+                    minWidth: '120px',
+                    boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3)',
+                    transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                    textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.transform = 'translateY(-2px) scale(1.05)'
+                    e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.transform = 'translateY(0) scale(1)'
+                    e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3)'
+                  }}
+                >
+                  🎮 Continue Playing
+                </button>
               </div>
             </div>
           )}

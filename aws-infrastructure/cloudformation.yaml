@@ -383,6 +383,37 @@ Resources:
       Timeout: 30
       MemorySize: 256
 
+  ResetStatsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-wordslide-reset-stats'
+      Runtime: nodejs18.x
+      Handler: reset-stats.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'Reset stats function placeholder' };
+          };
+      Environment:
+        Variables:
+          DB_HOST: !GetAtt Database.Endpoint.Address
+          DB_PORT: !GetAtt Database.Endpoint.Port
+          DB_NAME: postgres
+          DB_USER: postgres
+          DB_PASSWORD: !Ref DatabasePassword
+          JWT_SECRET: !Ref JWTSecret
+          NODE_ENV: !Ref Environment
+          ALLOWED_ORIGIN: '*'
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Timeout: 30
+      MemorySize: 256
+
   # API Gateway
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
@@ -408,6 +439,8 @@ Resources:
       - ProfileMethod
       - UserStatsOptionsMethod
       - UserStatsMethod
+      - ResetStatsOptionsMethod
+      - ResetStatsMethod
     Properties:
       RestApiId: !Ref ApiGateway
       StageName: !Ref Environment
@@ -477,6 +510,13 @@ Resources:
       RestApiId: !Ref ApiGateway
       ParentId: !Ref UserResource
       PathPart: 'stats'
+
+  ResetStatsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref UserResource
+      PathPart: 'reset-stats'
 
   # CORS Options Methods
   RegisterOptionsMethod:
@@ -696,6 +736,42 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UserStatsFunction.Arn}/invocations'
 
+  ResetStatsOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ResetStatsResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  ResetStatsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ResetStatsResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ResetStatsFunction.Arn}/invocations'
+
   # Lambda Permissions for API Gateway
   RegisterPermission:
     Type: AWS::Lambda::Permission
@@ -744,6 +820,14 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/GET/user/stats'
+
+  ResetStatsPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ResetStatsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/user/reset-stats'
 
 Outputs:
   ApiGatewayUrl:
