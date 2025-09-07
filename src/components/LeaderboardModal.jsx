@@ -10,7 +10,10 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
   const [retryCount, setRetryCount] = useState(0);
   const { token, user } = useAuth();
 
-  const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev';
+  // Use proxy in development to avoid CORS issues
+  const API_BASE = process.env.NODE_ENV === 'development' 
+    ? '/api'
+    : 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev';
 
   useEffect(() => {
     if (isOpen) {

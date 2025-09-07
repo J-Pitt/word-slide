@@ -17,7 +17,10 @@ export const AuthProvider = ({ children }) => {
 
   console.log('🔍 AuthProvider initializing with:', { user, token, loading });
 
-  const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev';
+  // Use proxy in development to avoid CORS issues
+  const API_BASE = process.env.NODE_ENV === 'development' 
+    ? '/api'
+    : 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev';
 
   console.log('🔍 API_BASE:', API_BASE);
   console.log('🔍 NODE_ENV:', process.env.NODE_ENV);

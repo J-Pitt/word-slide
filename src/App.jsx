@@ -112,7 +112,10 @@ function App() {
     console.log('Updating database stats:', { level, moves, wordsCompleted, user, token })
     
     try {
-      const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
+      // Use proxy in development to avoid CORS issues
+      const API_BASE = process.env.NODE_ENV === 'development' 
+        ? '/api'
+        : 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
       const response = await fetch(`${API_BASE}/game/stats`, {
         method: 'POST',
         headers: {
@@ -148,7 +151,10 @@ function App() {
     console.log('Resetting user stats using dedicated reset endpoint')
     
     try {
-      const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
+      // Use proxy in development to avoid CORS issues
+      const API_BASE = process.env.NODE_ENV === 'development' 
+        ? '/api'
+        : 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
       
       // Use the new reset endpoint that directly sets values to 0
       const resetResponse = await fetch(`${API_BASE}/user/reset-stats`, {
@@ -3154,7 +3160,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
               marginTop: '5px',
               display: 'flex',
               flexWrap: 'wrap',
-              gap: '8px',
+              gap: '4px',
               justifyContent: 'center'
             }}>
               <button 
@@ -3165,36 +3171,39 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     ? 'linear-gradient(135deg, #FFD700, #FFA500)' 
                     : 'linear-gradient(135deg, #666, #888)',
                   color: hintCount > 0 ? '#2F1B14' : '#CCC',
-                  padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
-                  borderRadius: '10px',
-                  fontSize: 'clamp(13px, 3.5vw, 15px)',
-                  fontWeight: 'bold',
+                  border: '2px solid #8B4513',
+                  padding: '8px',
+                  borderRadius: '8px',
+                  fontSize: '18px',
                   cursor: hintCount > 0 ? 'pointer' : 'not-allowed',
-                  minHeight: '36px',
-                  minWidth: '100px',
+                  width: '36px',
+                  height: '36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   boxShadow: hintCount > 0 
-                    ? '0 4px 12px rgba(255, 215, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)' 
+                    ? '0 2px 8px rgba(255, 215, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)' 
                     : '0 2px 8px rgba(0, 0, 0, 0.2)',
                   transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
                   touchAction: 'manipulation',
-                  textShadow: hintCount > 0 ? '0 1px 2px rgba(255, 255, 255, 0.3)' : 'none',
                   position: 'relative',
                   overflow: 'hidden'
                 }}
                 onMouseEnter={(e) => {
                   if (hintCount > 0) {
-                    e.target.style.transform = 'translateY(-1px) scale(1.02)'
-                    e.target.style.boxShadow = '0 6px 16px rgba(255, 215, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
+                    e.target.style.transform = 'translateY(-1px) scale(1.05)'
+                    e.target.style.boxShadow = '0 4px 12px rgba(255, 215, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (hintCount > 0) {
                     e.target.style.transform = 'translateY(0) scale(1)'
-                    e.target.style.boxShadow = '0 4px 12px rgba(255, 215, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+                    e.target.style.boxShadow = '0 2px 8px rgba(255, 215, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
                   }
                 }}
+                title={`Hint (${hintCount})`}
               >
-                💡 Hint ({hintCount})
+                💡
               </button>
               
               <button 
@@ -3202,30 +3211,33 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 style={{
                   background: 'linear-gradient(135deg, #00CED1, #20B2AA)',
                   color: '#2F1B14',
-                  padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
-                  borderRadius: '10px',
-                  fontSize: 'clamp(13px, 3.5vw, 15px)',
-                  fontWeight: 'bold',
+                  border: '2px solid #8B4513',
+                  padding: '8px',
+                  borderRadius: '8px',
+                  fontSize: '18px',
                   cursor: 'pointer',
-                  minHeight: '36px',
-                  minWidth: '100px',
-                  boxShadow: '0 4px 12px rgba(0, 206, 209, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                  width: '36px',
+                  height: '36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(0, 206, 209, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
                   transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
                   touchAction: 'manipulation',
-                  textShadow: '0 1px 2px rgba(255, 255, 255, 0.3)',
                   position: 'relative',
                   overflow: 'hidden'
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.transform = 'translateY(-1px) scale(1.02)'
-                  e.target.style.boxShadow = '0 6px 16px rgba(0, 206, 209, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
+                  e.target.style.transform = 'translateY(-1px) scale(1.05)'
+                  e.target.style.boxShadow = '0 4px 12px rgba(0, 206, 209, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
                 }}
                 onMouseLeave={(e) => {
                   e.target.style.transform = 'translateY(0) scale(1)'
-                  e.target.style.boxShadow = '0 4px 12px rgba(0, 206, 209, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+                  e.target.style.boxShadow = '0 2px 8px rgba(0, 206, 209, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
                 }}
+                title="Rules"
               >
-                📖 Rules
+                📖
               </button>
 
               <button 
