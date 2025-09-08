@@ -2604,7 +2604,15 @@ Note: Some browsers don't support PWA installation in development mode.`)
     }
     setHintCount(prev => prev - 1)
     const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
-    const uncompletedWords = (targetWords || []).filter(word => !completedWords.has(word))
+    const uncompletedWords = (targetWords || []).filter(word => {
+      // Check if this word is already completed (check all positions)
+      for (const completedKey of completedWords) {
+        if (completedKey.startsWith(word + '-')) {
+          return false // Word is already completed
+        }
+      }
+      return true // Word is not completed
+    })
     const chosenWord = (uncompletedWords.length > 0 ? uncompletedWords : targetWords)?.[0]
     if (!chosenWord || board.length === 0) return
     const letters = chosenWord.toUpperCase().split('')
@@ -3369,6 +3377,13 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         boxSizing: 'border-box',
                         // Clean solid background for 3D blocks
                         background: cell ? 'linear-gradient(135deg, #F5DEB3, #DEB887)' : 'transparent',
+                        // Hint blink styling
+                        ...(hintBlinkPositions && hintBlinkPositions.some(p => p.r === r && p.c === c) && {
+                          background: 'linear-gradient(135deg, #90EE90, #32CD32)',
+                          color: '#006400',
+                          boxShadow: '0 0 20px rgba(50, 205, 50, 0.8), 0 0 40px rgba(50, 205, 50, 0.6)',
+                          animation: 'hintBlink 0.5s ease-in-out infinite alternate'
+                        }),
                         // 3D block appearance with enhanced shadows
                         border: cell ? '1px solid #CD853F' : '1px solid transparent',
                         borderTop: cell ? '3px solid #F8F0E3' : '3px solid transparent', // Brighter light highlight on top

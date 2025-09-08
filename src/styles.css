@@ -1152,6 +1152,17 @@ h1 {
   }
 }
 
+@keyframes hintBlink {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
 @keyframes completionGlow {
   0% {
     box-shadow: 
