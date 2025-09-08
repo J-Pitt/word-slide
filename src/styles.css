@@ -47,48 +47,39 @@ body {
 
 /* Ensure html element also has the background */
 html {
-    background: 
-        /* Base dark brown wood color */
-        #654321,
-        /* Individual floor slats - horizontal planks */
+    background-color: #2F1B14 !important;
+    background-image: 
+        /* Dark oak horizontal floor slats */
         repeating-linear-gradient(
             0deg,
             transparent,
-            transparent 80px,
-            #8B4513 80px,
-            #8B4513 85px
+            transparent 60px,
+            #3D2318 60px,
+            #3D2318 65px
         ),
-        /* Wood grain within each slat */
+        /* Wood grain within slats */
         repeating-linear-gradient(
             90deg,
             transparent,
-            transparent 2px,
-            rgba(139, 69, 19, 0.8) 2px,
-            rgba(139, 69, 19, 0.8) 4px
+            transparent 3px,
+            rgba(47, 27, 20, 0.9) 3px,
+            rgba(47, 27, 20, 0.9) 6px
         ),
         /* Subtle grain variations */
         repeating-linear-gradient(
             0deg,
             transparent,
-            transparent 4px,
-            rgba(160, 82, 45, 0.4) 4px,
-            rgba(160, 82, 45, 0.4) 8px
+            transparent 6px,
+            rgba(61, 35, 24, 0.5) 6px,
+            rgba(61, 35, 24, 0.5) 12px
         ),
-        /* Wood knots and natural variations */
-        repeating-linear-gradient(
-            45deg,
-            transparent,
-            transparent 40px,
-            rgba(101, 67, 33, 0.3) 40px,
-            rgba(101, 67, 33, 0.3) 50px
-        ),
-        /* Subtle highlights on slat edges */
+        /* Dark oak highlights on slat edges */
         repeating-linear-gradient(
             0deg,
             transparent,
-            transparent 80px,
-            rgba(255, 255, 255, 0.1) 80px,
-            rgba(255, 255, 255, 0.1) 85px
+            transparent 60px,
+            rgba(255, 255, 255, 0.03) 60px,
+            rgba(255, 255, 255, 0.03) 65px
         ) !important;
     min-height: 100vh;
 }
@@ -208,7 +199,16 @@ html {
 }
 
 .game-container {
+    position: relative;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
     text-align: center;
+    padding-top: 80px;
     background-color: #2F1B14 !important;
     background-image: 
         /* Dark oak horizontal floor slats */
@@ -243,21 +243,9 @@ html {
             rgba(255, 255, 255, 0.03) 60px,
             rgba(255, 255, 255, 0.03) 65px
         ) !important;
-    padding: 15px;
-    padding-top: 100px;
-    border-radius: 15px;
     box-shadow: 
         inset 0 0 50px rgba(0, 0, 0, 0.3),
         inset 0 0 100px rgba(255, 255, 255, 0.02);
-    border: none;
-    width: 100vw;
-    height: 100vh;
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: center;
 }
 
 .game-header {
@@ -343,7 +331,8 @@ html {
 
 canvas {
     border: 3px solid #654321;
-    background-color: #8B4513;
+    background-color: transparent;
+    background-image: inherit;
     touch-action: none;
     margin: 10px 0;
     border-radius: 8px;

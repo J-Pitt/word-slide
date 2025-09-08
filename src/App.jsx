@@ -247,6 +247,47 @@ function App() {
     }
   }, [])
 
+  // Service Worker update handling
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      // Listen for service worker updates
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'SW_UPDATE_READY') {
+          console.log('🔄 New version available:', event.data.version)
+          // Force reload to get the latest version
+          window.location.reload()
+        }
+      })
+
+      // Check for updates every 30 seconds
+      const updateInterval = setInterval(() => {
+        navigator.serviceWorker.getRegistration().then((registration) => {
+          if (registration) {
+            registration.update()
+          }
+        })
+      }, 30000) // Check every 30 seconds
+
+      // Also check for updates when the page becomes visible
+      const handleVisibilityChange = () => {
+        if (!document.hidden) {
+          navigator.serviceWorker.getRegistration().then((registration) => {
+            if (registration) {
+              registration.update()
+            }
+          })
+        }
+      }
+
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+
+      return () => {
+        clearInterval(updateInterval)
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+      }
+    }
+  }, [])
+
   // Mobile optimization initialization
   useEffect(() => {
     // Initialize compatibility features
@@ -3092,7 +3133,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         style={{
                           width: '24px',
                           height: '24px',
-                          backgroundColor: '#F5DEB3',
+                          background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
                           color: '#8B4513',
                           display: 'flex',
                           alignItems: 'center',
@@ -3360,8 +3401,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 width: 'min(90vw, 400px)',
                 height: 'min(90vw, 400px)',
                 overflow: 'visible',
-                backgroundColor: '#654321', // Dark brown like wood paneling
-                padding: '0px', // No padding - blocks align perfectly with board edges
+                backgroundColor: 'transparent',
+                padding: '10px', // 10px padding from cell edges to board edge
                 borderRadius: '12px',
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.1)',
                 border: '2px solid #8B4513',
@@ -3405,7 +3446,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
                   backfaceVisibility: 'hidden',
                   // Ensure absolute positioning stability
                   left: 0,
-                  top: 0
+                  top: 0,
+                  // Add horizontal borders between rows
+                  borderBottom: r < board.length - 1 ? '1px solid #654321' : 'none'
                 }}>
                   {row.map((cell, c) => (
                   <div
@@ -3423,7 +3466,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         margin: '2px 1px',
                         boxSizing: 'border-box',
                         // Clean solid background for 3D blocks
-                        backgroundColor: cell ? '#F5DEB3' : 'transparent',
+                        background: cell ? 'linear-gradient(135deg, #F5DEB3, #DEB887)' : 'transparent',
                         // 3D block appearance with enhanced shadows
                         border: cell ? '1px solid #CD853F' : '1px solid transparent',
                         borderTop: cell ? '3px solid #F8F0E3' : '3px solid transparent', // Brighter light highlight on top
@@ -3464,17 +3507,18 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         // Make tiles appear as raised sections of the board
                         /* transform: cell ? 'translateZ(2px)' : 'none', */ // Disabled GPU acceleration to prevent ghosting
                         // Removed individual border properties - using consistent border above
-                      // Highlight completed words in green
+                      // Highlight completed words in green - same as home screen P-L-A-Y tiles
                         ...(cell && isLetterInCompletedWord(r, c) && {
-                        backgroundColor: '#90EE90',
+                        background: 'linear-gradient(135deg, #90EE90 0%, #32CD32 100%)',
                         color: '#006400',
-                          borderTop: '2px solid #228B22',
-                          borderLeft: '2px solid #228B22',
-                          borderRight: c < row.length - 1 ? '1px solid #228B22' : 'none',
-                          borderBottom: r < board.length - 1 ? '1px solid #228B22' : 'none',
-                          boxShadow: '0 6px 12px rgba(34,139,34,0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2)',
-                          // animation: 'completedWordPulse 1.5s ease-in-out infinite', // Disabled to prevent ghosting
-                          /* transform: 'translateZ(4px) perspective(100px) rotateX(3deg)' */ // Disabled GPU acceleration to prevent ghosting
+                        fontWeight: 900,
+                        boxShadow: '3px 3px 6px rgba(0,0,0,0.3), inset 2px 2px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,100,0,0.3)',
+                        borderTop: '2px solid #98FB98',
+                        borderLeft: '2px solid #98FB98',
+                        borderRight: '2px solid #228B22',
+                        borderBottom: '2px solid #228B22',
+                        transform: 'scale(1.05)',
+                        zIndex: 2
                         }),
                         // Blink hint tiles for chosen word
                         ...(hintBlinkPositions && hintBlinkPositions.some(p => p.r === r && p.c === c) && {
@@ -3543,7 +3587,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                   position: 'absolute',
                       width: 'clamp(60px, 14vw, 80px)',
                       height: 'clamp(40px, 10vw, 55px)',
-                  backgroundColor: '#F5DEB3',
+                  background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
                   border: '2px solid #8B4513',
                   borderRadius: '6px',
                   display: 'flex',
@@ -3573,148 +3617,167 @@ Note: Some browsers don't support PWA installation in development mode.`)
             </div>
           </div>
           
-          {/* Bottom action buttons: Next Level, Start Over + Main Menu */}
+          {/* Bottom action buttons: Previous, Home, Install, Next */}
           <div id="game-action-buttons" style={{
             display: 'flex',
-            justifyContent: 'center',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            gap: '12px',
+            gap: '8px',
             marginTop: '20px',
             marginBottom: '20px',
-            flexWrap: 'wrap'
+            padding: '0 10px'
           }}>
+            {/* Previous Level Button */}
             <button 
-              onClick={goToNextLevel}
-              disabled={currentLevel >= 20}
-              style={{
-                background: currentLevel < 20 
-                  ? 'linear-gradient(135deg, #32CD32, #228B22)' 
-                  : 'linear-gradient(135deg, #666, #888)',
-                color: currentLevel < 20 ? '#F5DEB3' : '#CCC',
-                padding: 'clamp(14px, 3.5vw, 18px) clamp(24px, 6vw, 36px)',
-                borderRadius: '12px',
-                fontSize: 'clamp(15px, 4.5vw, 17px)',
-                fontWeight: 'bold',
-                cursor: currentLevel < 20 ? 'pointer' : 'not-allowed',
-                minHeight: '50px',
-                minWidth: '140px',
-                boxShadow: currentLevel < 20 
-                  ? '0 8px 16px rgba(50, 205, 50, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
-                  : '0 4px 8px rgba(0, 0, 0, 0.2)',
-                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                touchAction: 'manipulation',
-                textShadow: currentLevel < 20 ? '0 1px 2px rgba(0, 0, 0, 0.3)' : 'none'
-              }}
-              onMouseEnter={(e) => {
-                if (currentLevel < 20) {
-                  e.target.style.transform = 'translateY(-2px) scale(1.02)'
-                  e.target.style.boxShadow = '0 12px 20px rgba(50, 205, 50, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+              onClick={() => {
+                if (currentLevel > 1) {
+                  setCurrentLevel(prev => prev - 1)
+                  setMoveCount(0)
+                  setCompletedWords(new Set())
+                  setHintCount(3)
+                  setLevelTransitioning(false)
+                  setBoard([])
+                  setEmptyPos({ r: 6, c: 6 })
                 }
               }}
-              onMouseLeave={(e) => {
-                if (currentLevel < 20) {
-                  e.target.style.transform = 'translateY(0) scale(1)'
-                  e.target.style.boxShadow = '0 8px 16px rgba(50, 205, 50, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
-                }
-              }}
-            >
-              {currentLevel < 20 ? '🚀 Next Level' : '🏆 Max Level'}
-            </button>
-            <button 
-              onClick={() => setShowStartOverModal(true)}
+              disabled={currentLevel <= 1}
               style={{
                 background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
                 color: '#654321',
                 border: '3px solid #8B4513',
-                padding: 'clamp(14px, 3.5vw, 18px) clamp(24px, 6vw, 36px)',
+                padding: 'clamp(10px, 2.5vw, 14px) clamp(16px, 4vw, 24px)',
                 borderRadius: '12px',
-                fontSize: 'clamp(15px, 4.5vw, 17px)',
+                fontSize: 'clamp(16px, 4vw, 20px)',
                 fontWeight: 'bold',
-                cursor: 'pointer',
-                minHeight: '48px',
-                minWidth: '140px',
-                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
+                cursor: currentLevel > 1 ? 'pointer' : 'not-allowed',
+                boxShadow: currentLevel > 1 ? '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)' : '0 4px 8px rgba(0, 0, 0, 0.2)',
                 transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                touchAction: 'manipulation',
-                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.3)',
                 position: 'relative',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                opacity: currentLevel > 1 ? 1 : 0.5,
+                minHeight: '48px',
+                minWidth: '60px'
               }}
               onMouseEnter={(e) => {
-                e.target.style.transform = 'translateY(-3px) scale(1.02)'
-                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+                if (currentLevel > 1) {
+                  e.target.style.transform = 'translateY(-2px) scale(1.05)'
+                  e.target.style.boxShadow = '0 12px 20px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+                }
               }}
               onMouseLeave={(e) => {
-                e.target.style.transform = 'translateY(0) scale(1)'
-                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+                if (currentLevel > 1) {
+                  e.target.style.transform = 'translateY(0) scale(1)'
+                  e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+                }
               }}
             >
-              Start Over
+              ←
             </button>
+
+            {/* Home Button */}
             <button 
               onClick={() => setCurrentView('menu')}
               style={{
                 background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
                 color: '#654321',
                 border: '3px solid #8B4513',
-                padding: 'clamp(14px, 3.5vw, 18px) clamp(24px, 6vw, 36px)',
+                padding: 'clamp(8px, 2vw, 12px) clamp(12px, 3vw, 18px)',
                 borderRadius: '12px',
-                fontSize: 'clamp(15px, 4.5vw, 17px)',
+                fontSize: 'clamp(12px, 3vw, 16px)',
                 fontWeight: 'bold',
                 cursor: 'pointer',
-                minHeight: '48px',
-                minWidth: '140px',
                 boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
                 transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                touchAction: 'manipulation',
-                textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.3)',
                 position: 'relative',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                minHeight: '40px',
+                minWidth: '80px'
               }}
               onMouseEnter={(e) => {
-                e.target.style.transform = 'translateY(-3px) scale(1.02)'
-                e.target.style.boxShadow = '0 12px 24px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+                e.target.style.transform = 'translateY(-2px) scale(1.05)'
+                e.target.style.boxShadow = '0 12px 20px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
               }}
               onMouseLeave={(e) => {
                 e.target.style.transform = 'translateY(0) scale(1)'
                 e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
               }}
             >
-              🏠 Main Menu
+              🏠 Home
             </button>
+
+            {/* Install Button */}
             {showInstallButton && (
-              <button 
+            <button 
                 onClick={handleInstallClick}
+              style={{
+                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                color: '#654321',
+                border: '3px solid #8B4513',
+                  padding: 'clamp(8px, 2vw, 12px) clamp(12px, 3vw, 18px)',
+                borderRadius: '12px',
+                  fontSize: 'clamp(12px, 3vw, 16px)',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                boxShadow: '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
+                transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+                  textShadow: '0 1px 2px rgba(255, 255, 255, 0.3)',
+                position: 'relative',
+                  overflow: 'hidden',
+                  minHeight: '40px',
+                  minWidth: '80px'
+              }}
+              onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-2px) scale(1.05)'
+                  e.target.style.boxShadow = '0 12px 20px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0) scale(1)'
+                e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+              }}
+            >
+                📱 Install
+            </button>
+            )}
+
+            {/* Next Level Button */}
+              <button 
+              onClick={goToNextLevel}
+              disabled={currentLevel >= 20}
                 style={{
-                  background: 'linear-gradient(135deg, #4CAF50, #45a049)',
-                  color: 'white',
-                  border: '3px solid #4CAF50',
-                  padding: 'clamp(14px, 3.5vw, 18px) clamp(24px, 6vw, 36px)',
+                background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
+                color: '#654321',
+                border: '3px solid #8B4513',
+                padding: 'clamp(10px, 2.5vw, 14px) clamp(16px, 4vw, 24px)',
                   borderRadius: '12px',
-                  fontSize: 'clamp(15px, 4.5vw, 17px)',
+                fontSize: 'clamp(16px, 4vw, 20px)',
                   fontWeight: 'bold',
-                  cursor: 'pointer',
-                  minHeight: '48px',
-                  minWidth: '100px',
-                  boxShadow: '0 8px 16px rgba(76, 175, 80, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)',
+                cursor: currentLevel < 20 ? 'pointer' : 'not-allowed',
+                boxShadow: currentLevel < 20 ? '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)' : '0 4px 8px rgba(0, 0, 0, 0.2)',
                   transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-                  touchAction: 'manipulation',
-                  textShadow: '0 1px 2px rgba(255, 255, 255, 0.5)',
+                textShadow: '0 1px 2px rgba(255, 255, 255, 0.3)',
                   position: 'relative',
-                  overflow: 'hidden'
+                overflow: 'hidden',
+                opacity: currentLevel < 20 ? 1 : 0.5,
+                minHeight: '48px',
+                minWidth: '60px'
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.transform = 'translateY(-3px) scale(1.02)'
-                  e.target.style.boxShadow = '0 12px 24px rgba(76, 175, 80, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+                if (currentLevel < 20) {
+                  e.target.style.transform = 'translateY(-2px) scale(1.05)'
+                  e.target.style.boxShadow = '0 12px 20px rgba(139, 69, 19, 0.6), inset 0 2px 0 rgba(255, 255, 255, 0.4), inset 0 -2px 0 rgba(0, 0, 0, 0.3)'
+                }
                 }}
                 onMouseLeave={(e) => {
+                if (currentLevel < 20) {
                   e.target.style.transform = 'translateY(0) scale(1)'
-                  e.target.style.boxShadow = '0 8px 16px rgba(76, 175, 80, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+                  e.target.style.boxShadow = '0 8px 16px rgba(139, 69, 19, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 0 rgba(0, 0, 0, 0.2)'
+                }
                 }}
               >
-                📱 Install
+              →
               </button>
-            )}
           </div>
           
           {/* Fireworks Animation - DISABLED FOR TESTING */}
@@ -4517,7 +4580,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 height: 'min(90vw, 400px)',
                 overflow: 'visible',
                 backgroundColor: '#654321', // Dark brown like wood paneling
-                padding: '0px', // No padding - blocks align perfectly with board edges
+                padding: '10px', // 10px padding from cell edges to board edge
                 borderRadius: '12px',
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.1)',
                 border: '2px solid #8B4513',
@@ -4574,7 +4637,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         marginRight: c === row.length - 1 ? '0px' : '1px', // Last tile touches right edge
                         marginTop: r === 0 ? '0px' : '1px', // First row touches top edge
                         marginBottom: r === tetrisBoard.length - 1 ? '0px' : '1px', // Last row touches bottom edge
-                        backgroundColor: cell ? '#F5DEB3' : 'rgba(139, 69, 19, 0.3)', // Show empty cells
+                        background: cell ? 'linear-gradient(135deg, #F5DEB3, #DEB887)' : 'rgba(139, 69, 19, 0.3)', // Show empty cells
                         border: 'none', // Remove conflicting shorthand border
                         borderRadius: cell ? '6px' : '4px', // Smaller radius for connected appearance
                         display: 'flex',
@@ -4584,7 +4647,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         fontWeight: 'bold',
                         color: cell ? '#654321' : 'rgba(139, 69, 19, 0.5)',
                         cursor: 'default',
-                        boxShadow: cell ? '0 4px 8px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.2)' : '0 2px 4px rgba(0, 0, 0, 0.2)',
+                        boxShadow: cell ? '0 4px 8px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.2)' : 'inset 0 2px 4px rgba(0, 0, 0, 0.3), inset 0 -1px 2px rgba(0, 0, 0, 0.2)',
                         transition: 'all 0.1s ease',
                         position: 'relative',
                         userSelect: 'none',
@@ -4702,7 +4765,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     position: 'absolute',
                     width: 'clamp(40px, 10vw, 55px)',
                     height: 'clamp(40px, 10vw, 55px)',
-                    backgroundColor: '#F5DEB3',
+                    background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
                     border: '2px solid #8B4513',
                     borderRadius: '6px',
                     display: 'flex',
@@ -4793,10 +4856,10 @@ export default App;
 // Wrap App with AuthProvider for components that need authentication
 function AppWithAuth() {
   return (
-  <AuthProvider>
-    <App />
-  </AuthProvider>
-)
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  )
 }
 
 export { AppWithAuth };

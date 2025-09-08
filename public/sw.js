@@ -1,6 +1,10 @@
-const CACHE_NAME = `wordslide-${new Date().getTime()}`;
+// Use a timestamp-based cache name to force updates
+const CACHE_NAME = `wordslide-${Date.now()}`;
 const OFFLINE_URL = '/';
 const APP_VERSION = '1.0.0'; // Update this for major releases
+
+// Force immediate activation of new service worker
+const FORCE_UPDATE = true;
 
 // Files to cache for offline functionality
 const STATIC_CACHE_FILES = [
@@ -41,7 +45,7 @@ self.addEventListener('install', (event) => {
       })
   );
   
-  // Force the waiting service worker to become the active service worker
+  // Force immediate activation - don't wait for existing tabs to close
   self.skipWaiting();
 });
 
@@ -60,17 +64,19 @@ self.addEventListener('activate', (event) => {
         })
       );
     }).then(() => {
-      // Ensure the new service worker takes control immediately
+      // Force immediate control of all clients
       return self.clients.claim();
     }).then(() => {
-      // Notify clients that the update is complete
+      // Notify clients that the update is complete and force reload
       self.clients.matchAll().then(clients => {
         clients.forEach(client => {
           client.postMessage({
             type: 'SW_UPDATED',
             version: APP_VERSION,
-            message: 'App updated successfully!'
+            message: 'App updated successfully! Reloading...'
           });
+          // Force reload the page to ensure latest version
+          client.navigate(client.url);
         });
       });
     })
@@ -106,34 +112,33 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For static assets, try cache first, then network
+  // For static assets, try network first for updates, then cache
   event.respondWith(
-    caches.match(event.request)
-      .then((cachedResponse) => {
-        if (cachedResponse) {
-          return cachedResponse;
+    fetch(event.request)
+      .then((response) => {
+        // Don't cache non-successful responses
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+          return response;
         }
         
-        // If not in cache, fetch from network
-        return fetch(event.request)
-          .then((response) => {
-            // Don't cache non-successful responses
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
+        // Clone the response for caching
+        const responseToCache = response.clone();
+        
+        // Cache successful responses
+        caches.open(CACHE_NAME)
+          .then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        
+        return response;
+      })
+      .catch(() => {
+        // If network fails, try cache
+        return caches.match(event.request)
+          .then((cachedResponse) => {
+            if (cachedResponse) {
+              return cachedResponse;
             }
-            
-            // Clone the response for caching
-            const responseToCache = response.clone();
-            
-            // Cache successful responses
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(event.request, responseToCache);
-              });
-            
-            return response;
-          })
-          .catch(() => {
             // If both cache and network fail, return offline page
             return caches.match(OFFLINE_URL);
           });
