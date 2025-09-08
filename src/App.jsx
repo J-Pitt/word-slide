@@ -34,7 +34,7 @@ function App() {
   const [emptyPos, setEmptyPos] = useState({ r: 6, c: 6 })
   const [moveCount, setMoveCount] = useState(0)
   const [currentLevel, setCurrentLevel] = useState(1)
-  const [completedWords, setCompletedWords] = useState(new Set())
+  const [completedWords, setCompletedWords] = useState(new Set()) // Now stores word positions like "CAT-0-0-horizontal"
   const [hintCount, setHintCount] = useState(3)
   const [levelTransitioning, setLevelTransitioning] = useState(false)
   const [showFireworks, setShowFireworks] = useState(false)
@@ -781,45 +781,32 @@ Note: Some browsers don't support PWA installation in development mode.`)
   const isLetterInCompletedWord = useCallback((r, c) => {
     if (!board || board.length === 0 || !board[0]) return false
     
-    const targetWords = WORD_SETS[currentLevel - 1] || WORD_SETS[0]
-    if (!targetWords || targetWords.length === 0) return false
-    
-    // Check completed words
-    const wordsToCheck = completedWords
-    
-    for (const word of targetWords) {
-      if (!wordsToCheck.has(word)) continue
+    // Check if this specific position is part of any completed word
+    for (const completedWordKey of completedWords) {
+      // Parse the completed word key: "WORD-row-col-direction"
+      const parts = completedWordKey.split('-')
+      if (parts.length < 4) continue
       
-      // Check horizontal words
-      for (let row = 0; row < board.length; row++) {
-        for (let col = 0; col <= board[row].length - word.length; col++) {
-          const horizontalWord = board[row].slice(col, col + word.length).join('').toLowerCase()
-          if (horizontalWord === word.toLowerCase()) {
-            if (row === r && c >= col && c < col + word.length) {
-              return true
-            }
-          }
+      const word = parts[0]
+      const startRow = parseInt(parts[1])
+      const startCol = parseInt(parts[2])
+      const direction = parts[3]
+      
+      if (direction === 'horizontal') {
+        // Check if this letter is within the horizontal word range
+        if (startRow === r && c >= startCol && c < startCol + word.length) {
+          return true
         }
-      }
-      
-      // Check vertical words
-      for (let col = 0; col < board[0].length; col++) {
-        for (let row = 0; row <= board.length - word.length; row++) {
-          const verticalWord = []
-          for (let i = 0; i < word.length; i++) {
-            verticalWord.push(board[row + i][col])
-          }
-          if (verticalWord.join('').toLowerCase() === word.toLowerCase()) {
-            if (col === c && r >= row && r < row + word.length) {
-              return true
-            }
-          }
+      } else if (direction === 'vertical') {
+        // Check if this letter is within the vertical word range
+        if (startCol === c && r >= startRow && r < startRow + word.length) {
+          return true
         }
       }
     }
     
     return false
-  }, [board, currentLevel, completedWords, WORD_SETS])
+  }, [board, completedWords])
 
   // Reset tile visual state
   const resetTileVisualState = useCallback((r, c) => {
@@ -849,8 +836,15 @@ Note: Some browsers don't support PWA installation in development mode.`)
     let hasNewCompletions = false
     
     for (const word of targetWords) {
-      // Skip if already completed
-      if (completedWords.has(word)) continue
+      // Skip if this word is already completed (check all positions)
+      let wordAlreadyCompleted = false
+      for (const completedKey of completedWords) {
+        if (completedKey.startsWith(word + '-')) {
+          wordAlreadyCompleted = true
+          break
+        }
+      }
+      if (wordAlreadyCompleted) continue
       
       const wordLower = word.toLowerCase()
       let wordFound = false
@@ -860,9 +854,13 @@ Note: Some browsers don't support PWA installation in development mode.`)
         for (let col = 0; col <= boardToCheck[row].length - word.length && !wordFound; col++) {
           const horizontalWord = boardToCheck[row].slice(col, col + word.length).join('').toLowerCase()
           if (horizontalWord === wordLower) {
-            newCompletedWords.add(word)
-            wordFound = true
-            hasNewCompletions = true
+            // Check if this specific position is already completed
+            const wordKey = `${word}-${row}-${col}-horizontal`
+            if (!newCompletedWords.has(wordKey)) {
+              newCompletedWords.add(wordKey)
+              wordFound = true
+              hasNewCompletions = true
+            }
             
             // Fireworks are now triggered immediately in the move functions
           }
@@ -877,9 +875,13 @@ Note: Some browsers don't support PWA installation in development mode.`)
             verticalWord.push(boardToCheck[row + i][col])
           }
           if (verticalWord.join('').toLowerCase() === wordLower) {
-            newCompletedWords.add(word)
-            wordFound = true
-            hasNewCompletions = true
+            // Check if this specific position is already completed
+            const wordKey = `${word}-${row}-${col}-vertical`
+            if (!newCompletedWords.has(wordKey)) {
+              newCompletedWords.add(wordKey)
+              wordFound = true
+              hasNewCompletions = true
+            }
             
             // Fireworks are now triggered immediately in the move functions
           }
@@ -902,90 +904,53 @@ Note: Some browsers don't support PWA installation in development mode.`)
       // Apply green styling immediately to all tiles in newly completed words
       // Use multiple timing strategies to ensure this works
       const applyGreenStyling = () => {
-        newlyCompleted.forEach(word => {
-          const wordLower = word.toLowerCase()
+        console.log('🎨 APPLYING GREEN STYLING to newly completed words:', newlyCompleted)
+        newlyCompleted.forEach(wordKey => {
+          // Parse the word key: "WORD-row-col-direction"
+          const parts = wordKey.split('-')
+          if (parts.length < 4) return
           
-          // Check horizontal words and apply styling immediately
-          for (let row = 0; row < boardToCheck.length; row++) {
-            for (let col = 0; col <= boardToCheck[row].length - word.length; col++) {
-              const horizontalWord = boardToCheck[row].slice(col, col + word.length).join('').toLowerCase()
-              if (horizontalWord === wordLower) {
-                // Apply green styling to all tiles in this horizontal word
-                for (let i = 0; i < word.length; i++) {
-                  const tileElement = document.querySelector(`[data-tile="${row}-${col + i}"]`)
-                  if (tileElement) {
-                    // Verify the tile has the correct letter before applying styling
-                    const tileText = tileElement.textContent?.trim()
-                    const expectedLetter = boardToCheck[row][col + i]
-                    if (tileText === expectedLetter) {
-                      // Batch style updates for better performance
-                      const styles = {
-                        'background-color': '#90EE90',
-                        'color': '#006400',
-                        'border-top': '2px solid #228B22',
-                        'border-left': '2px solid #228B22',
-                        'border-right': col + i < boardToCheck[row].length - 1 ? '1px solid #228B22' : 'none',
-                        'border-bottom': row < boardToCheck.length - 1 ? '1px solid #228B22' : 'none',
-                        'box-shadow': '0 6px 12px rgba(34,139,34,0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2)',
-                        'transition': 'none',
-                        'will-change': 'transform, background-color, box-shadow'
-                      }
-                      
-                      // Apply all styles at once
-                      Object.entries(styles).forEach(([property, value]) => {
-                        tileElement.style.setProperty(property, value, 'important')
-                      })
-                      
-                      // Force a reflow to ensure the styles are applied
-                      tileElement.offsetHeight
-                    }
-                  }
+          const word = parts[0]
+          const startRow = parseInt(parts[1])
+          const startCol = parseInt(parts[2])
+          const direction = parts[3]
+          
+          if (direction === 'horizontal') {
+            // Apply green styling to all tiles in this horizontal word
+            for (let i = 0; i < word.length; i++) {
+              const tileElement = document.querySelector(`[data-tile="${startRow}-${startCol + i}"]`)
+              if (tileElement) {
+                // Verify the tile has the correct letter before applying styling
+                const tileText = tileElement.textContent?.trim()
+                const expectedLetter = boardToCheck[startRow][startCol + i]
+                if (tileText === expectedLetter) {
+                  // Add the completed-tile class for full 3D styling
+                  tileElement.classList.add('completed-tile')
+                  tileElement.setAttribute('data-completed', 'true')
+                  console.log(`🎨 STYLED HORIZONTAL TILE: ${startRow}-${startCol + i} (${expectedLetter})`)
+                  
+                  // Force a reflow to ensure the styles are applied
+                  tileElement.offsetHeight
                 }
-                break
               }
             }
-          }
-          
-          // Check vertical words and apply styling immediately
-          for (let col = 0; col < boardToCheck[0].length; col++) {
-            for (let row = 0; row <= boardToCheck.length - word.length; row++) {
-              const verticalWord = []
-              for (let i = 0; i < word.length; i++) {
-                verticalWord.push(boardToCheck[row + i][col])
-              }
-              if (verticalWord.join('').toLowerCase() === wordLower) {
-                // Apply green styling to all tiles in this vertical word
-                for (let i = 0; i < word.length; i++) {
-                  const tileElement = document.querySelector(`[data-tile="${row + i}-${col}"]`)
-                  if (tileElement) {
-                    // Verify the tile has the correct letter before applying styling
-                    const tileText = tileElement.textContent?.trim()
-                    const expectedLetter = boardToCheck[row + i][col]
-                    if (tileText === expectedLetter) {
-                      // Batch style updates for better performance
-                      const styles = {
-                        'background-color': '#90EE90',
-                        'color': '#006400',
-                        'border-top': '2px solid #228B22',
-                        'border-left': '2px solid #228B22',
-                        'border-right': col < boardToCheck[0].length - 1 ? '1px solid #228B22' : 'none',
-                        'border-bottom': row + i < boardToCheck.length - 1 ? '1px solid #228B22' : 'none',
-                        'box-shadow': '0 6px 12px rgba(34,139,34,0.6), inset 0 1px 0 rgba(255, 255, 255, 0.5), inset 0 -1px 0 rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2)',
-                        'transition': 'none',
-                        'will-change': 'transform, background-color, box-shadow'
-                      }
-                      
-                      // Apply all styles at once
-                      Object.entries(styles).forEach(([property, value]) => {
-                        tileElement.style.setProperty(property, value, 'important')
-                      })
-                      
-                      // Force a reflow to ensure the styles are applied
-                      tileElement.offsetHeight
-                    }
-                  }
+          } else if (direction === 'vertical') {
+            // Apply green styling to all tiles in this vertical word
+            for (let i = 0; i < word.length; i++) {
+              const tileElement = document.querySelector(`[data-tile="${startRow + i}-${startCol}"]`)
+              if (tileElement) {
+                // Verify the tile has the correct letter before applying styling
+                const tileText = tileElement.textContent?.trim()
+                const expectedLetter = boardToCheck[startRow + i][startCol]
+                if (tileText === expectedLetter) {
+                  // Add the completed-tile class for full 3D styling
+                  tileElement.classList.add('completed-tile')
+                  tileElement.setAttribute('data-completed', 'true')
+                  console.log(`🎨 STYLED VERTICAL TILE: ${startRow + i}-${startCol} (${expectedLetter})`)
+                  
+                  // Force a reflow to ensure the styles are applied
+                  tileElement.offsetHeight
                 }
-                break
               }
             }
           }
@@ -1013,11 +978,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
               const [row, col] = target.getAttribute('data-tile').split('-').map(Number)
               // Check if this tile should be green
               if (isLetterInCompletedWord(row, col)) {
-                target.style.setProperty('background-color', '#90EE90', 'important')
-                target.style.setProperty('color', '#006400', 'important')
-                target.style.setProperty('border-top', '2px solid #228B22', 'important')
-                target.style.setProperty('border-left', '2px solid #228B22', 'important')
-                target.style.setProperty('transition', 'none', 'important')
+                target.classList.add('completed-tile')
+                target.setAttribute('data-completed', 'true')
               }
             }
           }
@@ -1039,7 +1001,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
       
       // Also update the word completion indicators in the UI immediately
       requestAnimationFrame(() => {
-        newlyCompleted.forEach(word => {
+        newlyCompleted.forEach(wordKey => {
+          // Extract word name from position key
+          const word = wordKey.split('-')[0]
           const wordIndicator = document.querySelector(`[data-word-indicator="${word}"]`)
           if (wordIndicator) {
             // Remove any existing checkmark first
@@ -1061,9 +1025,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
             // Add the new checkmark
             wordIndicator.appendChild(checkmark)
             
-            // Trigger fireworks immediately when checkmark is added (same timing as checkmark)
-            console.log('🎯 WORD COMPLETED - CHECKMARK ADDED! Calling fireworks...', word)
-            showDirectFireworks()
+            // Checkmark added for completed word
+            console.log('🎯 WORD COMPLETED - CHECKMARK ADDED!', word)
           }
         })
       })
@@ -1078,10 +1041,27 @@ Note: Some browsers don't support PWA installation in development mode.`)
         // hapticUtils.success()
       }
       
+      // Count unique words completed (not just positions)
+      const uniqueWordsCompleted = new Set()
+      for (const wordKey of newCompletedWords) {
+        const word = wordKey.split('-')[0]
+        uniqueWordsCompleted.add(word)
+      }
+      
       // Check if level is completed
-      if (newCompletedWords.size === targetWords.length && !levelTransitioning) {
+      console.log('🎯 LEVEL COMPLETION CHECK:', {
+        completedPositions: newCompletedWords.size,
+        uniqueWordsCompleted: uniqueWordsCompleted.size,
+        targetWords: targetWords.length,
+        levelTransitioning: levelTransitioning,
+        shouldTriggerFireworks: uniqueWordsCompleted.size === targetWords.length && !levelTransitioning
+      })
+      
+      if (uniqueWordsCompleted.size === targetWords.length && !levelTransitioning) {
+        console.log('🎆 LEVEL COMPLETED! Triggering fireworks...')
         setLevelTransitioning(true)
-        setShowFireworks(true)
+        // Trigger direct fireworks immediately
+        showDirectFireworks()
         
         // Add haptic feedback for level completion
         // if (mobileState.hasHaptics) {
@@ -1091,75 +1071,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
         // Update database stats after level completion
         updateDatabaseStats(currentLevel, moveCount, newCompletedWords.size)
         
-        // Extravagant fireworks - particles launch from bottom and explode over board
-        const colors = ['#FFD700', '#FF4757', '#5352ed', '#00d2d3', '#ff6348', '#FF69B4', '#32CD32', '#FF8C00', '#8A2BE2', '#00CED1']
-        const newFireworks = []
-        
-        // Create 12 main fireworks that launch from below screen
-        for (let i = 0; i < 12; i++) {
-          const launchX = 5 + Math.random() * 90 // Spread across entire width
-          const explodeY = 10 + Math.random() * 50 // Explode over the game board
-          const explodeX = launchX + (Math.random() - 0.5) * 25 // More horizontal drift
-          
-          newFireworks.push({
-            id: i,
-            launchX: launchX,
-            launchY: 100, // Start from below screen
-            explodeX: explodeX,
-            explodeY: explodeY,
-            color: colors[Math.floor(Math.random() * colors.length)],
-            delay: i * 200, // Faster launches
-            size: 1.3,
-            intensity: 'high',
-            particleCount: 30 + Math.floor(Math.random() * 20) // 30-50 particles per firework
-          })
-        }
-        
-        // Add secondary wave of fireworks
-        for (let i = 12; i < 18; i++) {
-          const launchX = 10 + Math.random() * 80
-          const explodeY = 20 + Math.random() * 40
-          const explodeX = launchX + (Math.random() - 0.5) * 20
-          
-          newFireworks.push({
-            id: i,
-            launchX: launchX,
-            launchY: 100,
-            explodeX: explodeX,
-            explodeY: explodeY,
-            color: colors[Math.floor(Math.random() * colors.length)],
-            delay: 1500 + (i - 12) * 150,
-            size: 1.0,
-            intensity: 'high',
-            particleCount: 20 + Math.floor(Math.random() * 15) // 20-35 particles
-          })
-        }
-        
-        // Add final wave of smaller fireworks
-        for (let i = 18; i < 24; i++) {
-          const launchX = 15 + Math.random() * 70
-          const explodeY = 25 + Math.random() * 35
-          const explodeX = launchX + (Math.random() - 0.5) * 15
-          
-          newFireworks.push({
-            id: i,
-            launchX: launchX,
-            launchY: 100,
-            explodeX: explodeX,
-            explodeY: explodeY,
-            color: colors[Math.floor(Math.random() * colors.length)],
-            delay: 3000 + (i - 18) * 100,
-            size: 0.8,
-            intensity: 'medium',
-            particleCount: 15 + Math.floor(Math.random() * 10) // 15-25 particles
-          })
-        }
-        setFireworks(newFireworks)
-        
-        // Show level complete modal after 2 seconds (1 second sooner than before)
+        // Show level complete modal after 2 seconds
         setTimeout(() => {
-          setShowFireworks(false)
-          setFireworks([])
           setShowLevelCompleteModal(true)
         }, 2000)
       }
@@ -1312,7 +1225,15 @@ Note: Some browsers don't support PWA installation in development mode.`)
       let hasNewCompletions = false
       
       for (const word of targetWords) {
-        if (completedWords.has(word)) continue
+        // Skip if this word is already completed (check all positions)
+        let wordAlreadyCompleted = false
+        for (const completedKey of completedWords) {
+          if (completedKey.startsWith(word + '-')) {
+            wordAlreadyCompleted = true
+            break
+          }
+        }
+        if (wordAlreadyCompleted) continue
         
         const wordLower = word.toLowerCase()
         let wordFound = false
@@ -1326,11 +1247,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
               wordFound = true
               hasNewCompletions = true
               
-              // Trigger fireworks immediately when word completion is detected
-              if (newCompletedWords.size < targetWords.length) {
-                console.log('🎯 HORIZONTAL WORD COMPLETED! Calling fireworks...', word)
-                showDirectFireworks()
-              }
+              // Word completion detected
+              console.log('🎯 HORIZONTAL WORD COMPLETED!', word)
             }
           }
         }
@@ -1347,11 +1265,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
               wordFound = true
               hasNewCompletions = true
               
-              // Trigger fireworks immediately when word completion is detected
-              if (newCompletedWords.size < targetWords.length) {
-                console.log('🎯 VERTICAL WORD COMPLETED! Calling fireworks...', word)
-                showDirectFireworks()
-              }
+              // Word completion detected
+              console.log('🎯 VERTICAL WORD COMPLETED!', word)
             }
           }
         }
@@ -1397,7 +1312,15 @@ Note: Some browsers don't support PWA installation in development mode.`)
         let hasNewCompletions = false
         
         for (const word of targetWords) {
-          if (completedWords.has(word)) continue
+          // Skip if this word is already completed (check all positions)
+        let wordAlreadyCompleted = false
+        for (const completedKey of completedWords) {
+          if (completedKey.startsWith(word + '-')) {
+            wordAlreadyCompleted = true
+            break
+          }
+        }
+        if (wordAlreadyCompleted) continue
           
           const wordLower = word.toLowerCase()
           let wordFound = false
@@ -1411,10 +1334,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 wordFound = true
                 hasNewCompletions = true
                 
-                // Trigger fireworks immediately when word completion is detected
-                if (newCompletedWords.size < targetWords.length) {
-                  showDirectFireworks()
-                }
+                // Word completion detected
               }
             }
           }
@@ -1431,10 +1351,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 wordFound = true
                 hasNewCompletions = true
                 
-                // Trigger fireworks immediately when word completion is detected
-                if (newCompletedWords.size < targetWords.length) {
-                  showDirectFireworks()
-                }
+                // Word completion detected
               }
             }
           }
@@ -3505,29 +3422,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         // Make tiles appear as raised sections of the board
                         /* transform: cell ? 'translateZ(2px)' : 'none', */ // Disabled GPU acceleration to prevent ghosting
                         // Removed individual border properties - using consistent border above
-                      // Highlight completed words in green - same as home screen P-L-A-Y tiles
-                        ...(cell && isLetterInCompletedWord(r, c) && {
-                        background: 'linear-gradient(135deg, #90EE90 0%, #32CD32 100%)',
-                        color: '#006400',
-                        fontWeight: 900,
-                        boxShadow: '3px 3px 6px rgba(0,0,0,0.3), inset 2px 2px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,100,0,0.3)',
-                        borderTop: '2px solid #98FB98',
-                        borderLeft: '2px solid #98FB98',
-                        borderRight: '2px solid #228B22',
-                        borderBottom: '2px solid #228B22',
-                        transform: 'scale(1.05)',
-                        zIndex: 2
-                        }),
-                        // Blink hint tiles for chosen word
-                        ...(hintBlinkPositions && hintBlinkPositions.some(p => p.r === r && p.c === c) && {
-                          backgroundColor: '#90EE90',
-                          color: '#006400',
-                          borderTop: '2px solid #228B22',
-                          borderLeft: '2px solid #228B22',
-                          borderRight: c < row.length - 1 ? '1px solid #228B22' : 'none',
-                          borderBottom: r < board.length - 1 ? '1px solid #228B22' : 'none',
-                          // animation: 'hintBlink 0.6s ease-in-out infinite' // Disabled to prevent ghosting
-                        }),
+                      // Completed words will be styled via CSS class applied in DOM manipulation
+                        // Hint tiles will be styled via CSS class if needed
                         // Highlight selected tile with enhanced 3D effects
                         ...(selectedTile && selectedTile.r === r && selectedTile.c === c && {
                           // transform: 'translateZ(6px) perspective(100px) rotateX(6deg) scale(1.1)', // Disabled GPU acceleration to prevent ghosting
@@ -3778,7 +3674,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
               </button>
           </div>
           
-          {/* Fireworks Animation - DISABLED FOR TESTING */}
+          {/* Fireworks Animation - DISABLED (using direct fireworks instead) */}
           {false && showFireworks && (
             <div id="fireworks-overlay" style={{
               position: 'fixed',
