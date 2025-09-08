@@ -2970,37 +2970,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          backgroundColor: '#2F1B14',
-          backgroundImage: `
-            repeating-linear-gradient(
-              0deg,
-              transparent,
-              transparent 60px,
-              #3D2318 60px,
-              #3D2318 65px
-            ),
-            repeating-linear-gradient(
-              90deg,
-              transparent,
-              transparent 3px,
-              rgba(47, 27, 20, 0.9) 3px,
-              rgba(47, 27, 20, 0.9) 6px
-            ),
-            repeating-linear-gradient(
-              0deg,
-              transparent,
-              transparent 6px,
-              rgba(61, 35, 24, 0.5) 6px,
-              rgba(61, 35, 24, 0.5) 12px
-            ),
-            repeating-linear-gradient(
-              0deg,
-              transparent,
-              transparent 60px,
-              rgba(255, 255, 255, 0.03) 60px,
-              rgba(255, 255, 255, 0.03) 65px
-            )
-          `,
+          backgroundColor: 'transparent',
           minHeight: '100vh',
           padding: '20px'
         }}>
@@ -3068,7 +3038,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                           borderTop: '2px solid #F8F0E3',
                           borderLeft: '2px solid #F8F0E3',
                           borderRight: '1px solid #7A6B47',
-                          borderBottom: '1px solid #7A6B47',
+                          // Removed bottom border
                           transition: 'all 0.3s ease'
                         }}
                       >
@@ -3380,8 +3350,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                   // Ensure absolute positioning stability
                   left: 0,
                   top: 0,
-                  // Add horizontal borders between rows
-                  borderBottom: r < board.length - 1 ? '1px solid #654321' : 'none'
+                  // Removed horizontal borders between rows
                 }}>
                   {row.map((cell, c) => (
                   <div
@@ -3405,7 +3374,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         borderTop: cell ? '3px solid #F8F0E3' : '3px solid transparent', // Brighter light highlight on top
                         borderLeft: cell ? '3px solid #F8F0E3' : '3px solid transparent', // Brighter light highlight on left
                         borderRight: cell ? '3px solid #7A6B47' : '3px solid transparent', // Darker shadow on right
-                        borderBottom: cell ? '3px solid #7A6B47' : '3px solid transparent', // Darker shadow on bottom
+                        // Removed bottom border
                         borderRadius: '4px',
                         display: 'flex',
                         alignItems: 'center',
@@ -4569,7 +4538,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         /* transform: cell ? 'translateZ(2px)' : 'none', */ // Disabled GPU acceleration to prevent ghosting
                         // Connected surface effect - use specific border properties
                         borderRight: c < row.length - 1 ? '1px solid #654321' : 'none',
-                        borderBottom: r < tetrisBoard.length - 1 ? '1px solid #654321' : 'none',
+                        // Removed bottom border
                         // Add top and left borders for complete tile definition
                         borderTop: cell ? '2px solid #8B4513' : '1px solid #654321',
                         borderLeft: cell ? '2px solid #8B4513' : '1px solid #654321'
