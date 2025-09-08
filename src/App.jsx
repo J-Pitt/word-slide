@@ -2025,6 +2025,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
   const handleTouchStart = useCallback((e, r, c) => {
     if (!board[r][c]) return // Don't select empty tiles
     
+    // Don't allow any interaction with completed word tiles
+    if (isLetterInCompletedWord(r, c)) return
+    
     // Only allow dragging tiles that are directly adjacent to the empty cell
     const isAdjacent = (
       (emptyPos.r === r && emptyPos.c === c + 1) || // Empty is to the right
@@ -2067,10 +2070,13 @@ Note: Some browsers don't support PWA installation in development mode.`)
     else setDragAllowedDir(null)
     setIsDragging(true)
     // })
-  }, [board, emptyPos])
+  }, [board, emptyPos, isLetterInCompletedWord])
 
   const handleMouseDown = useCallback((e, r, c) => {
     if (!board[r][c]) return // Don't select empty tiles
+    
+    // Don't allow any interaction with completed word tiles
+    if (isLetterInCompletedWord(r, c)) return
     
     // Only allow dragging tiles that are directly adjacent to the empty cell
     const isAdjacent = (
@@ -2104,7 +2110,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
     else if (emptyPos.c === c && emptyPos.r === r - 1) setDragAllowedDir('up')
     else setDragAllowedDir(null)
     setIsDragging(true)
-  }, [board, emptyPos])
+  }, [board, emptyPos, isLetterInCompletedWord])
 
   const handleTouchMove = useCallback((e) => {
     if (!touchStart || !selectedTile || !isDragging) return
@@ -3074,11 +3080,6 @@ Note: Some browsers don't support PWA installation in development mode.`)
               </div>
             </div>
             <p style={{margin: '4px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
-              Completed: <span style={{color: '#F5DEB3'}}>
-                {completedWords.size}/{WORD_SETS[currentLevel - 1]?.length || 0}
-              </span>
-            </p>
-            <p style={{margin: '4px 0', fontSize: 'clamp(14px, 4vw, 18px)', color: '#F5DEB3'}}>
               Moves: <span style={{color: '#F5DEB3'}}>{moveCount}</span>
             </p>
             {isAuthenticated && user?.username ? (
@@ -3136,15 +3137,17 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     : 'linear-gradient(135deg, #666, #888)',
                   color: hintCount > 0 ? '#2F1B14' : '#CCC',
                   border: '2px solid #8B4513',
-                  padding: '8px',
+                  padding: '8px 12px',
                   borderRadius: '8px',
-                  fontSize: '18px',
+                  fontSize: 'clamp(13px, 3.5vw, 15px)',
+                  fontWeight: 'bold',
                   cursor: hintCount > 0 ? 'pointer' : 'not-allowed',
-                  width: '36px',
                   height: '36px',
+                  minWidth: '80px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  gap: '4px',
                   boxShadow: hintCount > 0 
                     ? '0 2px 8px rgba(255, 215, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)' 
                     : '0 2px 8px rgba(0, 0, 0, 0.2)',
@@ -3167,7 +3170,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 }}
                 title={`Hint (${hintCount})`}
               >
-                💡
+                💡 Hint
               </button>
               
               <button 
@@ -3176,15 +3179,17 @@ Note: Some browsers don't support PWA installation in development mode.`)
                   background: 'linear-gradient(135deg, #00CED1, #20B2AA)',
                   color: '#2F1B14',
                   border: '2px solid #8B4513',
-                  padding: '8px',
+                  padding: '8px 12px',
                   borderRadius: '8px',
-                  fontSize: '18px',
+                  fontSize: 'clamp(13px, 3.5vw, 15px)',
+                  fontWeight: 'bold',
                   cursor: 'pointer',
-                  width: '36px',
                   height: '36px',
+                  minWidth: '100px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  gap: '4px',
                   boxShadow: '0 2px 8px rgba(0, 206, 209, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
                   transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
                   touchAction: 'manipulation',
@@ -3199,9 +3204,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
                   e.target.style.transform = 'translateY(0) scale(1)'
                   e.target.style.boxShadow = '0 2px 8px rgba(0, 206, 209, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
                 }}
-                title="Rules"
+                title="How to Play"
               >
-                📖
+                📖 How to Play
               </button>
 
               <button 
@@ -3209,20 +3214,32 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 style={{
                   background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
                   color: '#654321',
-                  padding: 'clamp(8px, 2.5vw, 12px) clamp(16px, 4vw, 20px)',
-                  borderRadius: '10px',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
                   fontSize: 'clamp(13px, 3.5vw, 15px)',
                   fontWeight: 'bold',
                   cursor: 'pointer',
-                  minHeight: '36px',
+                  height: '36px',
                   minWidth: '100px',
-                  boxShadow: '0 4px 12px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
                   transition: 'all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
                   touchAction: 'manipulation',
                   textShadow: '0 1px 2px rgba(255, 255, 255, 0.3)',
                   position: 'relative',
                   overflow: 'hidden'
                 }}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = 'translateY(-1px) scale(1.05)'
+                  e.target.style.boxShadow = '0 4px 12px rgba(139, 69, 19, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4)'
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = 'translateY(0) scale(1)'
+                  e.target.style.boxShadow = '0 2px 8px rgba(139, 69, 19, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)'
+                }}
+                title="Leaderboard"
               >
                 🏆 Leaderboard
               </button>
@@ -3348,8 +3365,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 <div key={r} style={{
                   display: 'flex',
                   justifyContent: 'center',
+                  alignItems: 'center',
                   width: '100%',
-                  height: 'calc(100% / 6)',
+                  height: 'clamp(40px, calc((min(90vw, 400px) - 20px) / 6 + 4px), 65px)',
                   position: 'relative',
                   zIndex: 1,
                   contain: 'layout',
@@ -3376,9 +3394,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
                     style={{
-                        width: 'calc((100% - 20px) / 6)',
-                        height: 'calc((100% - 40px) / 6)',
-                        margin: '1px',
+                        width: 'clamp(35px, calc((min(90vw, 400px) - 20px) / 6), 60px)',
+                        height: 'clamp(35px, calc((min(90vw, 400px) - 20px) / 6), 60px)',
+                        margin: '2px',
                         boxSizing: 'border-box',
                         // Clean solid background for 3D blocks
                         background: cell ? 'linear-gradient(135deg, #F5DEB3, #DEB887)' : 'transparent',
