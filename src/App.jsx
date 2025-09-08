@@ -2209,22 +2209,22 @@ Note: Some browsers don't support PWA installation in development mode.`)
     if (tileEl) {
       tileEl.style.transition = 'none' // No transition for real-time following
       
-        // Use responsive tile size
-        const step = 41 + 1 // tileSizeRef.current + gapSizeRef.current || (41 + 1)
-      const maxDistance = step // Allow tile to slide all the way to empty space
+        // Use actual calculated tile step size
+        const step = tileStep || 42 // Use calculated tileStep or fallback
+      const maxDistance = step * 1.1 // Allow overshoot to reach empty cell
       
-      // Allow smooth movement all the way to empty space
+      // Allow smooth movement exactly to empty space boundary
       if (dragAllowedDir === 'right' && rawDx > 0) {
-        const clampedDx = Math.min(rawDx, maxDistance * 1.5) // Allow more overshoot for smooth feel
+        const clampedDx = Math.min(rawDx, maxDistance * 0.9) // Reduce horizontal overshoot
           tileEl.style.transform = `translate3d(${clampedDx}px, 0px, 0px)` // Use 3D transform for hardware acceleration
       } else if (dragAllowedDir === 'left' && rawDx < 0) {
-        const clampedDx = Math.max(rawDx, -maxDistance * 1.5) // Allow more overshoot for smooth feel
+        const clampedDx = Math.max(rawDx, -maxDistance * 0.9) // Reduce horizontal overshoot
           tileEl.style.transform = `translate3d(${clampedDx}px, 0px, 0px)`
       } else if (dragAllowedDir === 'down' && rawDy > 0) {
-        const clampedDy = Math.min(rawDy, maxDistance * 1.5) // Allow more overshoot for smooth feel
+        const clampedDy = Math.min(rawDy, maxDistance) // Keep full vertical overshoot
           tileEl.style.transform = `translate3d(0px, ${clampedDy}px, 0px)`
       } else if (dragAllowedDir === 'up' && rawDy < 0) {
-        const clampedDy = Math.max(rawDy, -maxDistance * 1.5) // Allow more overshoot for smooth feel
+        const clampedDy = Math.max(rawDy, -maxDistance) // Keep full vertical overshoot
           tileEl.style.transform = `translate3d(0px, ${clampedDy}px, 0px)`
       } else {
         // Reset if dragging in wrong direction
@@ -2248,21 +2248,21 @@ Note: Some browsers don't support PWA installation in development mode.`)
     if (tileEl) {
       tileEl.style.transition = 'none' // No transition for real-time following
       
-      const step = tileStep || (41 + 1)
-      const maxDistance = step // Allow tile to slide all the way to empty space
+      const step = tileStep || 42 // Use calculated tileStep or fallback
+      const maxDistance = step * 1.1 // Allow overshoot to reach empty cell
       
-      // Allow smooth movement all the way to empty space
+      // Allow smooth movement exactly to empty space boundary
       if (dragAllowedDir === 'right' && rawDx > 0) {
-        const clampedDx = Math.min(rawDx, maxDistance * 1.5) // Allow more overshoot for smooth feel
+        const clampedDx = Math.min(rawDx, maxDistance) // Stop exactly at empty cell
         tileEl.style.transform = `translate(${clampedDx}px, 0px)`
       } else if (dragAllowedDir === 'left' && rawDx < 0) {
-        const clampedDx = Math.max(rawDx, -maxDistance * 1.5) // Allow more overshoot for smooth feel
+        const clampedDx = Math.max(rawDx, -maxDistance) // Stop exactly at empty cell
         tileEl.style.transform = `translate(${clampedDx}px, 0px)`
       } else if (dragAllowedDir === 'down' && rawDy > 0) {
-        const clampedDy = Math.min(rawDy, maxDistance * 1.5) // Allow more overshoot for smooth feel
+        const clampedDy = Math.min(rawDy, maxDistance) // Stop exactly at empty cell
         tileEl.style.transform = `translate(0px, ${clampedDy}px)`
       } else if (dragAllowedDir === 'up' && rawDy < 0) {
-        const clampedDy = Math.max(rawDy, -maxDistance * 1.5) // Allow more overshoot for smooth feel
+        const clampedDy = Math.max(rawDy, -maxDistance) // Stop exactly at empty cell
         tileEl.style.transform = `translate(0px, ${clampedDy}px)`
       } else {
         // Reset if dragging in wrong direction
@@ -2307,27 +2307,26 @@ Note: Some browsers don't support PWA installation in development mode.`)
         //   hapticUtils.medium()
         // }
       
-      // Calculate final position (where tile should end up - empty cell)
+      // Calculate final position (where tile should end up - empty cell with overshoot)
       let finalX = 0, finalY = 0
-      if (dragAllowedDir === 'right') finalX = step
-      else if (dragAllowedDir === 'left') finalX = -step
-      else if (dragAllowedDir === 'down') finalY = step
-      else if (dragAllowedDir === 'up') finalY = -step
+      const finalStep = step * 1.1 // Match the overshoot distance used during dragging
+      if (dragAllowedDir === 'right') finalX = finalStep
+      else if (dragAllowedDir === 'left') finalX = -finalStep
+      else if (dragAllowedDir === 'down') finalY = finalStep
+      else if (dragAllowedDir === 'up') finalY = -finalStep
       
       if (tileEl) {
-        // Continue smoothly from current position to final position
-        tileEl.style.transition = 'transform 0.2s cubic-bezier(0.23, 1, 0.32, 1)'
-        tileEl.style.transform = `translate(${finalX}px, ${finalY}px)`
+        // Keep tile in current position without animation
+        tileEl.style.transition = 'none'
+        // Don't change the transform - keep it where it is
       }
 
-      // Complete the move after animation
-      setTimeout(() => {
-        directMove(selectedTile.r, selectedTile.c)
-        if (tileEl) {
-          tileEl.style.transition = 'none'
-          tileEl.style.transform = 'translate3d(0px, 0px, 0px)'
-        }
-      }, 200)
+      // Complete the move immediately
+      directMove(selectedTile.r, selectedTile.c)
+      if (tileEl) {
+        tileEl.style.transition = 'none'
+        tileEl.style.transform = 'translate3d(0px, 0px, 0px)'
+      }
     } else {
       // Snap back to original position
       if (tileEl) {
@@ -2368,27 +2367,26 @@ Note: Some browsers don't support PWA installation in development mode.`)
     const tileEl = document.querySelector(`[data-tile="${selectedTile.r}-${selectedTile.c}"]`)
     
     if (moveTriggered) {
-      // Calculate final position (where tile should end up - empty cell)
+      // Calculate final position (where tile should end up - empty cell with overshoot)
       let finalX = 0, finalY = 0
-      if (dragAllowedDir === 'right') finalX = step
-      else if (dragAllowedDir === 'left') finalX = -step
-      else if (dragAllowedDir === 'down') finalY = step
-      else if (dragAllowedDir === 'up') finalY = -step
+      const finalStep = step * 1.1 // Match the overshoot distance used during dragging
+      if (dragAllowedDir === 'right') finalX = finalStep
+      else if (dragAllowedDir === 'left') finalX = -finalStep
+      else if (dragAllowedDir === 'down') finalY = finalStep
+      else if (dragAllowedDir === 'up') finalY = -finalStep
       
       if (tileEl) {
-        // Continue smoothly from current position to final position
-        tileEl.style.transition = 'transform 0.2s cubic-bezier(0.23, 1, 0.32, 1)'
-        tileEl.style.transform = `translate(${finalX}px, ${finalY}px)`
+        // Keep tile in current position without animation
+        tileEl.style.transition = 'none'
+        // Don't change the transform - keep it where it is
       }
 
-      // Complete the move after animation
-      setTimeout(() => {
-        directMove(selectedTile.r, selectedTile.c)
-        if (tileEl) {
-          tileEl.style.transition = 'none'
-          tileEl.style.transform = 'translate(0px, 0px)'
-        }
-      }, 200)
+      // Complete the move immediately
+      directMove(selectedTile.r, selectedTile.c)
+      if (tileEl) {
+        tileEl.style.transition = 'none'
+        tileEl.style.transform = 'translate(0px, 0px)'
+      }
     } else {
       // Snap back to original position
       if (tileEl) {
@@ -3463,7 +3461,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     style={{
                         width: 'calc((100% - 20px) / 6)',
                         height: 'calc((100% - 40px) / 6)',
-                        margin: '2px 1px',
+                        margin: '1px',
                         boxSizing: 'border-box',
                         // Clean solid background for 3D blocks
                         background: cell ? 'linear-gradient(135deg, #F5DEB3, #DEB887)' : 'transparent',
@@ -4632,7 +4630,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                       style={{
                         width: 'calc((100% - 20px) / 6)',
                         height: 'calc((100% - 40px) / 6)',
-                        margin: '2px 1px', // More vertical spacing
+                        margin: '1px', // Equal spacing in all directions
                         marginLeft: c === 0 ? '0px' : '1px', // First tile touches left edge
                         marginRight: c === row.length - 1 ? '0px' : '1px', // Last tile touches right edge
                         marginTop: r === 0 ? '0px' : '1px', // First row touches top edge
