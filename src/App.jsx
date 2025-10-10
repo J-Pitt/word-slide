@@ -1395,7 +1395,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
     for (let r = 0; r < 6; r++) {
       fallbackBoard[r] = []
       for (let c = 0; c < 6; c++) {
-        if (r === 5 && c === 5) {
+        if (isCellBlocked(r, c, difficulty)) {
+          fallbackBoard[r][c] = "BLOCKED" // Mark blocked cells
+        } else if (r === 5 && c === 5) {
           fallbackBoard[r][c] = "" // Empty space
         } else {
           fallbackBoard[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26))
@@ -1404,7 +1406,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
     }
     setBoard(fallbackBoard)
     setEmptyPos({ r: 5, c: 5 })
-  }, [])
+  }, [difficulty])
 
   // Check if a board is solvable by verifying target words can be reached
   const isBoardSolvable = useCallback((board, targetWords) => {
@@ -1441,8 +1443,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
   }, [])
 
   // Generate a sophisticated game board that ensures target words are solvable
-  const generateBoard = useCallback(() => {
-    
+  const generateBoard = useCallback((difficultyLevel = difficulty) => {
     if (!WORD_SETS || WORD_SETS.length === 0) {
       generateFallbackBoard()
       return
@@ -1469,12 +1470,12 @@ Note: Some browsers don't support PWA installation in development mode.`)
           let emptyCol = Math.min(firstWord.length - 1, 5)
           
           // For difficulty 2, ensure empty space doesn't conflict with blocked cells
-          if (difficulty === 2) {
+          if (difficultyLevel === 2) {
             // If the calculated empty position would be blocked, move it
-            if (isCellBlocked(row, emptyCol, difficulty)) {
+            if (isCellBlocked(row, emptyCol, difficultyLevel)) {
               // Find a safe position in the top row
               for (let c = 0; c < 6; c++) {
-                if (!isCellBlocked(row, c, difficulty)) {
+                if (!isCellBlocked(row, c, difficultyLevel)) {
                   emptyCol = c
                   break
                 }
@@ -1505,7 +1506,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
           for (let r = 0; r < 6; r++) {
             for (let c = 0; c < 6; c++) {
               if (r === row && c === emptyCol) continue // empty cell
-              if (isCellBlocked(r, c, difficulty)) {
+              if (isCellBlocked(r, c, difficultyLevel)) {
                 newBoard[r][c] = 'BLOCKED' // Mark blocked cells
                 continue
               }
@@ -1534,17 +1535,32 @@ Note: Some browsers don't support PWA installation in development mode.`)
     let attempts = 0
     const maxAttempts = 20 // Increased attempts for better boards
     
+    // Pre-calculate blocked cell positions to ensure consistency across retries
+    const blockedPositions = []
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 6; c++) {
+        if (isCellBlocked(r, c, difficultyLevel)) {
+          blockedPositions.push({r, c})
+        }
+      }
+    }
+    
     do {
       attempts++
       
       const newBoard = []
       
-      // Initialize empty board (mark blocked cells)
+      // Initialize empty board (mark blocked cells consistently)
       for (let r = 0; r < 6; r++) {
         newBoard[r] = []
         for (let c = 0; c < 6; c++) {
-          newBoard[r][c] = isCellBlocked(r, c, difficulty) ? "BLOCKED" : ""
+          newBoard[r][c] = ""
         }
+      }
+      
+      // Set blocked cells from pre-calculated positions
+      for (const pos of blockedPositions) {
+        newBoard[pos.r][pos.c] = "BLOCKED"
       }
       
       // Step 1: Create a solved board first (target words in their final positions)
@@ -1552,8 +1568,13 @@ Note: Some browsers don't support PWA installation in development mode.`)
       for (let r = 0; r < 6; r++) {
         solvedBoard[r] = []
         for (let c = 0; c < 6; c++) {
-          solvedBoard[r][c] = isCellBlocked(r, c, difficulty) ? "BLOCKED" : ""
+          solvedBoard[r][c] = ""
         }
+      }
+      
+      // Set blocked cells in solved board from pre-calculated positions
+      for (const pos of blockedPositions) {
+        solvedBoard[pos.r][pos.c] = "BLOCKED"
       }
       
       // Place target words in their solved positions
@@ -1561,13 +1582,39 @@ Note: Some browsers don't support PWA installation in development mode.`)
       for (let targetWord of targetWords) {
         if (wordIndex === 0) {
           // Place first word horizontally starting from (0,0)
+          // Check if the placement conflicts with blocked cells first
+          let canPlace = true
           for (let i = 0; i < targetWord.length; i++) {
-            solvedBoard[0][i] = targetWord[i].toUpperCase()
+            if (solvedBoard[0][i] === "BLOCKED") {
+              canPlace = false
+              break
+            }
+          }
+          
+          if (canPlace) {
+            for (let i = 0; i < targetWord.length; i++) {
+              solvedBoard[0][i] = targetWord[i].toUpperCase()
+            }
           }
         } else if (wordIndex === 1) {
           // Place second word vertically starting from (1,0)
+          // Check if the placement conflicts with blocked cells first
+          let canPlace = true
           for (let i = 0; i < targetWord.length; i++) {
-            solvedBoard[1 + i][0] = targetWord[i].toUpperCase()
+            const row = 1 + i
+            if (row < 6 && solvedBoard[row][0] === "BLOCKED") {
+              canPlace = false
+              break
+            }
+          }
+          
+          if (canPlace) {
+            for (let i = 0; i < targetWord.length; i++) {
+              const row = 1 + i
+              if (row < 6) {
+                solvedBoard[row][0] = targetWord[i].toUpperCase()
+              }
+            }
           }
         } else {
           // Place additional words in available spaces
@@ -1577,7 +1624,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
               // Check if we can place horizontally
               let canPlace = true
               for (let i = 0; i < targetWord.length; i++) {
-                if (solvedBoard[r][c + i] !== "") {
+                if (solvedBoard[r][c + i] !== "" || solvedBoard[r][c + i] === "BLOCKED") {
                   canPlace = false
                   break
                 }
@@ -1597,7 +1644,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
               for (let c = 0; c < 6 && !placed; c++) {
                 let canPlace = true
                 for (let i = 0; i < targetWord.length; i++) {
-                  if (solvedBoard[r + i][c] !== "") {
+                  if (solvedBoard[r + i][c] !== "" || solvedBoard[r + i][c] === "BLOCKED") {
                     canPlace = false
                     break
                   }
@@ -1628,15 +1675,20 @@ Note: Some browsers don't support PWA installation in development mode.`)
         for (let i = 0; i < count; i++) allLetters.push(ch)
       }
       // Add solvedBoard letters (may include overlaps already present)
+      // Skip blocked cells - they shouldn't be in the letter pool
       for (let r = 0; r < 6; r++) {
         for (let c = 0; c < 6; c++) {
-          if (solvedBoard[r][c] !== "") {
+          if (solvedBoard[r][c] !== "" && solvedBoard[r][c] !== "BLOCKED") {
             allLetters.push(solvedBoard[r][c])
           }
         }
       }
       // Fill remaining slots with random letters
-      const remainingSlots = 6 * 6 - allLetters.length - 1 // -1 for empty space
+      // Calculate slots needed: total cells - blocked cells - empty space - letters already placed
+      const totalCells = 6 * 6
+      const blockedCellsCount = blockedPositions.length
+      const emptySpaceCount = 1
+      const remainingSlots = totalCells - blockedCellsCount - emptySpaceCount - allLetters.length
       for (let i = 0; i < remainingSlots; i++) {
         allLetters.push(String.fromCharCode(65 + Math.floor(Math.random() * 26)))
       }
@@ -1649,7 +1701,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
       
       // For difficulty 2, place empty space in a predictable location to avoid blocked cells
       let emptyRow, emptyCol
-      if (difficulty === 2) {
+      if (difficultyLevel === 2) {
         // Place empty space in a corner that doesn't conflict with blocked cells
         // Blocked cells are at (1,1), (1,4), (4,1), (4,4)
         // Safe corners are (0,0), (0,5), (5,0), (5,5)
@@ -1667,6 +1719,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
         for (let c = 0; c < 6; c++) {
           if (r === emptyRow && c === emptyCol) {
             newBoard[r][c] = "" // Empty space
+          } else if (newBoard[r][c] === "BLOCKED") {
+            // Keep blocked cells as BLOCKED - don't overwrite with letters
+            // newBoard[r][c] is already set to "BLOCKED" from earlier
           } else {
             newBoard[r][c] = allLetters[letterIndex++]
           }
@@ -1720,7 +1775,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
       // If no words are solved, this is a good board
       if (!hasSolvedWords) {
         setBoard(newBoard)
-          setEmptyPos({ r: emptyRow, c: emptyCol })
+        setEmptyPos({ r: emptyRow, c: emptyCol })
+        
         return
         }
       }
@@ -1992,11 +2048,12 @@ Note: Some browsers don't support PWA installation in development mode.`)
     return () => clearInterval(gameLoop)
   }, [currentView, tetrisGameOver, tetrisPaused, fallingSpeed, tetrisBoard, spawnFallingBlock, checkTetrisLines])
 
-  // Initialize board when component mounts
+  // Initialize board when component mounts (but not when level changes)
   useEffect(() => {
-    
-    if (currentView === 'original' && board.length === 0) {
-      generateBoard()
+    // Only generate board on initial mount, not on level changes
+    // Level changes are handled by the separate useEffect
+    if (currentView === 'original' && board.length === 0 && currentLevel === 1) {
+      generateBoard(difficulty)
     }
     
     // Fallback: if we're in original view but no board after a delay, generate one
@@ -2009,14 +2066,14 @@ Note: Some browsers don't support PWA installation in development mode.`)
       
       return () => clearTimeout(timer)
     }
-  }, [currentView, board.length, generateBoard, WORD_SETS, generateFallbackBoard])
+  }, [currentView, board.length, WORD_SETS, generateFallbackBoard, difficulty, currentLevel])
 
   // Generate board when level changes (but not on initial load)
   useEffect(() => {
     if (currentLevel > 1 && currentView === 'original') {
-      generateBoard()
+      generateBoard(difficulty)
     }
-  }, [currentLevel, currentView, generateBoard])
+  }, [currentLevel, currentView, difficulty])
 
   // Initialize Tetris board when Tetris view is selected
   useEffect(() => {
@@ -2735,12 +2792,12 @@ Note: Some browsers don't support PWA installation in development mode.`)
     
     // Try to generate the main board first
     if (WORD_SETS && WORD_SETS.length > 0) {
-      generateBoard()
+      generateBoard(difficulty)
     } else {
       // Fallback to simple board if WORD_SETS not ready
       generateFallbackBoard()
     }
-  }, [generateBoard, generateFallbackBoard, WORD_SETS, board])
+  }, [generateBoard, generateFallbackBoard, WORD_SETS, board, difficulty])
 
   // Show hint confirmation
   const showHintConfirmation = useCallback(() => {

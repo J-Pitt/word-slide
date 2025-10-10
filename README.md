@@ -88,14 +88,43 @@ src/
 └── styles.css           # Styling and responsive design
 ```
 
-## 🎯 Future Enhancements
+## 📚 Documentation
 
-- Multiple difficulty levels
-- Sound effects
-- Particle effects for wins
-- Local storage for high scores
-- More puzzle patterns
-- Accessibility improvements
+All project documentation has been organized in the `docs/` folder:
+
+- **[Setup Guide](docs/SETUP.md)** - Project setup and installation
+- **[Development Workflow](docs/DEVELOPMENT-WORKFLOW.md)** - Development best practices
+- **[Testing Guide](docs/TESTING.md)** - Testing setup and guidelines
+- **[AWS Deployment](docs/AWS-DEPLOYMENT.md)** - AWS deployment instructions
+- **[Database Setup](docs/aws-infrastructure/DATABASE-SETUP.md)** - Database configuration
+
+## 🎯 Current Features
+
+- ✅ **Three Difficulty Levels** - Easy, Medium, Hard with different blocked cell patterns
+- ✅ **User Authentication** - Login/register system with JWT tokens
+- ✅ **Game Statistics** - Track progress, moves, and scores
+- ✅ **Leaderboards** - Separate leaderboards for each difficulty level
+- ✅ **Game Completion** - Permanent completion tracking and stats reset
+- ✅ **Mobile Optimization** - Safe area support for iPhone 15 Pro and other devices
+- ✅ **Comprehensive Testing** - 127+ tests covering all functionality
+
+## 🚀 Quick Commands
+
+```bash
+# Development
+npm run dev              # Start development server
+npm run build            # Build for production
+npm run preview          # Preview production build
+
+# Testing
+npm test                 # Run all tests
+npm run test:watch       # Watch mode
+npm run test:coverage    # Coverage report
+npm run test:ui          # Interactive UI
+
+# Deployment
+npm run pre-deploy       # Run tests + build
+```
 
 ## 📄 License
 
