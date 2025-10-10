@@ -2,7 +2,13 @@ import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from
 import LeaderboardModal from './components/LeaderboardModal'
 import UserProfile from './components/UserProfile'
 import AuthModal from './components/AuthModal'
+import GameCompletionModal from './components/GameCompletionModal'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { 
+  calculateCompletionStats, 
+  createCompletionRecord,
+  createFreshStats
+} from './utils/completionTracking'
 // import { 
 //   mobileFeatures, 
 //   TouchOptimizer, 
@@ -39,12 +45,17 @@ function App() {
   const [levelTransitioning, setLevelTransitioning] = useState(false)
   const [showFireworks, setShowFireworks] = useState(false)
   const [showLevelCompleteModal, setShowLevelCompleteModal] = useState(false)
+  const [showGameCompleteModal, setShowGameCompleteModal] = useState(false)
   const [showStartOverModal, setShowStartOverModal] = useState(false)
   const [showResetSuccessModal, setShowResetSuccessModal] = useState(false)
   const [fireworks, setFireworks] = useState([])
   const [showRules, setShowRules] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
+  const [isSavingCompletion, setIsSavingCompletion] = useState(false)
+  
+  // Track stats for each level (for completion tracking)
+  const [levelHistory, setLevelHistory] = useState([])
   
   // Mini gameboard play button state
   const [miniGameCompleted, setMiniGameCompleted] = useState(false)
@@ -2000,20 +2011,113 @@ Note: Some browsers don't support PWA installation in development mode.`)
 
 
 
+  // Save game completion to permanent leaderboard
+  const saveGameCompletion = useCallback(async (completionStats) => {
+    if (!user || !token) {
+      console.log('No user or token, skipping completion save')
+      return
+    }
+    
+    setIsSavingCompletion(true)
+    
+    try {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      const API_BASE = isLocalhost 
+        ? '/api'
+        : 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
+      
+      const completionRecord = createCompletionRecord(user, completionStats, 'original')
+      
+      const response = await fetch(`${API_BASE}/game/complete`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(completionRecord)
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        console.log('✅ Game completion saved to leaderboard:', result)
+      } else {
+        console.error('❌ Failed to save completion:', response.statusText)
+      }
+    } catch (error) {
+      console.error('❌ Error saving game completion:', error)
+    } finally {
+      setIsSavingCompletion(false)
+    }
+  }, [user, token])
+
+  // Handle play again after game completion
+  const handlePlayAgain = useCallback(() => {
+    setShowGameCompleteModal(false)
+    
+    // Reset to fresh stats
+    const fresh = createFreshStats()
+    setCurrentLevel(fresh.currentLevel)
+    setMoveCount(fresh.moveCount)
+    setCompletedWords(fresh.completedWords)
+    setHintCount(fresh.hintCount)
+    setLevelHistory(fresh.levelHistory)
+    setBoard([])
+    setEmptyPos({ r: 6, c: 6 })
+    setLevelTransitioning(false)
+    
+    // Stay in game view, start from level 1
+  }, [])
+
+  // Handle return to menu after game completion
+  const handleCompletionToMenu = useCallback(() => {
+    setShowGameCompleteModal(false)
+    setCurrentView('menu')
+    
+    // Reset stats
+    const fresh = createFreshStats()
+    setCurrentLevel(fresh.currentLevel)
+    setMoveCount(fresh.moveCount)
+    setCompletedWords(fresh.completedWords)
+    setHintCount(fresh.hintCount)
+    setLevelHistory(fresh.levelHistory)
+  }, [])
+
   // Handle next level button
   const handleNextLevel = useCallback(() => {
     setShowLevelCompleteModal(false)
+    
+    // Save current level stats to history
+    const currentLevelStats = {
+      level: currentLevel,
+      moves: moveCount,
+      words: completedWords.size
+    }
+    const updatedHistory = [...levelHistory, currentLevelStats]
+    setLevelHistory(updatedHistory)
+    
     if (currentLevel < 20) {
+      // Move to next level
       setCurrentLevel(currentLevel + 1)
+      setMoveCount(0)
       setHintCount(3)
       setCompletedWords(new Set())
       setBoard([]) // Clear board to trigger regeneration via useEffect
+      setLevelTransitioning(false)
     } else {
-      // Game completed!
-      setCurrentView('menu')
+      // Game completed! All 20 levels beaten
+      const completionStats = calculateCompletionStats(updatedHistory)
+      
+      // Show game completion modal
+      setShowGameCompleteModal(true)
+      
+      // Save to leaderboard and reset stats
+      if (isAuthenticated && user) {
+        saveGameCompletion(completionStats)
+      }
+      
+      setLevelTransitioning(false)
     }
-    setLevelTransitioning(false)
-  }, [currentLevel])
+  }, [currentLevel, moveCount, completedWords.size, levelHistory, isAuthenticated, user, saveGameCompletion])
 
   // Touch and mouse gesture handling for mobile and desktop
   const [touchStart, setTouchStart] = useState(null)
@@ -3690,7 +3794,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
             fontSize: '10px',
             color: '#F5DEB3'
           }}>
-            v1.0.1-mobile-fix
+            v1.1.0-game-completion
           </div>
           
           {/* Fireworks Animation - DISABLED (using direct fireworks instead) */}
@@ -4160,6 +4264,15 @@ Note: Some browsers don't support PWA installation in development mode.`)
               </div>
             </div>
           )}
+
+          {/* Game Completion Modal - Shown when all 20 levels are beaten */}
+          <GameCompletionModal
+            isOpen={showGameCompleteModal}
+            onClose={handleCompletionToMenu}
+            stats={calculateCompletionStats(levelHistory)}
+            onPlayAgain={handlePlayAgain}
+            isSaving={isSavingCompletion}
+          />
 
           {/* Reset Success Modal */}
           {showResetSuccessModal && (
