@@ -97,7 +97,10 @@ html {
     justify-content: center;
     align-items: center;
     text-align: center;
-    padding-top: 80px;
+    padding-top: max(80px, env(safe-area-inset-top));
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
     background-color: #2F1B14 !important;
     background-image: 
         /* Dark oak horizontal floor slats */
@@ -212,7 +215,10 @@ html {
     justify-content: center;
     align-items: center;
     text-align: center;
-    padding-top: 80px;
+    padding-top: max(80px, env(safe-area-inset-top));
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
     background-color: #2F1B14 !important;
     background-image: 
         /* Dark oak horizontal floor slats */
@@ -1713,5 +1719,65 @@ h1 {
     
     .install-button {
         display: none;
+    }
+}
+
+/* ===== ENHANCED MOBILE SAFE AREA SUPPORT ===== */
+
+/* iOS-specific safe area fixes for notched devices */
+@supports (padding: max(0px)) {
+    body {
+        padding-top: max(0px, env(safe-area-inset-top));
+        padding-bottom: max(0px, env(safe-area-inset-bottom));
+        padding-left: max(0px, env(safe-area-inset-left));
+        padding-right: max(0px, env(safe-area-inset-right));
+    }
+    
+    #root {
+        padding-top: max(0px, env(safe-area-inset-top));
+        padding-bottom: max(0px, env(safe-area-inset-bottom));
+        padding-left: max(0px, env(safe-area-inset-left));
+        padding-right: max(0px, env(safe-area-inset-right));
+    }
+    
+    /* Ensure game views have proper safe area padding */
+    #original-game-view, #tetris-game-view, #main-menu {
+        padding-top: max(20px, env(safe-area-inset-top)) !important;
+        padding-bottom: max(20px, env(safe-area-inset-bottom)) !important;
+        padding-left: max(10px, env(safe-area-inset-left)) !important;
+        padding-right: max(10px, env(safe-area-inset-right)) !important;
+    }
+    
+    /* Extra safe area for game headers to prevent cut-off */
+    #original-game-view h1,
+    #tetris-game-view h1,
+    #main-menu h1 {
+        margin-top: max(10px, calc(env(safe-area-inset-top) * 0.2)) !important;
+    }
+}
+
+/* Additional mobile viewport fixes for notched phones (iPhone X and later) */
+@media only screen 
+  and (device-width: 393px) 
+  and (device-height: 852px) 
+  and (-webkit-device-pixel-ratio: 3) {
+    /* iPhone 15 Pro specific */
+    #original-game-view, #tetris-game-view, #main-menu {
+        padding-top: max(50px, env(safe-area-inset-top)) !important;
+    }
+    
+    #target-words-info-panel {
+        margin-top: 15px !important;
+    }
+}
+
+/* General notched device support */
+@media only screen 
+  and (min-device-width: 375px) 
+  and (max-device-width: 428px) 
+  and (-webkit-min-device-pixel-ratio: 2) {
+    /* All modern iPhones with notch (iPhone X, 11, 12, 13, 14, 15) */
+    #original-game-view, #tetris-game-view {
+        padding-top: max(45px, env(safe-area-inset-top)) !important;
     }
 }

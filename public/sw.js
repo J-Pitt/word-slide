@@ -1,7 +1,7 @@
 // Use a timestamp-based cache name to force updates
 const CACHE_NAME = `wordslide-${Date.now()}`;
 const OFFLINE_URL = '/';
-const APP_VERSION = '1.0.0'; // Update this for major releases
+const APP_VERSION = '1760057647'; // Update this for major releases
 
 // Force immediate activation of new service worker
 const FORCE_UPDATE = true;

@@ -2767,7 +2767,10 @@ Note: Some browsers don't support PWA installation in development mode.`)
         <div id="main-menu" className="main-menu" style={{
           zIndex: 1000, 
           position: 'relative',
-          padding: '20px 10px',
+          paddingTop: 'max(40px, env(safe-area-inset-top))',
+          paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+          paddingLeft: 'max(10px, env(safe-area-inset-left))',
+          paddingRight: 'max(10px, env(safe-area-inset-right))',
           maxWidth: '100vw',
           maxHeight: '100vh',
           overflow: 'hidden',
@@ -2775,8 +2778,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'flex-start',
-          minHeight: '100vh',
-          paddingTop: '40px'
+          minHeight: '100vh'
         }}>
           <h1 className="game-title" style={{
             fontSize: 'clamp(32px, 8vw, 48px)',
@@ -2980,7 +2982,10 @@ Note: Some browsers don't support PWA installation in development mode.`)
           alignItems: 'center',
           backgroundColor: 'transparent',
           minHeight: '100vh',
-          padding: '20px'
+          paddingTop: 'max(20px, env(safe-area-inset-top))',
+          paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+          paddingLeft: 'max(20px, env(safe-area-inset-left))',
+          paddingRight: 'max(20px, env(safe-area-inset-right))'
         }}>
           <h1 style={{
             fontSize: 'clamp(24px, 6vw, 32px)',
@@ -2995,6 +3000,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
             borderRadius: '10px',
             padding: '8px',
             margin: '5px auto',
+            marginTop: 'max(5px, calc(env(safe-area-inset-top) * 0.5))',
             maxWidth: '90vw',
             textAlign: 'center'
           }}>
@@ -3676,6 +3682,17 @@ Note: Some browsers don't support PWA installation in development mode.`)
               </button>
           </div>
           
+          {/* Version Indicator */}
+          <div style={{
+            textAlign: 'center',
+            marginTop: '10px',
+            opacity: 0.5,
+            fontSize: '10px',
+            color: '#F5DEB3'
+          }}>
+            v1.0.1-mobile-fix
+          </div>
+          
           {/* Fireworks Animation - DISABLED (using direct fireworks instead) */}
           {false && showFireworks && (
             <div id="fireworks-overlay" style={{
@@ -4267,7 +4284,10 @@ Note: Some browsers don't support PWA installation in development mode.`)
             )
           `,
           minHeight: '100vh',
-          padding: '20px'
+          paddingTop: 'max(20px, env(safe-area-inset-top))',
+          paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+          paddingLeft: 'max(20px, env(safe-area-inset-left))',
+          paddingRight: 'max(20px, env(safe-area-inset-right))'
         }}>
           {/* Game Header */}
           <div style={{
