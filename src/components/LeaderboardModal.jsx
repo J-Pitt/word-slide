@@ -2,13 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import './LeaderboardModal.css';
 
-const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
+const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original', difficulty = null }) => {
   const [leaderboard, setLeaderboard] = useState([]);
   const [userStats, setUserStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retryCount, setRetryCount] = useState(0);
   const { token, user } = useAuth();
+  
+  // Extract difficulty from gameMode if not provided directly
+  const getDifficultyLevel = () => {
+    if (difficulty !== null) return difficulty
+    if (gameMode.includes('difficulty-')) {
+      const match = gameMode.match(/difficulty-(\d+)/)
+      return match ? parseInt(match[1]) : null
+    }
+    return null
+  }
+  
+  const difficultyLevel = getDifficultyLevel()
+  const difficultyName = difficultyLevel === 1 ? 'Easy' 
+    : difficultyLevel === 2 ? 'Medium' 
+    : difficultyLevel === 3 ? 'Hard' 
+    : ''
 
   // Use proxy when running on localhost to avoid CORS issues
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -143,6 +159,14 @@ const LeaderboardModal = ({ isOpen, onClose, gameMode = 'original' }) => {
       >
         <div className="leaderboard-header">
           <h2>Leaderboard</h2>
+          {difficultyName && (
+            <div className="difficulty-indicator">
+              <span className="difficulty-label">Difficulty:</span>
+              <span className={`difficulty-badge difficulty-${difficultyLevel}`}>
+                {difficultyName}
+              </span>
+            </div>
+          )}
           <button className="leaderboard-close-btn" onClick={onClose}>×</button>
         </div>
 

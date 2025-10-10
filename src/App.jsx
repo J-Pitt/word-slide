@@ -3,12 +3,18 @@ import LeaderboardModal from './components/LeaderboardModal'
 import UserProfile from './components/UserProfile'
 import AuthModal from './components/AuthModal'
 import GameCompletionModal from './components/GameCompletionModal'
+import DifficultySelector from './components/DifficultySelector'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { 
   calculateCompletionStats, 
   createCompletionRecord,
   createFreshStats
 } from './utils/completionTracking'
+import { 
+  getBlockedCells, 
+  isCellBlocked,
+  getGameModeForDifficulty 
+} from './utils/difficultySettings'
 // import { 
 //   mobileFeatures, 
 //   TouchOptimizer, 
@@ -34,6 +40,9 @@ function App() {
   const [showInstallButton, setShowInstallButton] = useState(false)
   
   const [currentView, setCurrentView] = useState('menu')
+  
+  // Difficulty setting (1 = Easy, 2 = Medium, 3 = Hard)
+  const [difficulty, setDifficulty] = useState(1)
   
   // Basic game state
   const [board, setBoard] = useState([])
@@ -138,7 +147,7 @@ function App() {
         },
         body: JSON.stringify({
           userId: user.id,
-          gameMode: 'original',
+          gameMode: getGameModeForDifficulty(difficulty),
           wordsSolved: wordsCompleted,
           totalMoves: moves
         })
@@ -157,7 +166,7 @@ function App() {
       console.error('❌ Error updating database:', error)
       console.error('❌ Error details:', error.message, error.stack)
     }
-  }, [user, token])
+  }, [user, token, difficulty])
 
   // Reset user stats in database using the dedicated reset endpoint
   const resetUserStats = useCallback(async () => {
@@ -184,7 +193,7 @@ function App() {
         },
         body: JSON.stringify({
           userId: user.id,
-          gameMode: 'original'
+          gameMode: getGameModeForDifficulty(difficulty)
         })
       })
       
@@ -202,7 +211,7 @@ function App() {
       // Still return true since local reset will work
       return true
     }
-  }, [user, token])
+  }, [user, token, difficulty])
 
   // Handle start over confirmation
   const handleStartOverConfirm = useCallback(async () => {
@@ -1457,7 +1466,21 @@ Note: Some browsers don't support PWA installation in development mode.`)
         const firstWord = String(targetWords[0] || '').toUpperCase()
         if (firstWord && firstWord.length > 1) {
           const row = 0
-          const emptyCol = Math.min(firstWord.length - 1, 5)
+          let emptyCol = Math.min(firstWord.length - 1, 5)
+          
+          // For difficulty 2, ensure empty space doesn't conflict with blocked cells
+          if (difficulty === 2) {
+            // If the calculated empty position would be blocked, move it
+            if (isCellBlocked(row, emptyCol, difficulty)) {
+              // Find a safe position in the top row
+              for (let c = 0; c < 6; c++) {
+                if (!isCellBlocked(row, c, difficulty)) {
+                  emptyCol = c
+                  break
+                }
+              }
+            }
+          }
           // Place all but last letter in order
           for (let i = 0; i < Math.min(firstWord.length - 1, 6); i++) {
             newBoard[row][i] = firstWord[i]
@@ -1478,10 +1501,14 @@ Note: Some browsers don't support PWA installation in development mode.`)
           if (finalPos) {
             newBoard[finalPos.r][finalPos.c] = finalLetter
           }
-          // Fill remaining cells with random letters
+          // Fill remaining cells with random letters (skip blocked cells)
           for (let r = 0; r < 6; r++) {
             for (let c = 0; c < 6; c++) {
               if (r === row && c === emptyCol) continue // empty cell
+              if (isCellBlocked(r, c, difficulty)) {
+                newBoard[r][c] = 'BLOCKED' // Mark blocked cells
+                continue
+              }
               if (!newBoard[r][c]) {
                 newBoard[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26))
               }
@@ -1512,11 +1539,11 @@ Note: Some browsers don't support PWA installation in development mode.`)
       
       const newBoard = []
       
-      // Initialize empty board
+      // Initialize empty board (mark blocked cells)
       for (let r = 0; r < 6; r++) {
         newBoard[r] = []
         for (let c = 0; c < 6; c++) {
-          newBoard[r][c] = ""
+          newBoard[r][c] = isCellBlocked(r, c, difficulty) ? "BLOCKED" : ""
         }
       }
       
@@ -1525,7 +1552,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
       for (let r = 0; r < 6; r++) {
         solvedBoard[r] = []
         for (let c = 0; c < 6; c++) {
-          solvedBoard[r][c] = ""
+          solvedBoard[r][c] = isCellBlocked(r, c, difficulty) ? "BLOCKED" : ""
         }
       }
       
@@ -1619,8 +1646,22 @@ Note: Some browsers don't support PWA installation in development mode.`)
       
       // Step 3: Create the scrambled board
       let letterIndex = 0
-      const emptyRow = Math.floor(Math.random() * 6)
-      const emptyCol = Math.floor(Math.random() * 6)
+      
+      // For difficulty 2, place empty space in a predictable location to avoid blocked cells
+      let emptyRow, emptyCol
+      if (difficulty === 2) {
+        // Place empty space in a corner that doesn't conflict with blocked cells
+        // Blocked cells are at (1,1), (1,4), (4,1), (4,4)
+        // Safe corners are (0,0), (0,5), (5,0), (5,5)
+        const safeCorners = [{r: 0, c: 0}, {r: 0, c: 5}, {r: 5, c: 0}, {r: 5, c: 5}]
+        const randomCorner = safeCorners[Math.floor(Math.random() * safeCorners.length)]
+        emptyRow = randomCorner.r
+        emptyCol = randomCorner.c
+      } else {
+        // For other difficulties, use random placement
+        emptyRow = Math.floor(Math.random() * 6)
+        emptyCol = Math.floor(Math.random() * 6)
+      }
       
       for (let r = 0; r < 6; r++) {
         for (let c = 0; c < 6; c++) {
@@ -1688,7 +1729,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
     
     // If we couldn't generate a good board, use fallback
     generateFallbackBoard()
-  }, [currentLevel, WORD_SETS, generateFallbackBoard])
+  }, [currentLevel, WORD_SETS, generateFallbackBoard, difficulty])
 
   // Check for word completion in Tetris board
   const checkTetrisWordCompletion = useCallback(() => {
@@ -2026,7 +2067,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
         ? '/api'
         : 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
       
-      const completionRecord = createCompletionRecord(user, completionStats, 'original')
+      const completionRecord = createCompletionRecord(user, completionStats, getGameModeForDifficulty(difficulty))
       
       const response = await fetch(`${API_BASE}/game/complete`, {
         method: 'POST',
@@ -2048,7 +2089,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
     } finally {
       setIsSavingCompletion(false)
     }
-  }, [user, token])
+  }, [user, token, difficulty])
 
   // Handle play again after game completion
   const handlePlayAgain = useCallback(() => {
@@ -2923,6 +2964,17 @@ Note: Some browsers don't support PWA installation in development mode.`)
             A word solving puzzle game!
           </p>
           
+          {/* Difficulty Selector */}
+          <div style={{
+            animation: 'titleEntrance 1.5s ease-out 1.0s forwards',
+            opacity: 0
+          }}>
+            <DifficultySelector 
+              selectedDifficulty={difficulty}
+              onSelect={setDifficulty}
+            />
+          </div>
+          
           {/* Debug Modal State */}
           {/* removed debug box */}
           
@@ -3397,7 +3449,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
           <LeaderboardModal
             isOpen={showLeaderboard}
             onClose={() => setShowLeaderboard(false)}
-            gameMode="original"
+            gameMode={getGameModeForDifficulty(difficulty)}
+            difficulty={difficulty}
           />
           
           {/* Game Board */}
@@ -3470,14 +3523,16 @@ Note: Some browsers don't support PWA installation in development mode.`)
                   top: 0,
                   // Removed horizontal borders between rows
                 }}>
-                  {row.map((cell, c) => (
+                  {row.map((cell, c) => {
+                    const isBlocked = cell === 'BLOCKED'
+                    return (
                   <div
                     key={`${r}-${c}`}
                     data-tile={`${r}-${c}`}
-                    onMouseDown={(e) => handleMouseDown(e, r, c)}
+                    onMouseDown={(e) => !isBlocked && handleMouseDown(e, r, c)}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
-                    onTouchStart={(e) => handleTouchStart(e, r, c)}
+                    onTouchStart={(e) => !isBlocked && handleTouchStart(e, r, c)}
                     onTouchMove={handleTouchMove}
                     onTouchEnd={handleTouchEnd}
                     style={{
@@ -3485,8 +3540,27 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         height: 'clamp(35px, calc((min(90vw, 400px) - 20px) / 6), 60px)',
                         margin: '2px',
                         boxSizing: 'border-box',
+                        // Blocked cells - grey block, non-interactive
+                        ...(isBlocked && {
+                          background: 'linear-gradient(135deg, #6B6B6B, #4A4A4A)',
+                          border: '1px solid #3A3A3A',
+                          borderTop: '3px solid #8B8B8B',
+                          borderLeft: '3px solid #8B8B8B',
+                          borderRight: '3px solid #2A2A2A',
+                          borderBottom: '3px solid #2A2A2A',
+                          boxShadow: `
+                            0 4px 8px rgba(0, 0, 0, 0.5),
+                            inset 0 2px 4px rgba(255, 255, 255, 0.2),
+                            inset 0 -2px 4px rgba(0, 0, 0, 0.3)
+                          `,
+                          cursor: 'not-allowed',
+                          opacity: 0.9,
+                          pointerEvents: 'none'
+                        }),
                         // Clean solid background for 3D blocks
-                        background: cell ? 'linear-gradient(135deg, #F5DEB3, #DEB887)' : 'transparent',
+                        ...(!isBlocked && {
+                          background: cell ? 'linear-gradient(135deg, #F5DEB3, #DEB887)' : 'transparent'
+                        }),
                         // Hint blink styling
                         ...(hintBlinkPositions && hintBlinkPositions.some(p => p.r === r && p.c === c) && {
                           background: 'linear-gradient(135deg, #90EE90, #32CD32)',
@@ -3495,30 +3569,33 @@ Note: Some browsers don't support PWA installation in development mode.`)
                           animation: 'hintBlink 0.5s ease-in-out infinite alternate'
                         }),
                         // 3D block appearance with enhanced shadows
-                        border: cell ? '1px solid #CD853F' : '1px solid transparent',
-                        borderTop: cell ? '3px solid #F8F0E3' : '3px solid transparent', // Brighter light highlight on top
-                        borderLeft: cell ? '3px solid #F8F0E3' : '3px solid transparent', // Brighter light highlight on left
-                        borderRight: cell ? '3px solid #7A6B47' : '3px solid transparent', // Darker shadow on right
-                        // Removed bottom border
+                        ...(!isBlocked && {
+                          border: cell ? '1px solid #CD853F' : '1px solid transparent',
+                          borderTop: cell ? '3px solid #F8F0E3' : '3px solid transparent',
+                          borderLeft: cell ? '3px solid #F8F0E3' : '3px solid transparent',
+                          borderRight: cell ? '3px solid #7A6B47' : '3px solid transparent',
+                        }),
                         borderRadius: '4px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontSize: 'clamp(16px, 4vw, 22px)',
                         fontWeight: 'bold',
-                        color: '#654321',
-                        textShadow: cell ? '0 2px 4px rgba(255, 255, 255, 0.9), 0 -1px 2px rgba(0, 0, 0, 0.3), 1px 1px 2px rgba(0, 0, 0, 0.1)' : 'none',
-                        cursor: cell ? (isDragging ? 'grabbing' : 'grab') : 'default',
+                        color: isBlocked ? '#654321' : '#654321',
+                        textShadow: cell && !isBlocked ? '0 2px 4px rgba(255, 255, 255, 0.9), 0 -1px 2px rgba(0, 0, 0, 0.3), 1px 1px 2px rgba(0, 0, 0, 0.1)' : 'none',
+                        cursor: isBlocked ? 'not-allowed' : (cell ? (isDragging ? 'grabbing' : 'grab') : 'default'),
                         // Enhanced 3D shadow effect with deeper shading
-                        boxShadow: cell ? `
-                          0 8px 16px rgba(139, 69, 19, 0.4),
-                          0 4px 8px rgba(0, 0, 0, 0.2),
-                          inset 0 3px 6px rgba(255, 255, 255, 0.6),
-                          inset 0 -3px 6px rgba(0, 0, 0, 0.2),
-                          inset 3px 0 6px rgba(255, 255, 255, 0.3),
-                          inset -3px 0 6px rgba(0, 0, 0, 0.15),
-                          inset 0 0 0 1px rgba(255, 255, 255, 0.2)
-                        ` : 'none',
+                        ...(!isBlocked && cell && {
+                          boxShadow: `
+                            0 8px 16px rgba(139, 69, 19, 0.4),
+                            0 4px 8px rgba(0, 0, 0, 0.2),
+                            inset 0 3px 6px rgba(255, 255, 255, 0.6),
+                            inset 0 -3px 6px rgba(0, 0, 0, 0.2),
+                            inset 3px 0 6px rgba(255, 255, 255, 0.3),
+                            inset -3px 0 6px rgba(0, 0, 0, 0.15),
+                            inset 0 0 0 1px rgba(255, 255, 255, 0.2)
+                          `
+                        }),
                         // Prevent size changes during transforms
                         transformOrigin: 'center center',
                         minWidth: 'clamp(60px, 14vw, 80px)',
@@ -3565,9 +3642,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         }
                       }}
                     >
-                      {cell ? cell.toUpperCase() : ''}
+                      {isBlocked ? '' : (cell ? cell.toUpperCase() : '')}
                   </div>
-                ))}
+                )})}
               </div>
             ))}
           

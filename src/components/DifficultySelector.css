@@ -1,0 +1,122 @@
+/* Difficulty Selector Styles */
+
+.difficulty-selector {
+  margin: 20px 0;
+  text-align: center;
+}
+
+.difficulty-label {
+  color: #F5DEB3;
+  font-size: clamp(16px, 4vw, 20px);
+  font-weight: bold;
+  margin-bottom: 15px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.difficulty-options {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.difficulty-tile {
+  width: 80px;
+  height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  position: relative;
+  
+  /* 3D block effect like game tiles */
+  border-top: 3px solid rgba(255, 255, 255, 0.4);
+  border-left: 3px solid rgba(255, 255, 255, 0.3);
+  border-right: 2px solid rgba(0, 0, 0, 0.3);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.3);
+}
+
+.difficulty-tile:hover:not(.selected) {
+  transform: scale(1.05);
+  box-shadow: 
+    3px 3px 6px rgba(0,0,0,0.3),
+    inset 1px 1px 0 rgba(255,255,255,0.4);
+}
+
+.difficulty-tile:active {
+  transform: scale(0.98);
+}
+
+.difficulty-tile.selected {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.difficulty-number {
+  font-size: 32px;
+  font-weight: 900;
+  margin-bottom: 5px;
+  text-shadow: 0 2px 4px rgba(255, 255, 255, 0.3);
+}
+
+.difficulty-name {
+  font-size: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 
+      0 6px 12px rgba(0,0,0,0.3),
+      0 0 20px currentColor,
+      inset 0 2px 0 rgba(255,255,255,0.4);
+  }
+  50% {
+    box-shadow: 
+      0 8px 16px rgba(0,0,0,0.4),
+      0 0 30px currentColor,
+      inset 0 2px 0 rgba(255,255,255,0.5);
+  }
+}
+
+/* Mobile Responsive */
+@media (max-width: 600px) {
+  .difficulty-tile {
+    width: 70px;
+    height: 70px;
+  }
+  
+  .difficulty-number {
+    font-size: 28px;
+  }
+  
+  .difficulty-name {
+    font-size: 10px;
+  }
+  
+  .difficulty-options {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 400px) {
+  .difficulty-tile {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .difficulty-number {
+    font-size: 24px;
+  }
+  
+  .difficulty-name {
+    font-size: 9px;
+  }
+}
+
