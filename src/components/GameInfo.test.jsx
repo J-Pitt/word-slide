@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import React from 'react'
 import GameInfo from './GameInfo'
-import { AuthProvider } from '../contexts/AuthContext'
+import { AuthContext } from '../contexts/AuthContext'
 
 // Mock the LeaderboardModal component
 vi.mock('./LeaderboardModal', () => ({
@@ -24,16 +25,16 @@ describe('GameInfo', () => {
     gameMode: 'original'
   }
   
-  const renderWithAuth = (component, authState = {}) => {
+  const renderWithAuth = (component, authState = { isAuthenticated: false, user: null }) => {
     return render(
-      <AuthProvider value={authState}>
+      <AuthContext.Provider value={authState}>
         {component}
-      </AuthProvider>
+      </AuthContext.Provider>
     )
   }
   
   it('should render game info correctly', () => {
-    render(<GameInfo {...defaultProps} />)
+    renderWithAuth(<GameInfo {...defaultProps} />)
     
     expect(screen.getByText(/Level:/)).toBeInTheDocument()
     expect(screen.getByText(/3/)).toBeInTheDocument()
@@ -44,14 +45,14 @@ describe('GameInfo', () => {
   })
   
   it('should render leaderboard button', () => {
-    render(<GameInfo {...defaultProps} />)
+    renderWithAuth(<GameInfo {...defaultProps} />)
     
     const leaderboardBtn = screen.getByRole('button', { name: /leaderboard/i })
     expect(leaderboardBtn).toBeInTheDocument()
   })
   
   it('should open leaderboard modal when button clicked', () => {
-    render(<GameInfo {...defaultProps} />)
+    renderWithAuth(<GameInfo {...defaultProps} />)
     
     const leaderboardBtn = screen.getByRole('button', { name: /leaderboard/i })
     fireEvent.click(leaderboardBtn)
@@ -61,7 +62,7 @@ describe('GameInfo', () => {
   })
   
   it('should close leaderboard modal', () => {
-    render(<GameInfo {...defaultProps} />)
+    renderWithAuth(<GameInfo {...defaultProps} />)
     
     // Open modal
     const leaderboardBtn = screen.getByRole('button', { name: /leaderboard/i })
@@ -75,7 +76,7 @@ describe('GameInfo', () => {
   })
   
   it('should show correct game mode in modal', () => {
-    render(<GameInfo {...defaultProps} gameMode="tetris" />)
+    renderWithAuth(<GameInfo {...defaultProps} gameMode="tetris" />)
     
     const leaderboardBtn = screen.getByRole('button', { name: /leaderboard/i })
     fireEvent.click(leaderboardBtn)
@@ -84,48 +85,70 @@ describe('GameInfo', () => {
   })
   
   it('should handle single target word', () => {
-    render(<GameInfo {...defaultProps} targetWords={['CAT']} />)
+    renderWithAuth(<GameInfo {...defaultProps} targetWords={['CAT']} />)
     
     expect(screen.getByText(/Slide tiles to form the word/)).toBeInTheDocument()
     expect(screen.getByText(/CAT/)).toBeInTheDocument()
   })
   
   it('should handle multiple target words', () => {
-    render(<GameInfo {...defaultProps} targetWords={['CAT', 'DOG', 'BIRD']} />)
+    renderWithAuth(<GameInfo {...defaultProps} targetWords={['CAT', 'DOG', 'BIRD']} />)
     
     expect(screen.getByText(/Slide tiles to form the words/)).toBeInTheDocument()
     expect(screen.getByText(/CAT, DOG, BIRD/)).toBeInTheDocument()
   })
   
   it('should display move count correctly', () => {
-    const { rerender } = render(<GameInfo {...defaultProps} moveCount={0} />)
+    const mockAuthState = { isAuthenticated: false, user: null }
+    const { rerender } = render(
+      <AuthContext.Provider value={mockAuthState}>
+        <GameInfo {...defaultProps} moveCount={0} />
+      </AuthContext.Provider>
+    )
     expect(screen.getByText(/Moves:/)).toBeInTheDocument()
     expect(screen.getByText('0')).toBeInTheDocument()
     
-    rerender(<GameInfo {...defaultProps} moveCount={10} />)
+    rerender(
+      <AuthContext.Provider value={mockAuthState}>
+        <GameInfo {...defaultProps} moveCount={10} />
+      </AuthContext.Provider>
+    )
     expect(screen.getByText('10')).toBeInTheDocument()
     
-    rerender(<GameInfo {...defaultProps} moveCount={999} />)
+    rerender(
+      <AuthContext.Provider value={mockAuthState}>
+        <GameInfo {...defaultProps} moveCount={999} />
+      </AuthContext.Provider>
+    )
     expect(screen.getByText('999')).toBeInTheDocument()
   })
   
   it('should display level correctly', () => {
-    const { rerender } = render(<GameInfo {...defaultProps} currentLevel={1} />)
+    const mockAuthState = { isAuthenticated: false, user: null }
+    const { rerender } = render(
+      <AuthContext.Provider value={mockAuthState}>
+        <GameInfo {...defaultProps} currentLevel={1} />
+      </AuthContext.Provider>
+    )
     expect(screen.getByText('1')).toBeInTheDocument()
     
-    rerender(<GameInfo {...defaultProps} currentLevel={20} />)
+    rerender(
+      <AuthContext.Provider value={mockAuthState}>
+        <GameInfo {...defaultProps} currentLevel={20} />
+      </AuthContext.Provider>
+    )
     expect(screen.getByText('20')).toBeInTheDocument()
   })
   
   it('should have correct tooltip on leaderboard button', () => {
-    render(<GameInfo {...defaultProps} gameMode="original" />)
+    renderWithAuth(<GameInfo {...defaultProps} gameMode="original" />)
     
     const leaderboardBtn = screen.getByRole('button', { name: /leaderboard/i })
     expect(leaderboardBtn).toHaveAttribute('title', 'View Classic Mode Leaderboard')
   })
   
   it('should show tetris mode tooltip correctly', () => {
-    render(<GameInfo {...defaultProps} gameMode="tetris" />)
+    renderWithAuth(<GameInfo {...defaultProps} gameMode="tetris" />)
     
     const leaderboardBtn = screen.getByRole('button', { name: /leaderboard/i })
     expect(leaderboardBtn).toHaveAttribute('title', 'View Tetris Mode Leaderboard')
