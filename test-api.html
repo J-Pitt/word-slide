@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WordSlide API Tester</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    button.danger {
+      background: #f44336;
+    }
+    button.danger:hover {
+      background: #da190b;
+    }
+    #result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 5px;
+      white-space: pre-wrap;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .success {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+    }
+    .error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+    .info {
+      background: #d1ecf1;
+      border: 1px solid #bee5eb;
+      color: #0c5460;
+    }
+    .loading {
+      background: #fff3cd;
+      border: 1px solid #ffeaa7;
+      color: #856404;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 WordSlide API Tester</h1>
+    <p class="subtitle">Test your AWS Lambda functions directly from the browser</p>
+    
+    <div>
+      <button onclick="testStatsEndpoint()">Test Stats Endpoint</button>
+      <button onclick="testLeaderboard()">Test Leaderboard</button>
+      <button onclick="testLogin()">Test Login</button>
+      <button onclick="checkLambdaHealth()">Check All Endpoints</button>
+      <button class="danger" onclick="clearResults()">Clear Results</button>
+    </div>
+    
+    <div id="result"></div>
+  </div>
+
+  <script>
+    const API_BASE = 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev';
+    const resultDiv = document.getElementById('result');
+
+    function showResult(message, type = 'info') {
+      resultDiv.className = type;
+      resultDiv.textContent = message;
+    }
+
+    function showLoading() {
+      resultDiv.className = 'loading';
+      resultDiv.textContent = '⏳ Testing... Please wait...';
+    }
+
+    function clearResults() {
+      resultDiv.className = '';
+      resultDiv.textContent = '';
+    }
+
+    async function testStatsEndpoint() {
+      showLoading();
+      const startTime = Date.now();
+      
+      try {
+        const response = await fetch(`${API_BASE}/game/stats`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer test-token'
+          },
+          body: JSON.stringify({
+            userId: 1,
+            gameMode: 'easy',
+            wordsSolved: 3,
+            totalMoves: 10
+          })
+        });
+        
+        const duration = Date.now() - startTime;
+        const data = await response.text();
+        
+        if (response.ok) {
+          showResult(
+            `✅ SUCCESS (${duration}ms)\n\n` +
+            `HTTP Status: ${response.status} ${response.statusText}\n\n` +
+            `Response:\n${data}`,
+            'success'
+          );
+        } else {
+          showResult(
+            `❌ FAILED (${duration}ms)\n\n` +
+            `HTTP Status: ${response.status} ${response.statusText}\n\n` +
+            `Error Response:\n${data}\n\n` +
+            `Diagnosis:\n` +
+            (response.status === 502 ? '→ Lambda timeout or backend error\n→ Try increasing Lambda timeout to 10+ seconds' : '') +
+            (response.status === 500 ? '→ Lambda function error\n→ Check CloudWatch logs' : '') +
+            (response.status === 401 ? '→ Authentication error\n→ Check JWT token' : ''),
+            'error'
+          );
+        }
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        showResult(
+          `❌ REQUEST FAILED (${duration}ms)\n\n` +
+          `Error: ${error.message}\n\n` +
+          `Diagnosis:\n` +
+          `→ Network error or CORS issue\n` +
+          `→ Check your internet connection\n` +
+          `→ Check API Gateway is deployed`,
+          'error'
+        );
+      }
+    }
+
+    async function testLeaderboard() {
+      showLoading();
+      const startTime = Date.now();
+      
+      try {
+        const response = await fetch(`${API_BASE}/game/leaderboard?gameMode=easy`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const duration = Date.now() - startTime;
+        const data = await response.text();
+        
+        if (response.ok) {
+          showResult(
+            `✅ SUCCESS (${duration}ms)\n\n` +
+            `HTTP Status: ${response.status} ${response.statusText}\n\n` +
+            `Response:\n${data}`,
+            'success'
+          );
+        } else {
+          showResult(
+            `❌ FAILED (${duration}ms)\n\n` +
+            `HTTP Status: ${response.status} ${response.statusText}\n\n` +
+            `Error Response:\n${data}`,
+            'error'
+          );
+        }
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        showResult(`❌ REQUEST FAILED (${duration}ms)\n\nError: ${error.message}`, 'error');
+      }
+    }
+
+    async function testLogin() {
+      showLoading();
+      const startTime = Date.now();
+      
+      try {
+        const response = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            username: 'testuser',
+            password: 'testpass'
+          })
+        });
+        
+        const duration = Date.now() - startTime;
+        const data = await response.text();
+        
+        if (response.ok || response.status === 401) {
+          showResult(
+            `✅ ENDPOINT WORKING (${duration}ms)\n\n` +
+            `HTTP Status: ${response.status} ${response.statusText}\n\n` +
+            `Response:\n${data}\n\n` +
+            `Note: 401 is expected for invalid credentials (endpoint is working)`,
+            response.ok ? 'success' : 'info'
+          );
+        } else {
+          showResult(
+            `❌ FAILED (${duration}ms)\n\n` +
+            `HTTP Status: ${response.status} ${response.statusText}\n\n` +
+            `Error Response:\n${data}`,
+            'error'
+          );
+        }
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        showResult(`❌ REQUEST FAILED (${duration}ms)\n\nError: ${error.message}`, 'error');
+      }
+    }
+
+    async function checkLambdaHealth() {
+      showLoading();
+      resultDiv.textContent = '⏳ Testing all endpoints... This may take 30+ seconds...\n\n';
+      
+      const endpoints = [
+        { name: 'Stats POST', method: 'POST', path: '/game/stats', body: { userId: 1, gameMode: 'easy', wordsSolved: 3, totalMoves: 10 } },
+        { name: 'Leaderboard GET', method: 'GET', path: '/game/leaderboard?gameMode=easy' },
+        { name: 'Login POST', method: 'POST', path: '/auth/login', body: { username: 'test', password: 'test' } }
+      ];
+      
+      let results = '📊 ENDPOINT HEALTH CHECK RESULTS\n' + '='.repeat(50) + '\n\n';
+      
+      for (const endpoint of endpoints) {
+        const startTime = Date.now();
+        
+        try {
+          const options = {
+            method: endpoint.method,
+            headers: { 'Content-Type': 'application/json' }
+          };
+          
+          if (endpoint.body) {
+            options.body = JSON.stringify(endpoint.body);
+          }
+          
+          const response = await fetch(`${API_BASE}${endpoint.path}`, options);
+          const duration = Date.now() - startTime;
+          
+          const status = response.status === 502 ? '❌ 502 (Lambda Error)' :
+                        response.status === 500 ? '❌ 500 (Server Error)' :
+                        response.status === 401 ? '✅ 401 (Auth - Working)' :
+                        response.ok ? '✅ OK' : `⚠️  ${response.status}`;
+          
+          results += `${endpoint.name.padEnd(20)} ${status.padEnd(25)} ${duration}ms\n`;
+        } catch (error) {
+          results += `${endpoint.name.padEnd(20)} ❌ Network Error          -\n`;
+        }
+      }
+      
+      results += '\n' + '='.repeat(50) + '\n\n';
+      results += 'Interpretation:\n';
+      results += '✅ = Working correctly\n';
+      results += '❌ 502 = Lambda timeout or backend error\n';
+      results += '⚠️  = Unexpected status (but endpoint reachable)\n';
+      
+      showResult(results, 'info');
+    }
+  </script>
+</body>
+</html>
+
+

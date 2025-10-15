@@ -1781,3 +1781,44 @@ h1 {
         padding-top: max(45px, env(safe-area-inset-top)) !important;
     }
 }
+
+/* Mobile scrolling improvements */
+@media only screen and (max-height: 700px) {
+    /* For devices with short screens, ensure scrollable content */
+    #original-game-view {
+        height: 100vh !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        scroll-behavior: smooth !important;
+    }
+    
+    /* Ensure buttons are accessible by adding extra bottom padding */
+    #game-action-buttons {
+        margin-bottom: max(30px, env(safe-area-inset-bottom)) !important;
+        padding-bottom: 10px !important;
+    }
+}
+
+/* Very small mobile screens - additional scroll support */
+@media only screen and (max-height: 600px) {
+    #original-game-view {
+        /* Force scrolling for very small screens */
+        height: 100vh !important;
+        overflow-y: scroll !important;
+        -webkit-overflow-scrolling: touch !important;
+    }
+    
+    /* Make game board slightly smaller on very small screens */
+    #board-container {
+        max-height: 60vh !important;
+        width: min(85vw, 350px) !important;
+        height: min(85vw, 350px) !important;
+    }
+    
+    /* Ensure buttons have adequate spacing */
+    #game-action-buttons {
+        margin-bottom: max(40px, env(safe-area-inset-bottom)) !important;
+        padding-bottom: 15px !important;
+    }
+}

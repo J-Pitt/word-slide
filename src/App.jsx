@@ -41,8 +41,9 @@ function App() {
   
   const [currentView, setCurrentView] = useState('menu')
   
-  // Difficulty setting (1 = Easy, 2 = Medium, 3 = Hard)
-  const [difficulty, setDifficulty] = useState(1)
+  // Difficulty setting (1 = Easy, 2 = Medium, 3 = Hard) - no default selection
+  const [difficulty, setDifficulty] = useState(null)
+  const [difficultySelected, setDifficultySelected] = useState(false)
   
   // Basic game state
   const [board, setBoard] = useState([])
@@ -1444,7 +1445,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
 
   // Generate a sophisticated game board that ensures target words are solvable
   const generateBoard = useCallback((difficultyLevel = difficulty) => {
-    if (!WORD_SETS || WORD_SETS.length === 0) {
+    if (!difficultyLevel || !WORD_SETS || WORD_SETS.length === 0) {
       generateFallbackBoard()
       return
     }
@@ -2166,6 +2167,24 @@ Note: Some browsers don't support PWA installation in development mode.`)
     // Stay in game view, start from level 1
   }, [])
 
+  // Helper function to reset difficulty selection
+  const resetDifficultySelection = useCallback(() => {
+    setDifficulty(null)
+    setDifficultySelected(false)
+  }, [])
+
+  // Track viewport height for mobile scroll indicator
+  const [viewportHeight, setViewportHeight] = useState(window.innerHeight)
+  
+  useEffect(() => {
+    const handleResize = () => {
+      setViewportHeight(window.innerHeight)
+    }
+    
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
   // Handle return to menu after game completion
   const handleCompletionToMenu = useCallback(() => {
     setShowGameCompleteModal(false)
@@ -2175,10 +2194,13 @@ Note: Some browsers don't support PWA installation in development mode.`)
     const fresh = createFreshStats()
     setCurrentLevel(fresh.currentLevel)
     setMoveCount(fresh.moveCount)
+    
+    // Reset difficulty selection to force user to choose again
+    resetDifficultySelection()
     setCompletedWords(fresh.completedWords)
     setHintCount(fresh.hintCount)
     setLevelHistory(fresh.levelHistory)
-  }, [])
+  }, [resetDifficultySelection])
 
   // Handle next level button
   const handleNextLevel = useCallback(() => {
@@ -2593,7 +2615,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
   // Handle drag start
   const handleMiniDragStart = useCallback((r, c, e) => {
     e.stopPropagation()
-    if (miniGameCompleted) return
+    if (miniGameCompleted || !difficultySelected) return
     
     // Check if tile can move (adjacent to empty)
     const dr = Math.abs(r - miniEmptyPos.r)
@@ -2610,7 +2632,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
         startPos: { x: clientX, y: clientY }
       })
     }
-  }, [miniEmptyPos, miniGameCompleted])
+  }, [miniEmptyPos, miniGameCompleted, difficultySelected])
 
   // Handle drag move
   const handleMiniDragMove = useCallback((e) => {
@@ -2788,6 +2810,10 @@ Note: Some browsers don't support PWA installation in development mode.`)
 
   // Start original game
   const startOriginalGame = useCallback(() => {
+    if (!difficultySelected || difficulty === null) {
+      return // Don't start game if no difficulty selected
+    }
+    
     setCurrentView('original')
     
     // Try to generate the main board first
@@ -2797,7 +2823,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
       // Fallback to simple board if WORD_SETS not ready
       generateFallbackBoard()
     }
-  }, [generateBoard, generateFallbackBoard, WORD_SETS, board, difficulty])
+  }, [generateBoard, generateFallbackBoard, WORD_SETS, board, difficulty, difficultySelected])
 
   // Show hint confirmation
   const showHintConfirmation = useCallback(() => {
@@ -3023,12 +3049,15 @@ Note: Some browsers don't support PWA installation in development mode.`)
           
           {/* Difficulty Selector */}
           <div style={{
-            animation: 'titleEntrance 1.5s ease-out 1.0s forwards',
+            animation: 'titleEntrance 1.0s ease-out 0.5s forwards',
             opacity: 0
           }}>
             <DifficultySelector 
               selectedDifficulty={difficulty}
-              onSelect={setDifficulty}
+              onSelect={(selectedDifficulty) => {
+                setDifficulty(selectedDifficulty)
+                setDifficultySelected(true)
+              }}
             />
           </div>
           
@@ -3096,7 +3125,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                     const isEmpty = letter === ''
                     const isPlayTile = (r === 2 && ['P', 'L', 'A', 'Y'].includes(letter)) // Middle row PLAY tiles
                     const isCompleted = miniGameCompleted && r === 2 // All middle row tiles when completed
-                    const isAdjacent = !miniGameCompleted && !isEmpty && (
+                    const isAdjacent = !miniGameCompleted && !isEmpty && difficultySelected && (
                       (Math.abs(r - miniEmptyPos.r) === 1 && c === miniEmptyPos.c) ||
                       (Math.abs(c - miniEmptyPos.c) === 1 && r === miniEmptyPos.r)
                     )
@@ -3117,12 +3146,12 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         onMouseDown={(e) => handleMiniDragStart(r, c, e)}
                         onTouchStart={(e) => handleMiniDragStart(r, c, e)}
                         style={{
-                          cursor: isAdjacent ? 'grab' : 'default',
+                          cursor: isAdjacent ? 'grab' : (difficultySelected ? 'default' : 'not-allowed'),
                           position: 'relative',
                           background: isEmpty ? 'transparent' : undefined,
                           border: isEmpty ? '2px dashed #F5DEB3' : undefined,
-                          opacity: isEmpty ? 0.6 : undefined,
-                          animation: (isPlayTile && letter === 'Y' && !miniGameCompleted && !dragState.isDragging) 
+                          opacity: isEmpty ? 0.6 : (!difficultySelected ? 0.5 : undefined),
+                          animation: (isPlayTile && letter === 'Y' && !miniGameCompleted && !dragState.isDragging && difficultySelected) 
                             ? 'miniTileSlideHint 3s ease-in-out infinite' 
                             : 'none',
                           transform: (dragState.draggedTile?.r === r && dragState.draggedTile?.c === c) 
@@ -3136,7 +3165,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                       >
                         {letter}
                         {/* Show arrow hint only on Y tile when it can move left */}
-                        {letter === 'Y' && r === 2 && c === 4 && miniEmptyPos.r === 2 && miniEmptyPos.c === 3 && !miniGameCompleted && (
+                        {letter === 'Y' && r === 2 && c === 4 && miniEmptyPos.r === 2 && miniEmptyPos.c === 3 && !miniGameCompleted && difficultySelected && (
                           <div style={{
                             position: 'absolute',
                             top: '50%',
@@ -3162,12 +3191,13 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 marginTop: '15px',
                 fontSize: 'clamp(16px, 4vw, 20px)',
                 fontWeight: 'bold',
-                color: miniGameCompleted ? '#32CD32' : '#F5DEB3',
+                color: miniGameCompleted ? '#32CD32' : (difficultySelected ? '#F5DEB3' : '#FFA500'),
                 textShadow: '2px 2px 4px rgba(0, 0, 0, 0.8)',
                 fontFamily: 'Georgia, serif',
                 transition: 'color 0.5s ease'
               }}>
-              {miniGameCompleted ? 'Let\'s play!' : 'Slide the Y to play!'}
+              {!difficultySelected ? 'Select a difficulty level first!' : 
+               miniGameCompleted ? 'Let\'s play!' : 'Slide the Y to play!'}
               </div>
             </div>
             
@@ -3188,17 +3218,19 @@ Note: Some browsers don't support PWA installation in development mode.`)
 
       {currentView === 'original' && (
         <div id="original-game-view" style={{
-          maxHeight: '100vh',
-          overflow: 'auto',
+          height: '100vh',
+          overflowY: 'auto',
+          overflowX: 'hidden',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           backgroundColor: 'transparent',
-          minHeight: '100vh',
           paddingTop: 'max(20px, env(safe-area-inset-top))',
           paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
           paddingLeft: 'max(20px, env(safe-area-inset-left))',
-          paddingRight: 'max(20px, env(safe-area-inset-right))'
+          paddingRight: 'max(20px, env(safe-area-inset-right))',
+          WebkitOverflowScrolling: 'touch', // Smooth scrolling on iOS
+          scrollBehavior: 'smooth'
         }}>
           <h1 style={{
             fontSize: 'clamp(24px, 6vw, 32px)',
@@ -3520,7 +3552,8 @@ Note: Some browsers don't support PWA installation in development mode.`)
             alignItems: 'center',
             position: 'relative',
             isolation: 'isolate',
-            contain: 'layout'
+            contain: 'layout',
+            flexShrink: 0 // Prevent board from shrinking on mobile
           }}>
             
             {/* Board Container - Connected Surface */}
@@ -3764,8 +3797,10 @@ Note: Some browsers don't support PWA installation in development mode.`)
             alignItems: 'center',
             gap: '8px',
             marginTop: '20px',
-            marginBottom: '20px',
-            padding: '0 10px'
+            marginBottom: 'max(20px, env(safe-area-inset-bottom))',
+            padding: '0 10px',
+            flexShrink: 0, // Prevent buttons from shrinking
+            minHeight: '60px' // Ensure adequate touch target height
           }}>
             {/* Previous Level Button */}
             <button 
@@ -3817,7 +3852,10 @@ Note: Some browsers don't support PWA installation in development mode.`)
 
             {/* Home Button */}
             <button 
-              onClick={() => setCurrentView('menu')}
+              onClick={() => {
+                setCurrentView('menu')
+                resetDifficultySelection()
+              }}
               style={{
                 background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
                 color: '#654321',
@@ -3930,6 +3968,20 @@ Note: Some browsers don't support PWA installation in development mode.`)
           }}>
             v1.1.0-game-completion
           </div>
+          
+          {/* Mobile Scroll Indicator */}
+          {viewportHeight < 700 && (
+            <div style={{
+              textAlign: 'center',
+              marginTop: '10px',
+              opacity: 0.7,
+              fontSize: '12px',
+              color: '#F5DEB3',
+              fontStyle: 'italic'
+            }}>
+              ↑ Scroll to access all controls ↑
+            </div>
+          )}
           
           {/* Fireworks Animation - DISABLED (using direct fireworks instead) */}
           {false && showFireworks && (
@@ -4875,7 +4927,10 @@ Note: Some browsers don't support PWA installation in development mode.`)
             marginBottom: '20px'
           }}>
             <button 
-              onClick={() => setCurrentView('menu')}
+              onClick={() => {
+                setCurrentView('menu')
+                resetDifficultySelection()
+              }}
               style={{
                 background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
                 color: '#654321',
@@ -4992,7 +5047,10 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 Play Again
               </button>
               <button
-                onClick={() => setCurrentView('menu')}
+                onClick={() => {
+                  setCurrentView('menu')
+                  resetDifficultySelection()
+                }}
                 style={{
                   background: 'linear-gradient(135deg, #F5DEB3, #DEB887)',
                   color: '#654321',
