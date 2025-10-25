@@ -120,6 +120,6 @@ export function isValidDifficulty(difficulty) {
  * @returns {string} Game mode string for API
  */
 export function getGameModeForDifficulty(difficulty) {
-  return `original-difficulty-${difficulty}`
+  return `diff-${difficulty}`
 }
 

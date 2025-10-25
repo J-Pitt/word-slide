@@ -93,6 +93,11 @@ exports.handler = async (event) => {
     } catch (error) {
         console.error('Database error:', error);
         
+        // Define corsOrigin in catch block scope
+        const allowedOrigins = ['https://word-slide.com', 'http://localhost:3000', 'http://localhost:5173'];
+        const origin = event.headers?.origin || event.headers?.Origin;
+        const corsOrigin = allowedOrigins.includes(origin) ? origin : 'https://word-slide.com';
+        
         return {
             statusCode: 500,
             headers: {

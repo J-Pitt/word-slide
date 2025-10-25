@@ -123,16 +123,14 @@ function App() {
     // Board will regenerate via existing effect when board is empty
   }, [])
 
-  // Update database with level completion stats
-  const updateDatabaseStats = useCallback(async (level, moves, wordsCompleted) => {
+  // Update database with level completion stats with retry logic
+  const updateDatabaseStats = useCallback(async (level, moves, wordsCompleted, retryCount = 0) => {
     if (!user || !token) {
       console.log('No user or token, skipping database update')
       return
     }
     
-    console.log('🎯 Updating database stats:', { level, moves, wordsCompleted, user, token })
-    console.log('🎯 NODE_ENV:', process.env.NODE_ENV)
-    console.log('🎯 API_BASE will be:', process.env.NODE_ENV === 'development' ? '/api' : 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev')
+    console.log('🎯 Updating database stats:', { level, moves, wordsCompleted, user, token, retryCount })
     
     try {
       // Use proxy when running on localhost to avoid CORS issues
@@ -140,6 +138,7 @@ function App() {
       const API_BASE = isLocalhost 
         ? '/api'
         : 'https://63jgwqvqyf.execute-api.us-east-1.amazonaws.com/dev'
+      
       const response = await fetch(`${API_BASE}/game/stats`, {
         method: 'POST',
         headers: {
@@ -155,17 +154,37 @@ function App() {
       })
       
       if (!response.ok) {
-        console.error('❌ Failed to update database:', response.statusText, response.status)
-        console.error('❌ This might be a CORS issue - check server configuration')
         const errorText = await response.text()
+        console.error('❌ Failed to update database:', response.statusText, response.status)
         console.error('❌ Error response:', errorText)
+        
+        // Retry logic for 502/503 errors
+        if ((response.status === 502 || response.status === 503) && retryCount < 2) {
+          console.log(`🔄 Retrying database update (attempt ${retryCount + 1}/3)...`)
+          setTimeout(() => {
+            updateDatabaseStats(level, moves, wordsCompleted, retryCount + 1)
+          }, 1000 * (retryCount + 1)) // Exponential backoff
+          return
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
       } else {
         const result = await response.json()
         console.log('✅ Database update successful:', result)
       }
     } catch (error) {
       console.error('❌ Error updating database:', error)
-      console.error('❌ Error details:', error.message, error.stack)
+      
+      // Retry logic for network errors
+      if (retryCount < 2 && (error.message.includes('fetch') || error.message.includes('network'))) {
+        console.log(`🔄 Retrying database update due to network error (attempt ${retryCount + 1}/3)...`)
+        setTimeout(() => {
+          updateDatabaseStats(level, moves, wordsCompleted, retryCount + 1)
+        }, 1000 * (retryCount + 1)) // Exponential backoff
+        return
+      }
+      
+      console.error('❌ Final error after retries:', error.message, error.stack)
     }
   }, [user, token, difficulty])
 
