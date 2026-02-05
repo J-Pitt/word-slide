@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import LeaderboardModal from './components/LeaderboardModal'
 import UserProfile from './components/UserProfile'
 import AuthModal from './components/AuthModal'
@@ -34,6 +35,7 @@ import './styles.css'
 function App() {
   
   const { user, isAuthenticated, token } = useAuth() || {}
+  const navigate = useNavigate()
   
   // PWA install state
   const [deferredPrompt, setDeferredPrompt] = useState(null)
@@ -69,12 +71,12 @@ function App() {
   
   // Mini gameboard play button state
   const [miniGameCompleted, setMiniGameCompleted] = useState(false)
-  const [miniEmptyPos, setMiniEmptyPos] = useState({ r: 2, c: 3 }) // Row 2 (middle), Col 3 (empty space)
+  const [miniEmptyPos, setMiniEmptyPos] = useState({ r: 2, c: 3 }) // Middle row, empty between A and Y
   const [miniBoard, setMiniBoard] = useState([
     ['R', 'T', 'K', 'M', 'N'],
-    ['B', 'F', 'H', 'S', 'C'],
-    ['P', 'L', 'A', '', 'Y'], // Middle row with PLAY
-    ['D', 'W', 'Z', 'V', 'Q'],
+    ['B', 'F', 'H', 'S', 'C'], // tile (1,3)=S above empty → slide into empty opens Trivia
+    ['P', 'L', 'A', '', 'Y'],  // PLAY: slide Y left to start main game
+    ['D', 'W', 'Z', 'V', 'Q'], // tile (3,3)=V below empty → slide into empty opens Truth or Dare
     ['J', 'G', 'X', 'U', 'I']
   ])
   const [dragState, setDragState] = useState({
@@ -2634,13 +2636,25 @@ Note: Some browsers don't support PWA installation in development mode.`)
   // Handle drag start
   const handleMiniDragStart = useCallback((r, c, e) => {
     e.stopPropagation()
-    if (miniGameCompleted || !difficultySelected) return
+    if (miniGameCompleted) return
+    
+    // Trivia (tile above empty) and Truth or Dare (tile below empty) are always draggable
+    const isTriviaTile = r === 1 && c === 3
+    const isTruthOrDareTile = r === 3 && c === 3
+    const isNavTile = isTriviaTile || isTruthOrDareTile
     
     // Check if tile can move (adjacent to empty)
     const dr = Math.abs(r - miniEmptyPos.r)
     const dc = Math.abs(c - miniEmptyPos.c)
+    const isAdjacentToEmpty = (dr === 1 && dc === 0) || (dr === 0 && dc === 1)
     
-    if ((dr === 1 && dc === 0) || (dr === 0 && dc === 1)) {
+    if (isNavTile && isAdjacentToEmpty) {
+      // S (above) or V (below) → allow drag even without difficulty selected
+    } else if (!difficultySelected || !isAdjacentToEmpty) {
+      return
+    }
+    
+    if (isAdjacentToEmpty) {
       const clientX = e.clientX || e.touches?.[0]?.clientX
       const clientY = e.clientY || e.touches?.[0]?.clientY
       
@@ -2672,13 +2686,13 @@ Note: Some browsers don't support PWA installation in development mode.`)
       let constrainedX = 0
       let constrainedY = 0
       
-      // Calculate actual mini game tile size
-      const containerWidth = Math.min(400, Math.max(300, window.innerWidth * 0.35))
-      const padding = 8 * 2 // 8px padding on each side
-      const gaps = 3 * 4 // 3px gaps between 5 columns
+      // Calculate actual mini game tile size (match responsive width: clamp(260, 90vw, 400))
+      const containerWidth = Math.min(400, Math.max(260, (window.innerWidth - 32) * 0.9))
+      const padding = 8 * 2
+      const gaps = 3 * 4
       const tileSize = (containerWidth - padding - gaps) / 5
       const gapSize = 3
-      const maxDragDistance = tileSize + gapSize + 2 // Allow full tile movement to completely fill empty space
+      const maxDragDistance = tileSize + gapSize + 2
       
       // Only allow movement toward the empty space, allowing full movement to fill the empty slot
       if (r === emptyR) {
@@ -2719,14 +2733,14 @@ Note: Some browsers don't support PWA installation in development mode.`)
     const { r, c } = dragState.draggedTile
     const { x, y } = dragState.dragOffset
     
-    // Calculate actual mini game tile size
-    const containerWidth = Math.min(400, Math.max(300, window.innerWidth * 0.35))
-    const padding = 8 * 2 // 8px padding on each side
-    const gaps = 3 * 4 // 3px gaps between 5 columns
+    // Calculate actual mini game tile size (match responsive width)
+    const containerWidth = Math.min(400, Math.max(260, (window.innerWidth - 32) * 0.9))
+    const padding = 8 * 2
+    const gaps = 3 * 4
     const tileSize = (containerWidth - padding - gaps) / 5
     const gapSize = 3
-    const step = tileSize + gapSize + 2 // Add a few more pixels to slide all the way
-    const threshold = step * 0.3 // Same threshold as main game
+    const step = tileSize + gapSize + 2
+    const threshold = step * 0.3
     
     // Check if we should trigger a move based on drag distance and direction
     let moveTriggered = false
@@ -2744,7 +2758,18 @@ Note: Some browsers don't support PWA installation in development mode.`)
     }
     
     if (moveTriggered) {
-      // Just update the board state immediately - let CSS transitions handle the smooth movement
+      const fromAbove = r === 1 && c === 3 && miniEmptyPos.r === 2 && miniEmptyPos.c === 3 // tile above empty → Trivia
+      const fromBelow = r === 3 && c === 3 && miniEmptyPos.r === 2 && miniEmptyPos.c === 3 // tile below empty → Truth or Dare
+      if (fromAbove) {
+        navigate('/trivia')
+        setDragState({ isDragging: false, draggedTile: null, dragOffset: { x: 0, y: 0 }, startPos: { x: 0, y: 0 } })
+        return
+      }
+      if (fromBelow) {
+        navigate('/truthordare')
+        setDragState({ isDragging: false, draggedTile: null, dragOffset: { x: 0, y: 0 }, startPos: { x: 0, y: 0 } })
+        return
+      }
       setMiniBoard(prevBoard => {
         const newBoard = prevBoard.map(row => [...row])
         const movingLetter = prevBoard[r][c]
@@ -2752,19 +2777,13 @@ Note: Some browsers don't support PWA installation in development mode.`)
         newBoard[r][c] = ''
         return newBoard
       })
-      
-      // Update empty position
       setMiniEmptyPos({ r, c })
-      
-      // Check completion after a short delay
       setTimeout(() => {
         setMiniBoard(currentBoard => {
           const playRow = currentBoard[2]
-          const playString = playRow.join('')
-          
+          const playString = (playRow || []).join('')
           if (playString === 'PLAY' && !miniGameCompleted) {
             setMiniGameCompleted(true)
-            
             setTimeout(() => {
               setMiniGameCompleted(false)
               setMiniBoard([
@@ -2785,7 +2804,6 @@ Note: Some browsers don't support PWA installation in development mode.`)
               setEmptyPos({ r: 6, c: 6 })
             }, 2000)
           }
-          
           return currentBoard
         })
       }, 50)
@@ -2805,7 +2823,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
       dragOffset: { x: 0, y: 0 },
       startPos: { x: 0, y: 0 }
     })
-  }, [dragState, miniEmptyPos, miniGameCompleted])
+  }, [dragState, miniEmptyPos, miniGameCompleted, navigate])
 
   // Add global mouse/touch move and end handlers
   useEffect(() => {
@@ -3014,18 +3032,21 @@ Note: Some browsers don't support PWA installation in development mode.`)
         <div id="main-menu" className="main-menu" style={{
           zIndex: 1000, 
           position: 'relative',
-          paddingTop: 'max(40px, env(safe-area-inset-top))',
-          paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
-          paddingLeft: 'max(10px, env(safe-area-inset-left))',
-          paddingRight: 'max(10px, env(safe-area-inset-right))',
+          paddingTop: 'max(24px, env(safe-area-inset-top))',
+          paddingBottom: 'max(24px, env(safe-area-inset-bottom))',
+          paddingLeft: 'max(16px, env(safe-area-inset-left))',
+          paddingRight: 'max(16px, env(safe-area-inset-right))',
           maxWidth: '100vw',
-          maxHeight: '100vh',
-          overflow: 'hidden',
+          width: '100%',
+          minHeight: '100dvh',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          WebkitOverflowScrolling: 'touch',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'flex-start',
-          minHeight: '100vh'
+          justifyContent: 'center',
+          boxSizing: 'border-box'
         }}>
           <h1 className="game-title" style={{
             fontSize: 'clamp(32px, 8vw, 48px)',
@@ -3127,12 +3148,13 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 e.target.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.1)'
               }}
             >
-              {/* 5x5 Mini Gameboard */}
+              {/* 5x5 Mini Gameboard - responsive for mobile */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(5, 1fr)',
                 gap: '3px',
-                width: 'clamp(300px, 35vw, 400px)',
+                width: 'clamp(260px, 90vw, 400px)',
+                maxWidth: 'calc(100vw - 2rem)',
                 aspectRatio: '1',
                 background: 'rgba(47, 27, 20, 0.3)',
                 padding: '8px',
@@ -3143,11 +3165,15 @@ Note: Some browsers don't support PWA installation in development mode.`)
                   row.map((letter, c) => {
                     const isEmpty = letter === ''
                     const isPlayTile = (r === 2 && ['P', 'L', 'A', 'Y'].includes(letter)) // Middle row PLAY tiles
-                    const isCompleted = miniGameCompleted && r === 2 // All middle row tiles when completed
-                    const isAdjacent = !miniGameCompleted && !isEmpty && difficultySelected && (
-                      (Math.abs(r - miniEmptyPos.r) === 1 && c === miniEmptyPos.c) ||
-                      (Math.abs(c - miniEmptyPos.c) === 1 && r === miniEmptyPos.r)
+                    const isCompleted = miniGameCompleted && r === 2 // Middle row when PLAY completed
+                    const isTriviaOrToDTile = (r === 1 && c === 3) || (r === 3 && c === 3) // S above, V below empty
+                    const isAdjacent = !miniGameCompleted && !isEmpty && (
+                      isTriviaOrToDTile || (difficultySelected && (
+                        (Math.abs(r - miniEmptyPos.r) === 1 && c === miniEmptyPos.c) ||
+                        (Math.abs(c - miniEmptyPos.c) === 1 && r === miniEmptyPos.r)
+                      ))
                     )
+                    const isNavOnly = isTriviaOrToDTile && !difficultySelected
                     
                     return (
                       <div
@@ -3169,7 +3195,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                           position: 'relative',
                           background: isEmpty ? 'transparent' : undefined,
                           border: isEmpty ? '2px dashed #F5DEB3' : undefined,
-                          opacity: isEmpty ? 0.6 : (!difficultySelected ? 0.5 : undefined),
+                          opacity: isEmpty ? 0.6 : (isAdjacent || isNavOnly ? 1 : 0.5),
                           animation: (isPlayTile && letter === 'Y' && !miniGameCompleted && !dragState.isDragging && difficultySelected) 
                             ? 'miniTileSlideHint 3s ease-in-out infinite' 
                             : 'none',
@@ -3215,9 +3241,20 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 fontFamily: 'Georgia, serif',
                 transition: 'color 0.5s ease'
               }}>
-              {!difficultySelected ? 'Select a difficulty level first!' : 
+              {!difficultySelected ? 'Select difficulty, or slide S ↑ Trivia / V ↓ Truth or Dare' : 
                miniGameCompleted ? 'Let\'s play!' : 'Slide the Y to play!'}
               </div>
+              {!difficultySelected && (
+                <p style={{
+                  textAlign: 'center',
+                  marginTop: '8px',
+                  fontSize: 'clamp(11px, 2.5vw, 13px)',
+                  color: 'rgba(245, 222, 179, 0.7)',
+                  fontStyle: 'italic'
+                }}>
+                  Slide tile above empty → Trivia · Slide tile below → Truth or Dare
+                </p>
+              )}
             </div>
 
           </div>

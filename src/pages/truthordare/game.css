@@ -19,22 +19,31 @@
   left: 0;
   right: 0;
   bottom: 0;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
   height: 100dvh;
   min-height: 100vh;
   min-height: 100dvh;
   padding: 0;
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+  padding-left: max(0.5rem, env(safe-area-inset-left));
+  padding-right: max(0.5rem, env(safe-area-inset-right));
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
   flex-direction: column;
   overflow: hidden;
   box-sizing: border-box;
   z-index: 9999;
   background-color: #242424;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .qtd-game-fullscreen .qtd-game-header {
   flex-shrink: 0;
   padding: 0.75rem 1rem;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
   position: relative;
   z-index: 10;
 }
@@ -47,11 +56,15 @@
 .qtd-game-fullscreen .qtd-game-body {
   flex: 1;
   min-height: 0;
+  width: 100%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  padding: 0 0.5rem;
+  box-sizing: border-box;
 }
 
 .qtd-game-fullscreen .qtd-game-body > .game-with-chat {
@@ -207,6 +220,49 @@
     max-height: 280px;
     border-left: none;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .qtd-game-fullscreen .qtd-game-body .game-area {
+    flex: 1;
+    padding: 0.75rem;
+    justify-content: center;
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    min-height: 280px;
+  }
+  .qtd-game-fullscreen .qtd-game-body .game-area .game {
+    max-width: 100%;
+    width: 100%;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .qtd-game-fullscreen .qtd-game-body {
+    padding: 0 0.25rem;
+  }
+  .qtd-game-fullscreen .qtd-game-body .game-area {
+    padding: 0.5rem;
+    min-height: 240px;
+  }
+}
+
+@media (max-width: 480px) {
+  .qtd-game-fullscreen .qtd-game-body > .game,
+  .qtd-game-fullscreen .qtd-game-body > .title-page {
+    padding: 1rem;
+    max-width: 100%;
+  }
+  .qtd-game .game h1 {
+    font-size: clamp(1.5rem, 8vw, 2.5rem);
+  }
+  .qtd-game .setup-form {
+    max-width: 100%;
+    padding: 0 0.5rem;
+  }
+  .qtd-game .btn {
+    min-height: 44px;
+    padding: 0.75rem 1.25rem;
   }
 }
 
