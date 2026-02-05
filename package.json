@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^7.13.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.1.5",
@@ -25,13 +26,18 @@
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^1.0.4",
     "@vitest/ui": "^1.0.4",
     "jsdom": "^23.0.1",
     "vite": "^5.0.8",
-    "vitest": "^1.0.4",
-    "@vitest/coverage-v8": "^1.0.4"
+    "vitest": "^1.0.4"
   },
-  "keywords": ["game", "puzzle", "react", "sliding-tiles"],
+  "keywords": [
+    "game",
+    "puzzle",
+    "react",
+    "sliding-tiles"
+  ],
   "author": "",
   "license": "MIT"
 }

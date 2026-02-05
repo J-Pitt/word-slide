@@ -286,6 +286,12 @@ To avoid these issues in the future:
 4. **Use connection pooling** in Lambda functions to reduce cold start impact
 5. **Consider provisioned concurrency** for critical Lambda functions
 
+## Paths like /truthordare and /trivia don’t show the app (404 or blank)
+
+When you open or refresh `https://yoursite.com/truthordare` or `https://yoursite.com/trivia`, the server must respond with **index.html** (and status 200), not 404. Otherwise the browser never loads the React app and the path “doesn’t show the games.”
+
+**Fix:** Configure your host to serve **index.html** for all paths (SPA fallback). Step‑by‑step for **AWS Amplify** and other hosts is in **[docs/SPA-REDIRECTS.md](SPA-REDIRECTS.md)**. In short: add a **Rewrite (200)** rule so source `/<<*>>` (or the SPA regex) targets `/index.html`.
+
 ## Truth or Dare — "Failed to create game" / "Failed to join room"
 
 ### Symptom
