@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import LeaderboardModal from './components/LeaderboardModal'
 import UserProfile from './components/UserProfile'
@@ -2636,34 +2637,39 @@ Note: Some browsers don't support PWA installation in development mode.`)
   // Handle drag start
   const handleMiniDragStart = useCallback((r, c, e) => {
     e.stopPropagation()
+    if (e.touches) e.preventDefault() // prevent scroll so drag is recognized on touch
     if (miniGameCompleted) return
     
-    // Trivia (tile above empty) and Truth or Dare (tile below empty) are always draggable
     const isTriviaTile = r === 1 && c === 3
     const isTruthOrDareTile = r === 3 && c === 3
     const isNavTile = isTriviaTile || isTruthOrDareTile
+    const isYTile = r === 2 && c === 4
+    const emptyAtDefault = miniEmptyPos.r === 2 && miniEmptyPos.c === 3
     
-    // Check if tile can move (adjacent to empty)
     const dr = Math.abs(r - miniEmptyPos.r)
     const dc = Math.abs(c - miniEmptyPos.c)
     const isAdjacentToEmpty = (dr === 1 && dc === 0) || (dr === 0 && dc === 1)
     
-    if (isNavTile && isAdjacentToEmpty) {
-      // S (above) or V (below) → allow drag even without difficulty selected
-    } else if (!difficultySelected || !isAdjacentToEmpty) {
-      return
-    }
+    const allowNav = isNavTile && isAdjacentToEmpty
+    const allowY = isYTile && emptyAtDefault && difficultySelected
+    const allowOther = difficultySelected && isAdjacentToEmpty
     
-    if (isAdjacentToEmpty) {
-      const clientX = e.clientX || e.touches?.[0]?.clientX
-      const clientY = e.clientY || e.touches?.[0]?.clientY
-      
-      setDragState({
-        isDragging: true,
-        draggedTile: { r, c },
-        dragOffset: { x: 0, y: 0 },
-        startPos: { x: clientX, y: clientY }
-      })
+    if (!allowNav && !allowY && !allowOther) return
+    
+    const clientX = e.clientX ?? e.touches?.[0]?.clientX
+    const clientY = e.clientY ?? e.touches?.[0]?.clientY
+    if (clientX == null || clientY == null) return
+    
+    const newDragState = {
+      isDragging: true,
+      draggedTile: { r, c },
+      dragOffset: { x: 0, y: 0 },
+      startPos: { x: clientX, y: clientY }
+    }
+    if (e.touches) {
+      flushSync(() => setDragState(newDragState))
+    } else {
+      setDragState(newDragState)
     }
   }, [miniEmptyPos, miniGameCompleted, difficultySelected])
 
@@ -2758,8 +2764,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
     }
     
     if (moveTriggered) {
-      const fromAbove = r === 1 && c === 3 && miniEmptyPos.r === 2 && miniEmptyPos.c === 3 // tile above empty → Trivia
-      const fromBelow = r === 3 && c === 3 && miniEmptyPos.r === 2 && miniEmptyPos.c === 3 // tile below empty → Truth or Dare
+      // Secret nav: only S (above empty) and V (below empty) go to Trivia / Truth or Dare
+      const fromAbove = r === 1 && c === 3 && miniEmptyPos.r === 2 && miniEmptyPos.c === 3
+      const fromBelow = r === 3 && c === 3 && miniEmptyPos.r === 2 && miniEmptyPos.c === 3
       if (fromAbove) {
         navigate('/trivia')
         setDragState({ isDragging: false, draggedTile: null, dragOffset: { x: 0, y: 0 }, startPos: { x: 0, y: 0 } })
@@ -2770,6 +2777,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
         setDragState({ isDragging: false, draggedTile: null, dragOffset: { x: 0, y: 0 }, startPos: { x: 0, y: 0 } })
         return
       }
+      // All other moves (including Y sliding left to form PLAY) update the puzzle and start word game when row spells PLAY
       setMiniBoard(prevBoard => {
         const newBoard = prevBoard.map(row => [...row])
         const movingLetter = prevBoard[r][c]
@@ -3173,7 +3181,6 @@ Note: Some browsers don't support PWA installation in development mode.`)
                         (Math.abs(c - miniEmptyPos.c) === 1 && r === miniEmptyPos.r)
                       ))
                     )
-                    const isNavOnly = isTriviaOrToDTile && !difficultySelected
                     
                     return (
                       <div
@@ -3195,7 +3202,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                           position: 'relative',
                           background: isEmpty ? 'transparent' : undefined,
                           border: isEmpty ? '2px dashed #F5DEB3' : undefined,
-                          opacity: isEmpty ? 0.6 : (isAdjacent || isNavOnly ? 1 : 0.5),
+                          opacity: isEmpty ? 0.6 : 0.5,
                           animation: (isPlayTile && letter === 'Y' && !miniGameCompleted && !dragState.isDragging && difficultySelected) 
                             ? 'miniTileSlideHint 3s ease-in-out infinite' 
                             : 'none',
@@ -3241,20 +3248,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 fontFamily: 'Georgia, serif',
                 transition: 'color 0.5s ease'
               }}>
-              {!difficultySelected ? 'Select difficulty, or slide S ↑ Trivia / V ↓ Truth or Dare' : 
+              {!difficultySelected ? 'Select a difficulty level first!' : 
                miniGameCompleted ? 'Let\'s play!' : 'Slide the Y to play!'}
               </div>
-              {!difficultySelected && (
-                <p style={{
-                  textAlign: 'center',
-                  marginTop: '8px',
-                  fontSize: 'clamp(11px, 2.5vw, 13px)',
-                  color: 'rgba(245, 222, 179, 0.7)',
-                  fontStyle: 'italic'
-                }}>
-                  Slide tile above empty → Trivia · Slide tile below → Truth or Dare
-                </p>
-              )}
             </div>
 
           </div>

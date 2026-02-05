@@ -20,6 +20,12 @@ Parameters:
     Description: 'JWT secret key for authentication'
     MinLength: 32
 
+  GamePassword:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: 'Optional password for Question Truth Dare game at /game (leave blank to use client-side VITE_TRUTH_OR_DARE_PASSWORD or show not configured)'
+
 Resources:
   # VPC and Networking
   VPC:
@@ -420,6 +426,69 @@ Resources:
       Timeout: 30
       MemorySize: 256
 
+  GameAuthFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-wordslide-game-auth'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          const crypto = require('crypto');
+          const ALLOWED_ORIGINS = ['https://word-slide.com', 'http://localhost:3000', 'http://localhost:5173'];
+          const COOKIE_NAME = 'game_session';
+          function headers(origin) {
+            const o = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+            return { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': o, 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Allow-Headers': 'Content-Type,Cookie', 'Access-Control-Allow-Methods': 'GET,POST,OPTIONS' };
+          }
+          function sign(payload, secret) {
+            const data = JSON.stringify(payload);
+            const sig = crypto.createHmac('sha256', secret).update(data).digest('base64url');
+            return Buffer.from(data, 'utf8').toString('base64url') + '.' + sig;
+          }
+          function verify(token, secret) {
+            if (!token || !secret) return null;
+            const parts = token.split('.'); if (parts.length !== 2) return null;
+            const data = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
+            const expected = crypto.createHmac('sha256', secret).update(JSON.stringify(data)).digest('base64url');
+            if (parts[1] !== expected || (data.exp && Date.now() > data.exp)) return null;
+            return data;
+          }
+          exports.handler = async (event) => {
+            const origin = event.headers?.origin || event.headers?.Origin || '';
+            const h = headers(origin);
+            if ((event.requestContext?.http?.method || event.httpMethod) === 'OPTIONS') return { statusCode: 200, headers: h, body: '' };
+            const pathParts = (event.path || '').split('/').filter(Boolean);
+            if (pathParts[0] === 'dev' || pathParts[0] === 'prod') pathParts.shift();
+            const secret = process.env.GAME_PASSWORD || '';
+            const configured = secret.length > 0;
+            if (pathParts[0] === 'game-auth' && pathParts[1] === 'status') return { statusCode: 200, headers: h, body: JSON.stringify({ configured }) };
+            if (pathParts[0] === 'game-auth' && pathParts[1] === 'check') {
+              const cookieHeader = event.headers?.Cookie || event.headers?.cookie || '';
+              const m = cookieHeader.match(new RegExp(COOKIE_NAME + '=([^;]+)'));
+              const token = m ? decodeURIComponent(m[1].trim()) : null;
+              const ok = configured && verify(token, secret);
+              return { statusCode: ok ? 200 : 401, headers: h, body: JSON.stringify({ ok: !!ok }) };
+            }
+            if (pathParts[0] === 'game-auth' && pathParts[1] === 'login') {
+              if (!configured) return { statusCode: 503, headers: h, body: JSON.stringify({ error: 'Game is not configured' }) };
+              let body = {}; try { body = event.body ? (typeof event.body === 'string' ? JSON.parse(event.body) : event.body) : {}; } catch (_) {}
+              if (body.password !== secret) return { statusCode: 401, headers: h, body: JSON.stringify({ error: 'Wrong password' }) };
+              const token = sign({ v: 1, exp: Date.now() + 86400000 }, secret);
+              const isSecure = /^https:/.test(origin);
+              const cookie = 'game_session=' + encodeURIComponent(token) + '; HttpOnly; Path=/; Max-Age=86400; ' + (isSecure ? 'Secure; ' : '') + (origin.includes('localhost') ? 'SameSite=Lax' : 'SameSite=None');
+              return { statusCode: 200, headers: { ...h, 'Set-Cookie': cookie }, body: JSON.stringify({ ok: true }) };
+            }
+            return { statusCode: 404, headers: h, body: JSON.stringify({ error: 'Not found' }) };
+          };
+      Environment:
+        Variables:
+          GAME_PASSWORD: !Ref GamePassword
+          NODE_ENV: !Ref Environment
+      Timeout: 15
+      MemorySize: 128
+
   # API Gateway
   ApiGateway:
     Type: AWS::ApiGateway::RestApi
@@ -447,6 +516,12 @@ Resources:
       - UserStatsMethod
       - ResetStatsOptionsMethod
       - ResetStatsMethod
+      - GameAuthStatusOptionsMethod
+      - GameAuthStatusMethod
+      - GameAuthCheckOptionsMethod
+      - GameAuthCheckMethod
+      - GameAuthLoginOptionsMethod
+      - GameAuthLoginMethod
     Properties:
       RestApiId: !Ref ApiGateway
       StageName: !Ref Environment
@@ -523,6 +598,34 @@ Resources:
       RestApiId: !Ref ApiGateway
       ParentId: !Ref UserResource
       PathPart: 'reset-stats'
+
+  GameAuthResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: 'game-auth'
+
+  GameAuthStatusResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref GameAuthResource
+      PathPart: 'status'
+
+  GameAuthLoginResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref GameAuthResource
+      PathPart: 'login'
+
+  GameAuthCheckResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref GameAuthResource
+      PathPart: 'check'
 
   # CORS Options Methods
   RegisterOptionsMethod:
@@ -778,6 +881,120 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ResetStatsFunction.Arn}/invocations'
 
+  GameAuthStatusOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref GameAuthStatusResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Cookie'"
+              method.response.header.Access-Control-Allow-Origin: "'https://word-slide.com'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  GameAuthStatusMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref GameAuthStatusResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GameAuthFunction.Arn}/invocations'
+
+  GameAuthCheckOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref GameAuthCheckResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Cookie'"
+              method.response.header.Access-Control-Allow-Origin: "'https://word-slide.com'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  GameAuthCheckMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref GameAuthCheckResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GameAuthFunction.Arn}/invocations'
+
+  GameAuthLoginOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref GameAuthLoginResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Cookie'"
+              method.response.header.Access-Control-Allow-Origin: "'https://word-slide.com'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Access-Control-Allow-Methods: true
+
+  GameAuthLoginMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref GameAuthLoginResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GameAuthFunction.Arn}/invocations'
+
   # Lambda Permissions for API Gateway
   RegisterPermission:
     Type: AWS::Lambda::Permission
@@ -834,6 +1051,30 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/user/reset-stats'
+
+  GameAuthStatusPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GameAuthFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/GET/game-auth/status'
+
+  GameAuthCheckPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GameAuthFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/GET/game-auth/check'
+
+  GameAuthLoginPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GameAuthFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/game-auth/login'
 
 Outputs:
   ApiGatewayUrl:

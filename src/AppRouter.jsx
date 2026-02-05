@@ -11,6 +11,7 @@ export function AppRouter() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<App />} />
+          <Route path="/game" element={<TruthOrDarePage />} />
           <Route path="/truthordare" element={<TruthOrDarePage />} />
           <Route path="/trivia" element={<TriviaPage />} />
         </Routes>

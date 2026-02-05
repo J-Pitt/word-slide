@@ -1,0 +1,7 @@
+{
+  "name": "wordslide-game-auth",
+  "version": "1.0.0",
+  "description": "Game password protection: status, login (set cookie), check",
+  "main": "index.js",
+  "dependencies": {}
+}
