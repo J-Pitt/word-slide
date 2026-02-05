@@ -3219,8 +3219,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                miniGameCompleted ? 'Let\'s play!' : 'Slide the Y to play!'}
               </div>
             </div>
-            
-            
+
           </div>
           
           {/* Auth Modal */}

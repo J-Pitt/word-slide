@@ -1,0 +1,9 @@
+{
+  "name": "wordslide-truthordare-lambda",
+  "version": "1.0.0",
+  "description": "Truth or Dare room API (game code create/join/get/update)",
+  "main": "room.js",
+  "dependencies": {
+    "pg": "^8.11.3"
+  }
+}
