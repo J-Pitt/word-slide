@@ -1,11 +1,11 @@
-# SPA redirects: /truthordare and /trivia must serve index.html
+# SPA redirects: client routes must serve index.html
 
-The app is a single-page application (SPA). Routes like `/truthordare` and `/trivia` exist only in the client-side router. If you open or refresh `https://yoursite.com/truthordare`, the **server** must respond with `index.html` (and 200), not 404. Otherwise the path “doesn’t show the games.”
+The app is a single-page application (SPA). Client-side routes exist only in the React router. If you open or refresh a path like `https://yoursite.com/some-route`, the **server** must respond with `index.html` (and 200), not 404. Otherwise the app won’t load.
 
 ## AWS Amplify
 
 1. In **Amplify Console** → your app → **Hosting** → **Redirects and rewrites** (or **App settings** → **Redirects**).
-2. Add a **Rewrite (200)** so all paths serve `index.html` (required for `/truthordare` and `/trivia` to work when opened or refreshed).
+2. Add a **Rewrite (200)** so all paths serve `index.html`.
 
    **Option A – Simple catch‑all (easiest)**  
    - **Source:** `/<<*>>`  
@@ -17,7 +17,7 @@ The app is a single-page application (SPA). Routes like `/truthordare` and `/tri
    - **Target:** `/index.html`  
    - **Type:** **Rewrite (200)**
 
-   **Paste as JSON (Console “Edit” → paste, then save):**  
+   **Paste as JSON (Console "Edit" → paste, then save):**  
    ```json
    [
      {
@@ -30,9 +30,7 @@ The app is a single-page application (SPA). Routes like `/truthordare` and `/tri
    ```
    If you already have other redirect rules, add this object to the array and keep it **after** any more specific rules.
 
-3. Save and redeploy. Then open or refresh `https://yoursite.com/truthordare` or `https://yoursite.com/trivia` — the app should load and show the game.
-
-After this, opening or refreshing `https://yoursite.com/truthordare` or `https://yoursite.com/trivia` will serve `index.html` and the React router will show the correct game.
+3. Save and redeploy.
 
 ## Other hosts
 
@@ -43,4 +41,4 @@ After this, opening or refreshing `https://yoursite.com/truthordare` or `https:/
 
 ## Local dev
 
-With `npm run dev` (Vite), the dev server already serves `index.html` for all paths, so `/truthordare` and `/trivia` work without any extra config.
+With `npm run dev` (Vite), the dev server already serves `index.html` for all paths.

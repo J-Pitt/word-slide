@@ -286,33 +286,3 @@ To avoid these issues in the future:
 4. **Use connection pooling** in Lambda functions to reduce cold start impact
 5. **Consider provisioned concurrency** for critical Lambda functions
 
-## Paths like /truthordare and /trivia don’t show the app (404 or blank)
-
-When you open or refresh `https://yoursite.com/truthordare` or `https://yoursite.com/trivia`, the server must respond with **index.html** (and status 200), not 404. Otherwise the browser never loads the React app and the path “doesn’t show the games.”
-
-**Fix:** Configure your host to serve **index.html** for all paths (SPA fallback). Step‑by‑step for **AWS Amplify** and other hosts is in **[docs/SPA-REDIRECTS.md](SPA-REDIRECTS.md)**. In short: add a **Rewrite (200)** rule so source `/<<*>>` (or the SPA regex) targets `/index.html`.
-
-## Truth or Dare — "Failed to create game" / "Failed to join room"
-
-### Symptom
-When choosing **Play with others** → **Create game** (or **Join game**), the UI shows an error like "Failed to create room" or "Could not create room".
-
-### Causes and fixes
-
-1. **Room API not deployed**  
-   The app calls `/truthordare/room` (and `/truthordare/room/join`). If that route is not set up on your API Gateway, you get 404.  
-   - Deploy the Lambda in `lambda/truthordare/room.js` and add GET/POST `/truthordare/room` and POST `/truthordare/room/join` in API Gateway (see `lambda/truthordare/README.md`).  
-   - Or use a **different room service** (e.g. from another repo): set `VITE_TRUTHORDARE_ROOM_API_BASE` in `.env` to that service’s base URL. The frontend expects the same API shape (create → `{ roomId, gameCode, players }`, join → `{ roomId, players, state }`, GET room → `{ players, state, updatedAt }`, POST with `{ roomId, state }` to update). If your service uses a different API, share its docs or the other repo’s room code so we can add an adapter.
-
-2. **Network / CORS**  
-   If the error says "Network error" or "Failed to fetch", the browser may be blocking the request (CORS or wrong URL).  
-   - In dev, the app uses the Vite proxy: requests go to `/api`, which is proxied to your API base. Ensure `vite.config.js` proxy target includes the path your room API is on.  
-   - If you use a separate base for the room service, set `VITE_TRUTHORDARE_ROOM_API_BASE` to that URL (and ensure that host allows your app’s origin).
-
-3. **Database**  
-   If you use the Lambda room API, the `truthordare_rooms` table must exist. Run `docs/aws-infrastructure/truthordare-rooms-table.sql` in your `wordslide_game` database.
-
-4. **"Missing authentication token"**  
-   API Gateway or your room service may require an **API key** or **Bearer token**.  
-   - **API key:** In `.env` set `VITE_TRUTHORDARE_ROOM_API_KEY=your-api-key` (or `VITE_API_KEY`). The app sends it as the `x-api-key` header on room requests. Restart the dev server after changing.  
-   - **Bearer token:** If you’re logged in to WordSlide, the app now sends your auth token (`Authorization: Bearer …`) on room requests. If the customhomepage/room service expects a different token, add that repo to the workspace or paste how it sends auth so we can match it.

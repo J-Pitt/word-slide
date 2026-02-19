@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react'
 import { flushSync } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
 import LeaderboardModal from './components/LeaderboardModal'
 import UserProfile from './components/UserProfile'
 import AuthModal from './components/AuthModal'
@@ -36,7 +35,6 @@ import './styles.css'
 function App() {
   
   const { user, isAuthenticated, token } = useAuth() || {}
-  const navigate = useNavigate()
   
   // PWA install state
   const [deferredPrompt, setDeferredPrompt] = useState(null)
@@ -75,9 +73,9 @@ function App() {
   const [miniEmptyPos, setMiniEmptyPos] = useState({ r: 2, c: 3 }) // Middle row, empty between A and Y
   const [miniBoard, setMiniBoard] = useState([
     ['R', 'T', 'K', 'M', 'N'],
-    ['B', 'F', 'H', 'S', 'C'], // tile (1,3)=S above empty → slide into empty opens Trivia
+    ['B', 'F', 'H', 'S', 'C'],
     ['P', 'L', 'A', '', 'Y'],  // PLAY: slide Y left to start main game
-    ['D', 'W', 'Z', 'V', 'Q'], // tile (3,3)=V below empty → slide into empty opens Truth or Dare
+    ['D', 'W', 'Z', 'V', 'Q'],
     ['J', 'G', 'X', 'U', 'I']
   ])
   const [dragState, setDragState] = useState({
@@ -2640,21 +2638,14 @@ Note: Some browsers don't support PWA installation in development mode.`)
     if (e.touches) e.preventDefault() // prevent scroll so drag is recognized on touch
     if (miniGameCompleted) return
     
-    const isTriviaTile = r === 1 && c === 3
-    const isTruthOrDareTile = r === 3 && c === 3
-    const isNavTile = isTriviaTile || isTruthOrDareTile
     const isYTile = r === 2 && c === 4
     const emptyAtDefault = miniEmptyPos.r === 2 && miniEmptyPos.c === 3
-    
     const dr = Math.abs(r - miniEmptyPos.r)
     const dc = Math.abs(c - miniEmptyPos.c)
     const isAdjacentToEmpty = (dr === 1 && dc === 0) || (dr === 0 && dc === 1)
-    
-    const allowNav = isNavTile && isAdjacentToEmpty
     const allowY = isYTile && emptyAtDefault && difficultySelected
     const allowOther = difficultySelected && isAdjacentToEmpty
-    
-    if (!allowNav && !allowY && !allowOther) return
+    if (!allowY && !allowOther) return
     
     const clientX = e.clientX ?? e.touches?.[0]?.clientX
     const clientY = e.clientY ?? e.touches?.[0]?.clientY
@@ -2764,20 +2755,6 @@ Note: Some browsers don't support PWA installation in development mode.`)
     }
     
     if (moveTriggered) {
-      // Secret nav: only S (above empty) and V (below empty) go to Trivia / Truth or Dare
-      const fromAbove = r === 1 && c === 3 && miniEmptyPos.r === 2 && miniEmptyPos.c === 3
-      const fromBelow = r === 3 && c === 3 && miniEmptyPos.r === 2 && miniEmptyPos.c === 3
-      if (fromAbove) {
-        navigate('/trivia')
-        setDragState({ isDragging: false, draggedTile: null, dragOffset: { x: 0, y: 0 }, startPos: { x: 0, y: 0 } })
-        return
-      }
-      if (fromBelow) {
-        navigate('/truthordare')
-        setDragState({ isDragging: false, draggedTile: null, dragOffset: { x: 0, y: 0 }, startPos: { x: 0, y: 0 } })
-        return
-      }
-      // All other moves (including Y sliding left to form PLAY) update the puzzle and start word game when row spells PLAY
       setMiniBoard(prevBoard => {
         const newBoard = prevBoard.map(row => [...row])
         const movingLetter = prevBoard[r][c]
@@ -2831,7 +2808,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
       dragOffset: { x: 0, y: 0 },
       startPos: { x: 0, y: 0 }
     })
-  }, [dragState, miniEmptyPos, miniGameCompleted, navigate])
+  }, [dragState, miniEmptyPos, miniGameCompleted])
 
   // Add global mouse/touch move and end handlers
   useEffect(() => {
@@ -3172,14 +3149,11 @@ Note: Some browsers don't support PWA installation in development mode.`)
                 {miniBoard.map((row, r) => 
                   row.map((letter, c) => {
                     const isEmpty = letter === ''
-                    const isPlayTile = (r === 2 && ['P', 'L', 'A', 'Y'].includes(letter)) // Middle row PLAY tiles
-                    const isCompleted = miniGameCompleted && r === 2 // Middle row when PLAY completed
-                    const isTriviaOrToDTile = (r === 1 && c === 3) || (r === 3 && c === 3) // S above, V below empty
-                    const isAdjacent = !miniGameCompleted && !isEmpty && (
-                      isTriviaOrToDTile || (difficultySelected && (
-                        (Math.abs(r - miniEmptyPos.r) === 1 && c === miniEmptyPos.c) ||
-                        (Math.abs(c - miniEmptyPos.c) === 1 && r === miniEmptyPos.r)
-                      ))
+                    const isPlayTile = (r === 2 && ['P', 'L', 'A', 'Y'].includes(letter))
+                    const isCompleted = miniGameCompleted && r === 2
+                    const isAdjacent = !miniGameCompleted && !isEmpty && difficultySelected && (
+                      (Math.abs(r - miniEmptyPos.r) === 1 && c === miniEmptyPos.c) ||
+                      (Math.abs(c - miniEmptyPos.c) === 1 && r === miniEmptyPos.r)
                     )
                     
                     return (
