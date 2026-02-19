@@ -1096,19 +1096,32 @@ h1 {
   border: 1px solid #A0522D;
 }
 
+/* PLAY tiles: before difficulty, same tone as background; after difficulty, lighter tan */
 .play-tile {
-  background: linear-gradient(135deg, #F5DEB3 0%, #DEB887 100%);
-  color: #654321;
+  background: linear-gradient(135deg, #C4A484 0%, #A0826D 100%);
+  color: #5C4033;
   font-weight: 900;
   box-shadow: 
     3px 3px 6px rgba(0,0,0,0.3),
-    inset 2px 2px 0 rgba(255,255,255,0.4),
+    inset 2px 2px 0 rgba(255,255,255,0.3),
     inset -1px -1px 0 rgba(139,69,19,0.3);
-  border: 2px solid #8B4513;
-  border-top: 2px solid #F8F0E3;
-  border-left: 2px solid #F8F0E3;
+  border: 2px solid #6B4423;
+  border-top: 2px solid #B8956E;
+  border-left: 2px solid #B8956E;
   transform: scale(1.05);
   z-index: 2;
+}
+
+.mini-board-grid.difficulty-selected .play-tile {
+  background: linear-gradient(135deg, rgb(245, 222, 179), rgb(222, 184, 135)) !important;
+  color: #654321 !important;
+  border-color: #8B4513 !important;
+  border-top-color: #F8F0E3 !important;
+  border-left-color: #F8F0E3 !important;
+  box-shadow: 
+    3px 3px 6px rgba(0,0,0,0.3),
+    inset 2px 2px 0 rgba(255,255,255,0.4),
+    inset -1px -1px 0 rgba(139,69,19,0.3) !important;
 }
 
 /* More specific selector to override any conflicting styles */

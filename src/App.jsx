@@ -3134,7 +3134,9 @@ Note: Some browsers don't support PWA installation in development mode.`)
               }}
             >
               {/* 5x5 Mini Gameboard - responsive for mobile */}
-              <div style={{
+              <div
+                className={`mini-board-grid${difficultySelected ? ' difficulty-selected' : ''}`}
+                style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(5, 1fr)',
                 gap: '3px',
@@ -3176,7 +3178,7 @@ Note: Some browsers don't support PWA installation in development mode.`)
                           position: 'relative',
                           background: isEmpty ? 'transparent' : undefined,
                           border: isEmpty ? '2px dashed #F5DEB3' : undefined,
-                          opacity: isEmpty ? 0.6 : 0.5,
+                          opacity: isEmpty ? 0.6 : (isPlayTile && difficultySelected ? 1 : 0.5),
                           animation: (isPlayTile && letter === 'Y' && !miniGameCompleted && !dragState.isDragging && difficultySelected) 
                             ? 'miniTileSlideHint 3s ease-in-out infinite' 
                             : 'none',
